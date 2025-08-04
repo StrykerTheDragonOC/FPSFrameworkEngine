@@ -1,6 +1,8 @@
 {
   "name": "project",
+ 
   "tree": {
+  "$ignoreUnknownInstances": true,
     "$className": "DataModel",
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
