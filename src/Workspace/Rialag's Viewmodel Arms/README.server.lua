@@ -1,0 +1,4 @@
+-- ive seen like, 3 videos and 1 reupload without my name atributtion
+-- please consider doing that or i will become angi and i will take action if this happends again.
+-- >:(
+-- R.vellian / Rialag
