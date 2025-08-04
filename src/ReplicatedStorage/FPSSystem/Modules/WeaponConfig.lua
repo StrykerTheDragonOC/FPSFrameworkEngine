@@ -67,7 +67,7 @@ WeaponConfig.Weapons = {
 	G36 = {
 		name = "G36",
 		displayName = "G36",
-		description = "Standard assault rifle with balanced stats",
+		description = "Standard PDW with balanced stats",
 		category = WeaponConfig.Categories.PRIMARY,
 		type = WeaponConfig.Types.SMG,
 
@@ -159,8 +159,8 @@ WeaponConfig.Weapons = {
 
 		-- Audio
 		sounds = {
-			fire = "rbxassetid://4759267374",
-			reload = "rbxassetid://799954844",
+            fire = "rbxassetid://4759267374",
+            reload = "rbxassetid://799954844",
 			reloadEmpty = "rbxassetid://799954844",
 			equip = "rbxassetid://83331726258332",
 			empty = "rbxassetid://91170486"
@@ -177,7 +177,7 @@ WeaponConfig.Weapons = {
 
 		-- Animation IDs (if using custom animations)
 		animations = {
-			idle = "rbxassetid://110622472219213",
+            idle = "rbxassetid://82993551235368",
 			fire = "rbxassetid://9949926480",
 			reload = "rbxassetid://9949926480",
 			reloadEmpty = "rbxassetid://9949926480",
@@ -395,61 +395,6 @@ WeaponConfig.Weapons = {
 		}
 	},
 
-	-- MELEE WEAPONS
-	Knife = {
-		name = "Knife",
-		displayName = "Combat Knife",
-		description = "Standard combat knife for close quarters",
-		category = WeaponConfig.Categories.MELEE,
-		type = WeaponConfig.Types.BLADEONEHAND,
-
-		-- Damage
-		damage = 55,           -- Front damage
-		backstabDamage = 100,  -- Backstab damage
-
-		-- Attack properties
-		attackRate = 1.5,      -- Attacks per second
-		attackDelay = 0.1,     -- Delay before damage registers
-		attackRange = 3.0,     -- Range in studs
-		attackType = "stab",   -- stab or slash
-
-		-- Mobility
-		mobility = {
-			walkSpeed = 16,    -- Walking speed
-			sprintSpeed = 22,  -- Sprint speed
-			equipTime = 0.2    -- Weapon draw time
-		},
-
-		-- Audio
-		sounds = {
-			swing = "rbxassetid://5810753638",
-			hit = "rbxassetid://3744370687",
-			hitCritical = "rbxassetid://3744371342",
-			equip = "rbxassetid://6842081192"
-		},
-
-		-- Handling
-		canBlock = false,      -- Can block attacks
-		blockDamageReduction = 0.5, -- Damage reduction when blocking
-
-		-- Animations
-		animations = {
-			idle = "rbxassetid://9949926480",
-			attack = "rbxassetid://9949926480",
-			attackAlt = "rbxassetid://9949926480",
-			equip = "rbxassetid://9949926480",
-			sprint = "rbxassetid://9949926480"
-		},
-
-		-- Crosshair
-		crosshair = {
-			style = WeaponConfig.CrosshairStyles.DOT,
-			size = 2,
-			thickness = 2,
-			dot = true,
-			color = Color3.fromRGB(255, 255, 255)
-		}
-	},
 
 	-- GRENADES
 	FragGrenade = {
@@ -495,10 +440,10 @@ WeaponConfig.Weapons = {
 
 		-- Audio
 		sounds = {
-			throw = "rbxassetid://3744370687",
+            throw = "rbxassetid://5564314786",
 			bounce = "rbxassetid://6842081192",
-			explosion = "rbxassetid://5801257793",
-			pin = "rbxassetid://3744370687"
+            explosion = "rbxassetid://2814355743",
+            pin = "rbxassetid://8186569638"
 		},
 
 		-- Inventory
