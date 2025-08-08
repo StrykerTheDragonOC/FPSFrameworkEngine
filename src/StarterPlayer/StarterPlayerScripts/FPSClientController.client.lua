@@ -25,7 +25,9 @@ local systems = {
 	grenades = nil,
 	melee = nil,
 	camera = nil,
-	attachments = nil
+	attachments = nil,
+	movement = nil,
+	damage = nil
 }
 
 -- System settings
@@ -41,6 +43,7 @@ local state = {
 	isAiming = false,
 	isSprinting = false,
 	isReloading = false,
+	attachmentModeActive = false,
 	slots = {
 		PRIMARY = nil,
 		SECONDARY = nil,
@@ -60,7 +63,9 @@ local inputActions = {
 	weaponMelee = Enum.KeyCode.Three,
 	weaponGrenade = Enum.KeyCode.Four,
 	throwGrenade = Enum.KeyCode.G,
-	toggleDebug = Enum.KeyCode.P
+	toggleDebug = Enum.KeyCode.P,
+	toggleAttachments = Enum.KeyCode.T,
+	spotEnemy = Enum.KeyCode.Q
 }
 
 -- Remote events
@@ -98,6 +103,8 @@ function FPSController:init()
 		self:initMeleeSystem()
 		self:initCameraSystem()
 		self:initAttachmentSystem()
+		self:initMovementSystem()
+		self:initDamageSystem()
 
 		-- Load default weapons into slots
 		self:loadDefaultWeapons()
@@ -105,10 +112,7 @@ function FPSController:init()
 		-- Set up input handlers
 		self:setupInputHandlers()
 
-		-- Initialize debugger if enabled
-		if settings.enableDebug then
-			self:initDebugger()
-		end
+		-- Debug mode disabled (debugger module removed)
 
 		print("FPS Controller initialization complete!")
 		return true
@@ -217,7 +221,9 @@ function FPSController:loadSystems()
 		grenades = "GrenadeSystem",
 		melee = "MeleeSystem",
 		camera = "FPSCamera",
-		attachments = "AttachmentSystem"
+		attachments = "AttachmentSystem",
+		movement = "AdvancedMovementSystem",
+		damage = "DamageSystem"
 	}
 
 	for key, moduleName in pairs(requiredSystems) do
@@ -363,23 +369,33 @@ function FPSController:initAttachmentSystem()
 	return true
 end
 
--- Initialize debugger
-function FPSController:initDebugger()
-	local ViewmodelOffsetDebugger = self:requireModule("ViewmodelOffsetDebugger")
-	if not ViewmodelOffsetDebugger then
-		warn("ViewmodelOffsetDebugger module not found")
+-- Initialize movement system
+function FPSController:initMovementSystem()
+	local AdvancedMovementSystem = self:requireModule("AdvancedMovementSystem")
+	if not AdvancedMovementSystem then
+		warn("AdvancedMovementSystem module not found")
 		return false
 	end
 
-	local debugger = ViewmodelOffsetDebugger:init()
-	if debugger then
-		-- Inject debugger into viewmodel system
-		ViewmodelOffsetDebugger:injectIntoViewmodelSystem(systems.viewmodel)
-		print("Debugger initialized - press P to toggle")
-	end
-
+	systems.movement = AdvancedMovementSystem.new()
+	print("Movement system initialized")
 	return true
 end
+
+-- Initialize damage system
+function FPSController:initDamageSystem()
+	local DamageSystem = self:requireModule("DamageSystem")
+	if not DamageSystem then
+		warn("DamageSystem module not found")
+		return false
+	end
+
+	systems.damage = DamageSystem.new()
+	print("Damage system initialized (test rigs handled by server)")
+	return true
+end
+
+-- Debugger removed
 
 -----------------
 -- WEAPON MANAGEMENT
@@ -390,14 +406,14 @@ function FPSController:loadDefaultWeapons()
 	-- Load primary weapon (G36)
 	self:loadWeapon("PRIMARY", settings.defaultWeapon)
 
-	-- Load secondary weapon (Pistol)
-	self:loadWeapon("SECONDARY", "Pistol")
+	-- Load secondary weapon (M9)
+	self:loadWeapon("SECONDARY", "M9")
 
-	-- Load melee weapon
-	self:loadWeapon("MELEE", "Knife")
+	-- Load melee weapon (PocketKnife)
+	self:loadWeapon("MELEE", "PocketKnife")
 
-	-- Load grenade
-	self:loadWeapon("GRENADE", "FragGrenade")
+	-- Load grenade (M67)
+	self:loadWeapon("GRENADE", "M67")
 
 	-- Equip the primary weapon by default
 	self:equipWeapon("PRIMARY")
@@ -412,15 +428,18 @@ function FPSController:loadWeapon(slot, weaponName)
 
 	-- Load the weapon model
 	local weaponModel
-
-	-- Try to use weapons system to load model
-	if typeof(systems.weapons.loadWeapon) == "function" then
-		weaponModel = systems.weapons.loadWeapon(weaponName, slot)
-	elseif slot == "PRIMARY" and typeof(systems.weapons.getG36) == "function" and weaponName == "G36" then
-		weaponModel = systems.weapons.getG36()
-	else
-		-- Fallback to create a placeholder
+	
+	-- First try to find the weapon model using WeaponManager
+	if systems.weapons and systems.weapons.findWeaponModel then
+		weaponModel = systems.weapons.findWeaponModel(weaponName, slot)
+	end
+	
+	-- If no model found, create a placeholder for now
+	if not weaponModel then
+		print("No weapon model found for " .. weaponName .. ", creating placeholder")
 		weaponModel = self:createPlaceholderWeapon(slot, weaponName)
+	else
+		print("Found weapon model for " .. weaponName)
 	end
 
 	if not weaponModel then
@@ -985,6 +1004,14 @@ function FPSController:handleInputBegan(input)
 		-- G key (throw grenade)
 	elseif input.KeyCode == inputActions.throwGrenade then
 		self:handleGrenade()
+	
+	-- T key (toggle attachments)
+	elseif input.KeyCode == inputActions.toggleAttachments then
+		self:toggleAttachmentMode()
+	
+	-- Q key (spot enemy)
+	elseif input.KeyCode == inputActions.spotEnemy then
+		self:handleSpotting()
 	end
 end
 
@@ -1020,6 +1047,11 @@ end
 
 -- Handle primary fire
 function FPSController:handlePrimaryFire(isPressed)
+	-- Don't handle firing when in attachment mode
+	if state.attachmentModeActive then
+		return
+	end
+	
 	if state.currentSlot == "PRIMARY" or state.currentSlot == "SECONDARY" then
 		-- Gun firing
 		if systems.firing then
@@ -1103,6 +1135,74 @@ function FPSController:handleGrenade()
 		end)
 	end
 end
+
+-- Toggle attachment mode
+function FPSController:toggleAttachmentMode()
+	state.attachmentModeActive = not state.attachmentModeActive
+	
+	if state.attachmentModeActive then
+		-- Unlock mouse for attachment selection
+		if _G.FPSCameraMouseControl then
+			_G.FPSCameraMouseControl.unlockMouse()
+		end
+		print("Attachment mode activated - mouse unlocked")
+		
+		-- Stop firing if currently firing
+		if systems.firing then
+			systems.firing:handleFiring(false)
+		end
+		
+		-- TODO: Create attachment UI when implemented
+		print("Attachment UI would open here - not yet implemented")
+		
+	else
+		-- Lock mouse back
+		if _G.FPSCameraMouseControl then
+			_G.FPSCameraMouseControl.lockMouse()
+		end
+		print("Attachment mode deactivated - mouse locked")
+		
+		-- TODO: Close attachment UI when implemented
+	end
+end
+
+-- Handle enemy spotting
+function FPSController:handleSpotting()
+	-- Cast a ray from camera to spot enemies
+	local camera = workspace.CurrentCamera
+	local ray = camera:ScreenPointToRay(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = {player.Character}
+	
+	local raycastResult = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+	
+	if raycastResult then
+		local hit = raycastResult.Instance
+		local character = hit.Parent
+		
+		-- Check if we hit a player character
+		if character:FindFirstChild("Humanoid") then
+			local targetPlayer = Players:GetPlayerFromCharacter(character)
+			if targetPlayer then
+				print("Spotted player:", targetPlayer.Name, "at", raycastResult.Position)
+				-- TODO: Implement actual spotting mechanics (markers, etc.)
+			else
+				-- Check if it's a test rig
+				if character.Name:find("TestRig") then
+					print("Spotted test rig:", character.Name, "at", raycastResult.Position)
+					-- TODO: Add test rig spotting visual
+				end
+			end
+		end
+	end
+end
+
+-- Expose globally for other scripts
+_G.FPSController = FPSController
+_G.FPSController.state = state
+_G.FPSController.systems = systems
 
 -- Initialize the controller when the character loads
 if player.Character then

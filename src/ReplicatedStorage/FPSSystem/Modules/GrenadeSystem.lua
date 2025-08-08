@@ -525,28 +525,178 @@ function GrenadeSystem:throwGrenade(cookTime)
 
 	print("Throwing grenade with force:", throwForce, "Remaining time:", remainingTime)
 
-	-- Notify server about throw
+	-- Only notify server about throw - let server handle the physics
 	if self.grenadeEvent then
 		self.grenadeEvent:FireServer("ThrowGrenade", {
 			Position = throwPosition,
 			Direction = throwDirection,
 			Force = throwForce,
-			RemainingTime = remainingTime
+			RemainingTime = remainingTime,
+			GrenadeType = grenadeConfig.type or "explosive",
+			GrenadeName = grenadeConfig.name or "M67"
 		})
 	end
 
-	-- Create physical grenade locally
-	self:createThrownGrenade(throwPosition, throwDirection, throwForce, remainingTime)
-
-	-- Play throw sound
+	-- Play throw sound locally
 	self:playSound("Throw")
 end
 
--- Create a physical thrown grenade
+-- Create a physical thrown grenade using actual models
 function GrenadeSystem:createThrownGrenade(position, direction, force, remainingTime)
 	-- Get grenade config
 	local grenadeConfig = self.currentGrenade or {}
+	local grenadeType = grenadeConfig.name or "M67"
+	
+	-- Try to get the actual grenade model
+	local grenadeModel = self:getGrenadeModel(grenadeType)
+	
+	if not grenadeModel then
+		-- Fallback to simple grenade
+		return self:createSimpleGrenade(position, direction, force, remainingTime, grenadeConfig)
+	end
 
+	-- Set up the model
+	grenadeModel.Name = "ThrownGrenade"
+	grenadeModel.Parent = self.effectsFolder
+	
+	-- Get the primary part
+	local primaryPart = grenadeModel.PrimaryPart
+	if not primaryPart then
+		-- Find the main part
+		for _, child in ipairs(grenadeModel:GetChildren()) do
+			if child:IsA("BasePart") and child.Name ~= "Handle" then
+				primaryPart = child
+				grenadeModel.PrimaryPart = primaryPart
+				break
+			end
+		end
+	end
+	
+	if not primaryPart then
+		-- Create a primary part if none exists
+		primaryPart = Instance.new("Part")
+		primaryPart.Name = "GrenadeBody"
+		primaryPart.Size = Vector3.new(0.8, 0.8, 0.8)
+		primaryPart.Shape = Enum.PartType.Ball
+		primaryPart.Color = Color3.fromRGB(50, 100, 50)
+		primaryPart.Material = Enum.Material.Metal
+		primaryPart.Parent = grenadeModel
+		grenadeModel.PrimaryPart = primaryPart
+	end
+
+	-- Position the model
+	grenadeModel:SetPrimaryPartCFrame(CFrame.new(position))
+
+	-- Configure physics
+	primaryPart.CanCollide = true
+	primaryPart.Anchored = false
+	
+	-- Add physics properties
+	primaryPart.CustomPhysicalProperties = PhysicalProperties.new(
+		grenadeConfig.density or 2,
+		grenadeConfig.friction or 0.3,
+		grenadeConfig.elasticity or GRENADE_SETTINGS.DEFAULT_BOUNCINESS,
+		grenadeConfig.frictionWeight or 1,
+		grenadeConfig.elasticityWeight or 1
+	)
+
+	-- Set collision group
+	pcall(function()
+		primaryPart.CollisionGroup = "Grenades"
+	end)
+
+	-- Create a light to make the grenade more visible
+	local light = Instance.new("PointLight")
+	light.Color = grenadeConfig.cookColor or GRENADE_SETTINGS.INDICATOR.END_COLOR
+	light.Range = 4
+	light.Brightness = 0.5
+	light.Parent = primaryPart
+
+	-- Apply velocity in throw direction
+	primaryPart.Velocity = direction * force
+
+	-- Add random spin
+	primaryPart.RotVelocity = Vector3.new(
+		math.random(-20, 20),
+		math.random(-20, 20),
+		math.random(-20, 20)
+	)
+
+	-- Handle different grenade types
+	if grenadeConfig.type == "impact" then
+		-- Impact grenades explode on contact
+		self:setupImpactGrenade(grenadeModel, primaryPart)
+	elseif grenadeConfig.type == "sticky" then
+		-- C4/Semtex stick to surfaces
+		self:setupStickyGrenade(grenadeModel, primaryPart)
+	else
+		-- Standard timed grenade
+		task.delay(remainingTime, function()
+			if grenadeModel and grenadeModel.Parent then
+				self:createExplosionEffect(primaryPart.Position)
+				grenadeModel:Destroy()
+			end
+		end)
+	end
+
+	-- Connect to touched event for bounce sound (only for non-impact grenades)
+	if grenadeConfig.type ~= "impact" then
+		primaryPart.Touched:Connect(function(hit)
+			-- Check if this is the first touch (to avoid spamming sounds)
+			if primaryPart:GetAttribute("LastBounce") and 
+				tick() - primaryPart:GetAttribute("LastBounce") < 0.2 then
+				return
+			end
+
+			-- Play bounce sound
+			local bounceVelocity = primaryPart.Velocity.Magnitude
+			if bounceVelocity > 5 then
+				self:playBounceSound(primaryPart.Position, bounceVelocity)
+				primaryPart:SetAttribute("LastBounce", tick())
+			end
+		end)
+	end
+
+	-- Clean up grenade after a safety timeout
+	Debris:AddItem(grenadeModel, remainingTime + 5)
+
+	return grenadeModel
+end
+
+-- Get grenade model from WeaponModels
+function GrenadeSystem:getGrenadeModel(grenadeType)
+	local FPSSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+	if not FPSSystem then return nil end
+	
+	local WeaponModels = FPSSystem:FindFirstChild("WeaponModels")
+	if not WeaponModels then return nil end
+	
+	local GrenadeModels = WeaponModels:FindFirstChild("Grenades")
+	if not GrenadeModels then return nil end
+	
+	-- Determine grenade category and find model
+	local grenadeConfig = self.currentGrenade or {}
+	local category = "Explosive" -- Default
+	
+	if grenadeConfig.type == "impact" then
+		category = "Impact"
+	elseif grenadeConfig.type == "sticky" then
+		category = "Tactical"
+	end
+	
+	local categoryFolder = GrenadeModels:FindFirstChild(category)
+	if not categoryFolder then return nil end
+	
+	local grenadeModel = categoryFolder:FindFirstChild(grenadeType .. ".rbxm")
+	if grenadeModel then
+		return grenadeModel:Clone()
+	end
+	
+	return nil
+end
+
+-- Create simple fallback grenade
+function GrenadeSystem:createSimpleGrenade(position, direction, force, remainingTime, grenadeConfig)
 	-- Create grenade part
 	local grenade = Instance.new("Part")
 	grenade.Name = "ThrownGrenade"
@@ -602,34 +752,120 @@ function GrenadeSystem:createThrownGrenade(position, direction, force, remaining
 		math.random(-20, 20)
 	)
 
-	-- Schedule local explosion after remaining time
-	task.delay(remainingTime, function()
-		if grenade and grenade.Parent then
-			self:createExplosionEffect(grenade.Position)
-			grenade:Destroy()
-		end
-	end)
+	-- Handle different grenade types
+	if grenadeConfig.type == "impact" then
+		-- Impact grenades explode on contact
+		grenade.Touched:Connect(function(hit)
+			if hit.Parent ~= self.player.Character and hit.CanCollide then
+				self:createExplosionEffect(grenade.Position)
+				grenade:Destroy()
+			end
+		end)
+	elseif grenadeConfig.type == "sticky" then
+		-- C4/Semtex stick to first surface
+		local hasStuck = false
+		grenade.Touched:Connect(function(hit)
+			if not hasStuck and hit.Parent ~= self.player.Character and hit.CanCollide then
+				hasStuck = true
+				grenade.Anchored = true
+				grenade.CanCollide = false
+				
+				-- Weld to surface
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = grenade
+				weld.Part1 = hit
+				weld.Parent = grenade
+				
+				-- Explode after remaining time
+				task.delay(remainingTime, function()
+					if grenade and grenade.Parent then
+						self:createExplosionEffect(grenade.Position)
+						grenade:Destroy()
+					end
+				end)
+			end
+		end)
+	else
+		-- Standard timed grenade
+		task.delay(remainingTime, function()
+			if grenade and grenade.Parent then
+				self:createExplosionEffect(grenade.Position)
+				grenade:Destroy()
+			end
+		end)
+		
+		-- Connect to touched event for bounce sound
+		grenade.Touched:Connect(function(hit)
+			-- Check if this is the first touch (to avoid spamming sounds)
+			if grenade:GetAttribute("LastBounce") and 
+				tick() - grenade:GetAttribute("LastBounce") < 0.2 then
+				return
+			end
 
-	-- Connect to touched event for bounce sound
-	grenade.Touched:Connect(function(hit)
-		-- Check if this is the first touch (to avoid spamming sounds)
-		if grenade:GetAttribute("LastBounce") and 
-			tick() - grenade:GetAttribute("LastBounce") < 0.2 then
-			return
-		end
-
-		-- Play bounce sound
-		local bounceVelocity = grenade.Velocity.Magnitude
-		if bounceVelocity > 5 then
-			self:playBounceSound(grenade.Position, bounceVelocity)
-			grenade:SetAttribute("LastBounce", tick())
-		end
-	end)
+			-- Play bounce sound
+			local bounceVelocity = grenade.Velocity.Magnitude
+			if bounceVelocity > 5 then
+				self:playBounceSound(grenade.Position, bounceVelocity)
+				grenade:SetAttribute("LastBounce", tick())
+			end
+		end)
+	end
 
 	-- Clean up grenade after a safety timeout
-	Debris:AddItem(grenade, remainingTime + 1)
+	Debris:AddItem(grenade, remainingTime + 5)
 
 	return grenade
+end
+
+-- Setup impact grenade behavior
+function GrenadeSystem:setupImpactGrenade(grenadeModel, primaryPart)
+	primaryPart.Touched:Connect(function(hit)
+		if hit.Parent ~= self.player.Character and hit.CanCollide then
+			-- Small delay to ensure proper physics
+			task.wait(0.05)
+			if grenadeModel and grenadeModel.Parent then
+				self:createExplosionEffect(primaryPart.Position)
+				grenadeModel:Destroy()
+			end
+		end
+	end)
+end
+
+-- Setup sticky grenade behavior (C4/Semtex)
+function GrenadeSystem:setupStickyGrenade(grenadeModel, primaryPart)
+	local hasStuck = false
+	
+	primaryPart.Touched:Connect(function(hit)
+		if not hasStuck and hit.Parent ~= self.player.Character and hit.CanCollide then
+			hasStuck = true
+			primaryPart.Anchored = true
+			primaryPart.CanCollide = false
+			
+			-- Weld to surface
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = primaryPart
+			weld.Part1 = hit
+			weld.Parent = primaryPart
+			
+			-- Change color to indicate it's stuck
+			primaryPart.Color = Color3.fromRGB(255, 100, 100)
+			
+			-- Play stick sound
+			self:playSound("Stick", primaryPart.Position)
+			
+			-- Get remaining fuse time
+			local grenadeConfig = self.currentGrenade or {}
+			local remainingTime = grenadeConfig.fuseTime or GRENADE_SETTINGS.DEFAULT_COOK_TIME
+			
+			-- Explode after remaining time
+			task.delay(remainingTime, function()
+				if grenadeModel and grenadeModel.Parent then
+					self:createExplosionEffect(primaryPart.Position)
+					grenadeModel:Destroy()
+				end
+			end)
+		end
+	end)
 end
 
 -- Create an explosion effect

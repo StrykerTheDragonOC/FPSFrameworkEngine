@@ -57,8 +57,8 @@ WeaponConfig.CrosshairStyles = {
 WeaponConfig.DefaultWeapons = {
 	PRIMARY = "G36",
 	SECONDARY = "M9",
-	MELEE = "Knife",
-	GRENADES = "FragGrenade"
+	MELEE = "PocketKnife", 
+	GRENADES = "M67"
 }
 
 -- Weapon Definitions
@@ -66,10 +66,10 @@ WeaponConfig.Weapons = {
 	-- ASSAULT RIFLES
 	G36 = {
 		name = "G36",
-		displayName = "G36",
-		description = "Standard PDW with balanced stats",
+		displayName = "G36 Assault Rifle",
+		description = "German assault rifle with integrated scope",
 		category = WeaponConfig.Categories.PRIMARY,
-		type = WeaponConfig.Types.SMG,
+		type = WeaponConfig.Types.ASSAULT_RIFLE,
 
 		-- Basic Stats
 		damage = 25,
@@ -295,6 +295,277 @@ WeaponConfig.Weapons = {
 		}
 	},
 
+	-- NTW-20 Anti-Material Rifle
+	NTW20 = {
+		name = "NTW20",
+		displayName = "NTW-20 Anti-Material Rifle",
+		description = "South African anti-material rifle with dual ammo support",
+		category = WeaponConfig.Categories.PRIMARY,
+		type = WeaponConfig.Types.SNIPER_RIFLE,
+
+		-- Basic Stats
+		damage = 150,
+		firerate = 30, -- Rounds per minute
+		velocity = 2500, -- Bullet velocity
+
+		-- Damage Range
+		damageRanges = {
+			{distance = 0, damage = 150},
+			{distance = 200, damage = 140},
+			{distance = 500, damage = 120},
+			{distance = 1000, damage = 100}
+		},
+
+		-- Recoil Properties
+		recoil = {
+			vertical = 12.0,       -- Massive vertical kick
+			horizontal = 3.0,      -- Significant horizontal sway
+			recovery = 0.8,        -- Slower recovery rate
+			initial = 1.5          -- High first shot recoil multiplier
+		},
+
+		-- Spread/Accuracy
+		spread = {
+			base = 0.05,           -- Very accurate
+			moving = 8.0,          -- Huge penalty when moving
+			jumping = 20.0,        -- Massive penalty when jumping
+			recovery = 0.7         -- Slower recovery rate
+		},
+
+		-- Mobility
+		mobility = {
+			adsSpeed = 1.0,        -- Very slow ADS
+			walkSpeed = 10,        -- Very slow walking speed
+			sprintSpeed = 12,      -- Very slow sprint speed
+			equipTime = 2.0        -- Very slow weapon draw time
+		},
+
+		-- Magazine
+		magazine = {
+			size = 3,             -- Small magazine
+			maxAmmo = 15,         -- Limited reserve ammo
+			reloadTime = 5.0,     -- Very slow reload
+			reloadTimeEmpty = 5.5, -- Even slower empty reload
+			ammoType = "14.5x114mm" -- Default ammo type
+		},
+
+		-- Dual ammo system
+		ammoTypes = {
+			["14.5x114mm"] = {
+				damage = 150,
+				velocity = 2500,
+				penetration = 4.0,
+				description = "Standard anti-material rounds"
+			},
+			["20x110mm"] = {
+				damage = 200,
+				velocity = 2200,
+				penetration = 5.0,
+				recoil = {
+					vertical = 15.0,
+					horizontal = 4.0
+				},
+				description = "High-explosive rounds with massive damage"
+			}
+		},
+
+		-- Advanced Ballistics
+		penetration = 4.0,         -- Extreme material penetration
+		bulletDrop = 0.02,         -- Minimal bullet drop
+		destructibleTerrain = true, -- Can destroy cover
+
+		-- Firing Mode
+		firingMode = WeaponConfig.FiringModes.BOLT_ACTION,
+
+		-- Special Features
+		specialFeatures = {
+			canDestroyVehicles = true,
+			wallPenetration = 3,      -- Can shoot through multiple walls
+			suppressorCompatible = true,
+			bipodRequired = false     -- Can be fired without bipod but with penalties
+		},
+
+		-- Scope Settings
+		scope = {
+			defaultZoom = 12.0,       -- High zoom level
+			maxZoom = 16.0,           -- Maximum zoom level
+			scopeType = "GUI",        -- GUI-based scope
+			scopeImage = "rbxassetid://6918290101",
+			scopeRenderScale = 0.7,   -- Performance optimization
+			scopeBlur = true,
+			scopeSensitivity = 0.3,   -- Very low sensitivity when scoped
+			scopeHoldBreath = true,
+			holdBreathDuration = 8.0, -- Longer hold breath
+			breathRecovery = 0.6
+		},
+
+		-- Visual Effects
+		muzzleFlash = {
+			size = 2.0,              -- Massive muzzle flash
+			brightness = 1.5,
+			color = Color3.fromRGB(255, 180, 100),
+			shockwave = true         -- Create visible shockwave
+		},
+
+		tracers = {
+			enabled = true,
+			color = Color3.fromRGB(255, 100, 100),
+			width = 0.1,             -- Thick tracers
+			frequency = 1            -- Every shot is a tracer
+		},
+
+		-- Audio
+		sounds = {
+			fire = "rbxassetid://168143115",
+			reload = "rbxassetid://1659380685", 
+			reloadEmpty = "rbxassetid://1659380685",
+			equip = "rbxassetid://4743275867",
+			empty = "rbxassetid://3744371342",
+			boltAction = "rbxassetid://3599663417",
+			shockwave = "rbxassetid://168143115" -- Shockwave sound effect
+		},
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.DOT,
+			size = 1,
+			thickness = 1,
+			dot = true,
+			color = Color3.fromRGB(255, 0, 0),
+			hideWhenADS = true
+		},
+
+		-- Animation IDs
+		animations = {
+			idle = "rbxassetid://9949926480",
+			fire = "rbxassetid://9949926480",
+			reload = "rbxassetid://9949926480",
+			reloadEmpty = "rbxassetid://9949926480",
+			equip = "rbxassetid://9949926480",
+			sprint = "rbxassetid://9949926480",
+			boltAction = "rbxassetid://9949926480"
+		}
+	},
+
+	-- NTW-20 Custom "Chaos Cannon" Variant (Admin/Exclusive)
+	NTW20_Chaos = {
+		name = "NTW20_Chaos",
+		displayName = "NTW-20 \"Chaos Cannon\"",
+		description = "Modified NTW-20 with experimental physics-defying ammunition",
+		category = WeaponConfig.Categories.PRIMARY,
+		type = WeaponConfig.Types.SNIPER_RIFLE,
+		isExclusive = true,          -- Mark as admin/exclusive weapon
+		isAdminOnly = true,
+
+		-- Inherits from base NTW-20 but with modifications
+		damage = 250,                -- Even higher damage
+		firerate = 25,               -- Slightly slower
+		velocity = 3000,             -- Faster velocity
+
+		-- Damage Range (longer effective range)
+		damageRanges = {
+			{distance = 0, damage = 250},
+			{distance = 300, damage = 240},
+			{distance = 800, damage = 220},
+			{distance = 1500, damage = 200}
+		},
+
+		-- Extreme Recoil with physics effects
+		recoil = {
+			vertical = 20.0,         -- Extreme vertical kick
+			horizontal = 5.0,        -- High horizontal sway
+			recovery = 0.6,          -- Even slower recovery
+			initial = 2.0,           -- Massive first shot recoil
+			playerKnockback = true   -- Knocks player backwards
+		},
+
+		-- Physics Effects
+		physicsEffects = {
+			shooterFling = {
+				onHit = Vector3.new(0, 50, -100),    -- Fling shooter backwards and up on hit
+				onMiss = Vector3.new(0, 10, -20)     -- Slight fling on miss
+			},
+			targetFling = {
+				force = Vector3.new(0, 100, 100),    -- Fling target across map
+				ragdoll = true                        -- Ragdoll the target
+			},
+			fallDamage = false,      -- Disable fall damage for this weapon's effects
+			shockwaveRadius = 20     -- Create shockwave effect on impact
+		},
+
+		-- Built-in suppressor
+		builtInAttachments = {"ChaosSupressor"},
+
+		-- Mobility (even slower due to modifications)
+		mobility = {
+			adsSpeed = 1.5,          -- Extremely slow ADS
+			walkSpeed = 8,           -- Very slow walking
+			sprintSpeed = 10,        -- Very slow sprinting
+			equipTime = 3.0          -- Very slow equip time
+		},
+
+		-- Magazine
+		magazine = {
+			size = 1,                -- Single shot
+			maxAmmo = 5,             -- Very limited ammo
+			reloadTime = 8.0,        -- Extremely slow reload
+			reloadTimeEmpty = 8.0,
+			ammoType = "Chaos Rounds"
+		},
+
+		-- Special ammo type
+		ammoTypes = {
+			["Chaos Rounds"] = {
+				damage = 250,
+				velocity = 3000,
+				penetration = 10.0,    -- Penetrates everything
+				description = "Experimental rounds that defy physics",
+				effectRadius = 10,     -- Damage radius around impact
+				chainReaction = true   -- Can cause chain explosions
+			}
+		},
+
+		-- Enhanced visual effects
+		muzzleFlash = {
+			size = 3.0,              -- Massive muzzle flash
+			brightness = 2.0,
+			color = Color3.fromRGB(255, 0, 255), -- Purple flash
+			shockwave = true,
+			particles = true         -- Enhanced particle effects
+		},
+
+		tracers = {
+			enabled = true,
+			color = Color3.fromRGB(255, 0, 255), -- Purple tracers
+			width = 0.2,             -- Very thick tracers
+			frequency = 1,
+			glowEffect = true        -- Tracers glow
+		},
+
+		-- Enhanced audio
+		sounds = {
+			fire = "rbxassetid://168143115",     -- Different fire sound
+			reload = "rbxassetid://1659380685",
+			reloadEmpty = "rbxassetid://1659380685", 
+			equip = "rbxassetid://4743275867",
+			empty = "rbxassetid://3744371342",
+			boltAction = "rbxassetid://3599663417",
+			shockwave = "rbxassetid://2814355743", -- Explosion sound for shockwave
+			chaos = "rbxassetid://131961136"       -- Special chaos sound
+		},
+
+		-- Special crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.CORNERS,
+			size = 3,
+			thickness = 2,
+			dot = true,
+			color = Color3.fromRGB(255, 0, 255), -- Purple crosshair
+			hideWhenADS = false,
+			animated = true          -- Animated crosshair
+		}
+	},
+
 	-- PISTOLS
 	M9 = {
 		name = "M9",
@@ -471,6 +742,330 @@ WeaponConfig.Weapons = {
 			style = WeaponConfig.CrosshairStyles.CIRCLE,
 			size = 4,
 			thickness = 2,
+			dot = true,
+			color = Color3.fromRGB(255, 255, 255)
+		}
+	},
+
+	-- M67 GRENADE (Updated default)
+	M67 = {
+		name = "M67",
+		displayName = "M67 Fragmentation Grenade",
+		description = "Standard military fragmentation grenade",
+		category = WeaponConfig.Categories.GRENADES,
+		type = WeaponConfig.Types.EXPLOSIVE,
+
+		-- Damage
+		damage = 100,            -- Maximum damage
+		damageRadius = 12,       -- Full damage radius (slightly larger than FragGrenade)
+		maxRadius = 25,          -- Maximum effect radius
+		falloffType = "linear",  -- How damage decreases with distance
+
+		-- Throw properties
+		throwForce = 55,         -- Base throw force (slightly more than FragGrenade)
+		throwForceCharged = 85,  -- Max throw force (when held)
+		throwChargeTime = 1.2,   -- Time to reach max throw
+
+		-- Explosion properties
+		fuseTime = 4.0,          -- Time until detonation (4 seconds like real M67)
+		bounciness = 0.2,        -- How bouncy the grenade is
+		cookingTime = 4.0,       -- Max cooking time before exploding in hand
+
+		-- Effects
+		effects = {
+			explosion = {
+				size = 3.5,
+				particles = 40,
+				light = true,
+				lightBrightness = 1.2,
+				lightRange = 25
+			},
+			cookingIndicator = true, -- Show visual indicator when cooking
+			smokeTrail = true        -- Leave smoke trail when thrown
+		},
+
+		-- Mobility
+		mobility = {
+			walkSpeed = 15,     -- Walking speed
+			sprintSpeed = 20,   -- Sprint speed (slightly slower than FragGrenade)
+			equipTime = 0.4     -- Weapon draw time
+		},
+
+		-- Audio
+		sounds = {
+			throw = "rbxassetid://5564314786",
+			bounce = "rbxassetid://6842081192", 
+			explosion = "rbxassetid://131961136", -- Different explosion sound
+			pin = "rbxassetid://131961136",
+			cooking = "rbxassetid://131961136"
+		},
+
+		-- Inventory
+		maxCount = 3,           -- Maximum number player can carry
+
+		-- Animations
+		animations = {
+			idle = "rbxassetid://9949926480",
+			throw = "rbxassetid://9949926480",
+			equip = "rbxassetid://9949926480",
+			sprint = "rbxassetid://9949926480",
+			cooking = "rbxassetid://9949926480"
+		},
+
+		-- Trajectory visualization
+		trajectory = {
+			enabled = true,
+			pointCount = 35,
+			lineColor = Color3.fromRGB(255, 150, 100),
+			showOnRightClick = true
+		},
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.CIRCLE,
+			size = 5,
+			thickness = 2,
+			dot = true,
+			color = Color3.fromRGB(255, 200, 100)
+		}
+	},
+
+	-- Impact Grenade
+	ImpactGrenade = {
+		name = "ImpactGrenade",
+		displayName = "Impact Grenade",
+		description = "Explodes on first contact - no fuse timer",
+		category = WeaponConfig.Categories.GRENADES,
+		type = WeaponConfig.Types.IMPACT,
+
+		-- Damage
+		damage = 80,             -- Slightly less than frag
+		damageRadius = 8,        -- Smaller radius 
+		maxRadius = 15,          -- Maximum effect radius
+		falloffType = "linear",
+
+		-- Throw properties
+		throwForce = 45,         -- Slightly less throw force
+		throwForceCharged = 75,  -- Max throw force
+		throwChargeTime = 0.8,   -- Faster charge time
+
+		-- Impact properties
+		fuseTime = 0,            -- No fuse - explodes on impact
+		impactSensitivity = 1.0, -- How sensitive to impact
+		bounces = 0,             -- No bouncing - explodes immediately
+		
+		-- Effects
+		effects = {
+			explosion = {
+				size = 2.5,
+				particles = 25,
+				light = true,
+				lightBrightness = 1.0,
+				lightRange = 18
+			},
+			impactSpark = true       -- Spark effect on impact
+		},
+
+		-- Mobility  
+		mobility = {
+			walkSpeed = 15,
+			sprintSpeed = 21,
+			equipTime = 0.25         -- Faster equip
+		},
+
+		-- Audio
+		sounds = {
+			throw = "rbxassetid://5564314786",
+			explosion = "rbxassetid://2814355743",
+			impact = "rbxassetid://131961136"
+		},
+
+		-- Inventory
+		maxCount = 3,
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.CORNERS,
+			size = 3,
+			thickness = 2,
+			dot = true,
+			color = Color3.fromRGB(255, 100, 100)
+		}
+	},
+
+	-- Flashbang
+	Flashbang = {
+		name = "Flashbang",
+		displayName = "M84 Flashbang",
+		description = "Blinds and deafens enemies without lethal damage",
+		category = WeaponConfig.Categories.GRENADES,
+		type = WeaponConfig.Types.TACTICAL,
+
+		-- Non-lethal effects
+		damage = 5,              -- Minimal damage
+		damageRadius = 2,        -- Very small damage radius
+		maxRadius = 25,          -- Large effect radius for flash/sound
+
+		-- Flash/stun effects
+		flashEffects = {
+			blindDuration = 3.0,     -- How long players are blinded
+			blindRadius = 15,        -- Radius for full blind effect
+			deafenDuration = 5.0,    -- How long hearing is affected
+			deafenRadius = 20,       -- Radius for audio effects
+			orientationEffect = 2.0   -- Disorientation duration
+		},
+
+		-- Throw properties
+		throwForce = 40,
+		throwForceCharged = 70,
+		throwChargeTime = 0.8,
+
+		-- Explosion properties
+		fuseTime = 2.0,          -- Short fuse
+		bounciness = 0.3,        -- Can bounce around corners
+
+		-- Effects
+		effects = {
+			explosion = {
+				size = 4.0,          -- Large visual flash
+				particles = 50,
+				light = true,
+				lightBrightness = 5.0, -- Very bright
+				lightRange = 40,
+				flashEffect = true    -- Special flash effect
+			}
+		},
+
+		-- Audio  
+		sounds = {
+			throw = "rbxassetid://5564314786",
+			explosion = "rbxassetid://131961136", -- Loud bang sound
+			bounce = "rbxassetid://6842081192"
+		},
+
+		-- Inventory
+		maxCount = 2,
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.CIRCLE,
+			size = 4,
+			thickness = 1,
+			dot = true,
+			color = Color3.fromRGB(255, 255, 100)
+		}
+	},
+
+	-- Smoke Grenade
+	SmokeGrenade = {
+		name = "SmokeGrenade",
+		displayName = "M18 Smoke Grenade", 
+		description = "Creates dense smoke screen for cover and concealment",
+		category = WeaponConfig.Categories.GRENADES,
+		type = WeaponConfig.Types.TACTICAL,
+
+		-- Smoke effects
+		damage = 0,              -- No damage
+		smokeEffects = {
+			duration = 30.0,         -- How long smoke lasts
+			radius = 20,             -- Smoke coverage radius
+			density = 0.8,           -- How thick the smoke is
+			color = Color3.fromRGB(200, 200, 200), -- Smoke color
+			particleCount = 100      -- Number of smoke particles
+		},
+
+		-- Throw properties
+		throwForce = 35,
+		throwForceCharged = 60,
+		throwChargeTime = 1.0,
+
+		-- Deployment properties
+		fuseTime = 1.5,          -- Time before smoke starts
+		bounciness = 0.4,        -- Can roll around
+
+		-- Effects
+		effects = {
+			smokeCloud = true,
+			continuousSmoke = true   -- Smoke continues to emit
+		},
+
+		-- Audio
+		sounds = {
+			throw = "rbxassetid://5564314786",
+			deploy = "rbxassetid://131961136", -- Hissing sound
+			bounce = "rbxassetid://6842081192"
+		},
+
+		-- Inventory
+		maxCount = 4,
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.CIRCLE,
+			size = 5,
+			thickness = 1,
+			dot = false,
+			color = Color3.fromRGB(150, 150, 150)
+		}
+	},
+
+	-- MELEE WEAPONS
+	PocketKnife = {
+		name = "PocketKnife",
+		displayName = "Pocket Knife",
+		description = "Small folding knife for stealth attacks",
+		category = WeaponConfig.Categories.MELEE,
+		type = WeaponConfig.Types.BLADEONEHAND,
+
+		-- Damage
+		damage = 45,             -- Front damage (less than combat knife)
+		backstabDamage = 90,     -- Backstab damage
+		headshotDamage = 65,     -- Headshot damage
+
+		-- Attack properties
+		attackRate = 2.0,        -- Attacks per second (faster than combat knife)
+		attackDelay = 0.08,      -- Delay before damage registers
+		attackRange = 2.5,       -- Range in studs (shorter than combat knife)
+		attackType = "stab",     -- stab or slash
+		canCombo = true,         -- Can perform combo attacks
+
+		-- Mobility
+		mobility = {
+			walkSpeed = 17,      -- Walking speed (faster than combat knife)
+			sprintSpeed = 23,    -- Sprint speed
+			equipTime = 0.15     -- Weapon draw time (very fast)
+		},
+
+		-- Audio
+		sounds = {
+			swing = "rbxassetid://5810753638",
+			hit = "rbxassetid://3744370687",
+			hitCritical = "rbxassetid://3744371342",
+			equip = "rbxassetid://6842081192",
+			deploy = "rbxassetid://131961136" -- Folding knife deploy sound
+		},
+
+		-- Handling
+		canBlock = false,        -- Cannot block attacks
+		stealthBonus = 1.5,      -- Damage multiplier for stealth attacks
+		silentKill = true,       -- Doesn't alert other players on backstab
+
+		-- Animations
+		animations = {
+			idle = "rbxassetid://9949926480",
+			attack = "rbxassetid://9949926480",
+			attackAlt = "rbxassetid://9949926480",
+			combo1 = "rbxassetid://9949926480",
+			combo2 = "rbxassetid://9949926480",
+			equip = "rbxassetid://9949926480",
+			sprint = "rbxassetid://9949926480"
+		},
+
+		-- Crosshair
+		crosshair = {
+			style = WeaponConfig.CrosshairStyles.DOT,
+			size = 1,
+			thickness = 1,
 			dot = true,
 			color = Color3.fromRGB(255, 255, 255)
 		}

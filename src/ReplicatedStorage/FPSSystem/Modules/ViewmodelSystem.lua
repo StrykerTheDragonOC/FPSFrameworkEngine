@@ -71,6 +71,11 @@ function ViewmodelSystem.new()
     self.bobCycle = 0
     self.isMoving = false
 
+    -- Animation tracking
+    self.currentAnimations = {}
+    self.animationTracks = {}
+    self.weaponAnimations = {}
+
     -- Debug flag - set to false to disable position logging
     self.debugLogging = false
 
@@ -161,14 +166,18 @@ function ViewmodelSystem:fixPartTransparency(part)
     part.CanCollide = false
 end
 
--- Set up the viewmodel rig
-function ViewmodelSystem:setupArms(armsModel)
-    print("Setting up viewmodel arms...")
+-- Set up the viewmodel rig (weapon-specific or default)
+function ViewmodelSystem:setupArms(weaponName, weaponCategory)
+    print("Setting up viewmodel arms for weapon:", weaponName or "default")
 
     -- Clean up existing viewmodel
     if self.viewmodelRig then
+        if self.partAddedConnection then
+            self.partAddedConnection:Disconnect()
+            self.partAddedConnection = nil
+        end
         self.viewmodelRig:Destroy()
-        self.viewmodelRig = nil -- Important to clear the reference
+        self.viewmodelRig = nil
     end
 
     -- Ensure container exists
@@ -176,37 +185,39 @@ function ViewmodelSystem:setupArms(armsModel)
         self:createViewmodelContainer()
     end
 
-    -- PRIORITY 1: Look for custom rig in the specified path
     local customRig = nil
     local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
 
-    if fpsSystem then
+    -- PRIORITY 1: Look for weapon-specific viewmodel
+    if weaponName and fpsSystem then
+        customRig = self:findWeaponViewmodel(weaponName, weaponCategory)
+        if customRig then
+            print("Found weapon-specific viewmodel for", weaponName)
+        end
+    end
+
+    -- PRIORITY 2: Look for default viewmodel rig in Arms folder
+    if not customRig and fpsSystem then
         local viewModels = fpsSystem:FindFirstChild("ViewModels")
         if viewModels then
             local arms = viewModels:FindFirstChild("Arms")
             if arms then
                 customRig = arms:FindFirstChild("ViewmodelRig")
                 if customRig then
-                    print("Found custom ViewmodelRig in ReplicatedStorage path!")
+                    print("Found default ViewmodelRig in Arms folder")
                 end
             end
         end
     end
 
-    -- PRIORITY 2: If specific model was passed in, use that
-    if not customRig and armsModel and armsModel:IsA("Model") then
-        customRig = armsModel
-        print("Using provided arms model")
-    end
-
-    -- PRIORITY 3: Use default arms as last resort
+    -- PRIORITY 3: Use fallback default arms
     if not customRig then
         print("No custom ViewmodelRig found, creating default arms")
         self:createDefaultArms()
         return self.viewmodelRig
     end
 
-    -- Clone your custom rig
+    -- Clone the rig
     local rigClone = customRig:Clone()
     self.viewmodelRig = rigClone
     self.viewmodelRig.Name = "ViewmodelRig"
@@ -235,8 +246,69 @@ function ViewmodelSystem:setupArms(armsModel)
         end
     end)
 
-    print("Arms setup complete!")
+    print("Arms setup complete for:", weaponName or "default")
     return self.viewmodelRig
+end
+
+-- Find weapon-specific viewmodel
+function ViewmodelSystem:findWeaponViewmodel(weaponName, weaponCategory)
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return nil end
+    
+    local viewModels = fpsSystem:FindFirstChild("ViewModels")
+    if not viewModels then return nil end
+    
+    -- Search paths for weapon-specific viewmodels
+    local searchPaths = {
+        -- Primary weapons
+        "Primary/AssaultRIfles/" .. weaponName,
+        "Primary/BattleRifles/" .. weaponName,
+        "Primary/Carbines/" .. weaponName,
+        "Primary/DMRS/" .. weaponName,
+        "Primary/LMGS/" .. weaponName,
+        "Primary/SMGS/" .. weaponName,
+        "Primary/Shotguns/" .. weaponName,
+        "Primary/SniperRifles/" .. weaponName,
+        -- Secondary weapons
+        "Secondary/Pistols/" .. weaponName,
+        "Secondary/Revolvers/" .. weaponName,
+        "Secondary/AutomaticPistols/" .. weaponName,
+        "Secondary/Other/" .. weaponName,
+        -- Melee weapons
+        "Melee/BladeOneHand/" .. weaponName,
+        "Melee/BladeTwoHand/" .. weaponName,
+        "Melee/BluntOneHand/" .. weaponName,
+        "Melee/BluntTwoHand/" .. weaponName,
+        -- Grenades
+        "Grenades/Explosive/" .. weaponName,
+        "Grenades/Impact/" .. weaponName,
+        "Grenades/Tactical/" .. weaponName
+    }
+    
+    -- Search for weapon viewmodel in all possible paths
+    for _, path in ipairs(searchPaths) do
+        local pathParts = path:split("/")
+        local currentFolder = viewModels
+        
+        for _, part in ipairs(pathParts) do
+            currentFolder = currentFolder:FindFirstChild(part)
+            if not currentFolder then
+                break
+            end
+        end
+        
+        if currentFolder then
+            -- Look for a .rbxm file or Model
+            for _, child in ipairs(currentFolder:GetChildren()) do
+                if child:IsA("Model") or child.Name:match("%.rbxm$") then
+                    print("Found weapon viewmodel at path:", path)
+                    return child
+                end
+            end
+        end
+    end
+    
+    return nil
 end
 
 -- Create default arms if no model is provided
@@ -294,20 +366,217 @@ function ViewmodelSystem:createDefaultArms()
     return arms
 end
 
--- Equip a weapon to the viewmodel with attachment support
-function ViewmodelSystem:equipWeapon(weaponModel, weaponType)
+-- Stop all currently playing animations
+function ViewmodelSystem:stopAllAnimations()
+    for animationName, track in pairs(self.animationTracks) do
+        if track and track.IsPlaying then
+            track:Stop()
+        end
+    end
+    self.animationTracks = {}
+    print("Stopped all viewmodel animations")
+end
+
+-- Load weapon animations from ReplicatedStorage Animations folder
+function ViewmodelSystem:loadWeaponAnimations(weaponName, weaponCategory)
+    self.weaponAnimations = {}
+
     if not self.viewmodelRig then
-        warn("Cannot equip weapon - no viewmodel rig set up")
-        self:setupArms() -- Create arms if none exist
+        warn("Cannot load animations: no viewmodel rig")
+        return
     end
 
-    print("Equipping weapon:", weaponType and weaponModel.Name or "nil")
+    local humanoid = self.viewmodelRig:FindFirstChild("Humanoid")
+    if not humanoid then
+        warn("Cannot load animations: no Humanoid in viewmodel rig")
+        return
+    end
+
+    -- Try to find animations in ReplicatedStorage.FPSSystem.Animations
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then
+        warn("FPSSystem folder not found in ReplicatedStorage")
+        return
+    end
+
+    local animationsFolder = fpsSystem:FindFirstChild("Animations")
+    if not animationsFolder then
+        warn("Animations folder not found in FPSSystem")
+        return
+    end
+
+    -- Determine weapon category and type for animation path
+    local animationPaths = {
+        -- Primary weapons
+        "Primary/AssaultRIfles/" .. weaponName,
+        "Primary/BattleRifles/" .. weaponName,
+        "Primary/Carbines/" .. weaponName,
+        "Primary/DMRS/" .. weaponName,
+        "Primary/LMGS/" .. weaponName,
+        "Primary/SMGS/" .. weaponName,
+        "Primary/Shotguns/" .. weaponName,
+        "Primary/SniperRifles/" .. weaponName,
+        -- Secondary weapons
+        "Secondary/Pistols/" .. weaponName,
+        "Secondary/Revolvers/" .. weaponName,
+        "Secondary/AutomaticPistols/" .. weaponName,
+        "Secondary/Other/" .. weaponName,
+        -- Melee weapons
+        "Melee/BladeOneHand/" .. weaponName,
+        "Melee/BladeTwoHand/" .. weaponName,
+        "Melee/BluntOneHand/" .. weaponName,
+        "Melee/BluntTwoHand/" .. weaponName,
+        -- Grenades
+        "Grenades/Explosive/" .. weaponName,
+        "Grenades/Impact/" .. weaponName,
+        "Grenades/Tactical/" .. weaponName
+    }
+
+    local weaponAnimFolder = nil
+    
+    -- Search for weapon animations in all possible paths
+    for _, path in ipairs(animationPaths) do
+        local pathParts = path:split("/")
+        local currentFolder = animationsFolder
+        
+        for _, part in ipairs(pathParts) do
+            currentFolder = currentFolder:FindFirstChild(part)
+            if not currentFolder then
+                break
+            end
+        end
+        
+        if currentFolder then
+            weaponAnimFolder = currentFolder
+            print("Found animations for", weaponName, "at path:", path)
+            break
+        end
+    end
+
+    if not weaponAnimFolder then
+        print("No animations found for weapon:", weaponName)
+        return
+    end
+
+    -- Load all animation files from the weapon's animation folder
+    for _, animObject in pairs(weaponAnimFolder:GetChildren()) do
+        if animObject:IsA("Model") or animObject.Name:match("%.rbxm$") then
+            -- This is an animation model file, try to find Animation objects in it
+            for _, child in pairs(animObject:GetDescendants()) do
+                if child:IsA("Animation") then
+                    local track = humanoid:LoadAnimation(child)
+                    local animName = animObject.Name:lower():gsub("%.rbxm", "")
+                    self.weaponAnimations[animName] = track
+                    print("Loaded animation:", animName, "from", animObject.Name)
+                end
+            end
+        elseif animObject:IsA("Animation") then
+            -- Direct Animation object
+            local track = humanoid:LoadAnimation(animObject)
+            local animName = animObject.Name:lower()
+            self.weaponAnimations[animName] = track
+            print("Loaded animation:", animName)
+        end
+    end
+    
+    print("Loaded", #self.weaponAnimations, "animations for", weaponName)
+end
+
+-- Play a specific animation
+function ViewmodelSystem:playAnimation(animationName, fadeTime, weight, speed)
+    fadeTime = fadeTime or 0.1
+    weight = weight or 1
+    speed = speed or 1
+
+    local track = self.weaponAnimations[animationName:lower()]
+    if not track then
+        -- Try to find it in current tracks
+        track = self.animationTracks[animationName:lower()]
+    end
+
+    if track then
+        track:Play(fadeTime, weight, speed)
+        self.animationTracks[animationName:lower()] = track
+        print("Playing animation:", animationName)
+        return track
+    else
+        warn("Animation not found:", animationName)
+        return nil
+    end
+end
+
+-- Setup Motor6Ds for weapon animation
+function ViewmodelSystem:setupWeaponMotor6Ds()
+    if not self.currentWeapon or not self.viewmodelRig then return end
+
+    -- Find attachment points in both the weapon and the rig
+    local weaponHandle = self.currentWeapon:FindFirstChild("Handle") or self.currentWeapon.PrimaryPart
+    if not weaponHandle then 
+        print("No weapon handle found for Motor6D setup")
+        return 
+    end
+
+    -- Try to find hand parts in the rig
+    local rightHand = self.viewmodelRig:FindFirstChild("RightHand") or 
+                      self.viewmodelRig:FindFirstChild("RightArm") or 
+                      self.viewmodelRig:FindFirstChild("Right Arm")
+
+    -- Create Motor6D connections for animation support
+    if rightHand and weaponHandle then
+        -- Remove existing grips first
+        local existingMotor = rightHand:FindFirstChild("RightGrip")
+        if existingMotor then
+            existingMotor:Destroy()
+        end
+        
+        local motor6d = Instance.new("Motor6D")
+        motor6d.Name = "RightGrip"
+        motor6d.Part0 = rightHand
+        motor6d.Part1 = weaponHandle
+        
+        -- Better default grip positioning
+        motor6d.C0 = CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+        motor6d.C1 = CFrame.new(0, 0, 0)
+        motor6d.Parent = rightHand
+        
+        print("Created RightGrip Motor6D between", rightHand.Name, "and", weaponHandle.Name)
+    else
+        print("Could not create Motor6D: rightHand =", rightHand and rightHand.Name or "nil", 
+              "weaponHandle =", weaponHandle and weaponHandle.Name or "nil")
+    end
+end
+
+-- Equip a weapon to the viewmodel with animation support
+function ViewmodelSystem:equipWeapon(weaponModel, weaponType)
+    print("Equipping weapon:", weaponModel and weaponModel.Name or "nil", "Type:", weaponType or "unknown")
 
     -- Clean up existing weapon
     if self.currentWeapon then
         self.currentWeapon:Destroy()
         self.currentWeapon = nil -- Clear reference
     end
+
+    -- Stop any existing animations
+    self:stopAllAnimations()
+
+    -- Determine weapon category for viewmodel selection
+    local weaponName = weaponModel and weaponModel.Name or nil
+    local weaponCategory = nil
+    
+    if weaponType then
+        if string.find(weaponType:lower(), "primary") then
+            weaponCategory = "Primary"
+        elseif string.find(weaponType:lower(), "secondary") then
+            weaponCategory = "Secondary"
+        elseif string.find(weaponType:lower(), "melee") then
+            weaponCategory = "Melee"
+        elseif string.find(weaponType:lower(), "grenade") then
+            weaponCategory = "Grenades"
+        end
+    end
+
+    -- Set up weapon-specific viewmodel rig BEFORE equipping weapon
+    self:setupArms(weaponName, weaponCategory)
 
     -- If no weapon model provided, create a placeholder
     if not weaponModel then
@@ -327,73 +596,73 @@ function ViewmodelSystem:equipWeapon(weaponModel, weaponType)
     end
 
     self.currentWeapon = result
+    self.currentWeaponType = weaponType
 
     -- Process weapon parts
     for _, part in pairs(self.currentWeapon:GetDescendants()) do
         if part:IsA("BasePart") then
             part.CanCollide = false
-            part.Anchored = true
+            part.Anchored = false -- Important for proper positioning with Motor6D
         end
     end
 
-    -- Verify or find primary part
-    if not self.currentWeapon.PrimaryPart then
-        local primaryPart = self.currentWeapon:FindFirstChild("Handle") or
-            self.currentWeapon:FindFirstChild("Gun") or
-            self.currentWeapon:FindFirstChildWhichIsA("BasePart")
-
-        if primaryPart then
-            self.currentWeapon.PrimaryPart = primaryPart
-        else
-            warn("Weapon model needs a primary part")
-            self:createPlaceholderWeapon()
-            return
-        end
-    end
-
-    -- Position the weapon based on type
-    local weaponOffset = VIEWMODEL_SETTINGS.WEAPON_OFFSETS.DEFAULT
-    if weaponType then
-        if weaponType == "PRIMARY" then
-            weaponOffset = VIEWMODEL_SETTINGS.WEAPON_OFFSETS.DEFAULT
-        elseif weaponType == "SECONDARY" then
-            weaponOffset = CFrame.new(0.2, -0.3, -0.4)
-        elseif weaponType == "MELEE" then
-            weaponOffset = CFrame.new(0.3, -0.4, -0.3)
-        elseif weaponType == "GRENADE" then
-            weaponOffset = CFrame.new(0.2, -0.3, -0.3)
-        end
-    end
-
-    -- Parent to viewmodel
+    -- Parent to viewmodel first
     if self.viewmodelRig then
         self.currentWeapon.Parent = self.viewmodelRig
     else
         warn("Cannot parent weapon: viewmodelRig is nil")
+        return
     end
 
-    -- Wait a frame to let the parenting complete
-    RunService.RenderStepped:Wait()
+    -- Position weapon properly using existing attachments or create default positioning
+    self:positionWeapon()
 
-    -- Position correctly - try to use attachment if available
-    if self.container and self.container.PrimaryPart then
-        local weaponAttachment = self.container.PrimaryPart:FindFirstChild("WeaponAttachment")
+    -- Find and set up Motor6Ds for animation
+    self:setupWeaponMotor6Ds()
 
-        if weaponAttachment then
-            -- Use attachment to position weapon
-            local attachmentWorldCFrame = weaponAttachment.WorldCFrame
-            pcall(function()
-                self.currentWeapon:PivotTo(attachmentWorldCFrame)
-            end)
-        else
-            -- Fallback to offset method
-            pcall(function()
-                self.currentWeapon:PivotTo(self.container.PrimaryPart.CFrame * weaponOffset)
-            end)
+    -- Load and play idle animation
+    self:loadWeaponAnimations(weaponName, weaponCategory)
+    self:playAnimation("idle")
+
+    print("Weapon equipped successfully with weapon-specific viewmodel!")
+end
+
+-- Position weapon properly relative to the viewmodel rig
+function ViewmodelSystem:positionWeapon()
+    if not self.currentWeapon or not self.viewmodelRig then return end
+    
+    -- Find the right hand in the viewmodel rig
+    local rightHand = self.viewmodelRig:FindFirstChild("RightHand") or 
+                      self.viewmodelRig:FindFirstChild("RightArm") or 
+                      self.viewmodelRig:FindFirstChild("Right Arm")
+                      
+    -- Find weapon handle
+    local weaponHandle = self.currentWeapon:FindFirstChild("Handle") or 
+                        self.currentWeapon.PrimaryPart
+    
+    if not rightHand or not weaponHandle then
+        print("Could not find right hand or weapon handle - using default positioning")
+        -- Fall back to container attachment positioning
+        if self.container and self.container.PrimaryPart then
+            local weaponAttachment = self.container.PrimaryPart:FindFirstChild("WeaponAttachment")
+            if weaponAttachment and self.currentWeapon.PrimaryPart then
+                local offset = CFrame.new(0.2, -0.3, -0.5) -- Default weapon offset
+                self.currentWeapon:SetPrimaryPartCFrame(weaponAttachment.WorldCFrame * offset)
+                print("Positioned weapon using container attachment")
+            end
         end
+        return
     end
-
-    print("Weapon equipped successfully!")
+    
+    -- Position weapon in right hand
+    if self.currentWeapon.PrimaryPart then
+        -- Create a grip offset (adjust as needed)
+        local gripOffset = CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+        local targetCFrame = rightHand.CFrame * gripOffset
+        
+        self.currentWeapon:SetPrimaryPartCFrame(targetCFrame)
+        print("Positioned weapon in right hand")
+    end
 end
 
 -- Create a placeholder weapon with attachment support
@@ -640,6 +909,9 @@ function ViewmodelSystem:cleanup()
         self.partAddedConnection:Disconnect()
         self.partAddedConnection = nil
     end
+
+    -- Stop all animations before cleanup
+    self:stopAllAnimations()
 
     -- Clean up viewmodel parts but don't destroy container
     if self.currentWeapon then

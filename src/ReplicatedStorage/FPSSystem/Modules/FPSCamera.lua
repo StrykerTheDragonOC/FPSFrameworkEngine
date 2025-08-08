@@ -135,11 +135,29 @@ function FPSCamera:setupCamera()
 	-- Lock the mouse
 	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	UserInputService.MouseIconEnabled = false
+	
+	-- Export mouse control functions for other systems
+	_G.FPSCameraMouseControl = {
+		unlockMouse = function()
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			UserInputService.MouseIconEnabled = true
+		end,
+		lockMouse = function()
+			UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+			UserInputService.MouseIconEnabled = false
+		end,
+		isLocked = function()
+			return UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter
+		end
+	}
 
 	-- Connect mouse movement
 	self.mouseConnection = UserInputService.InputChanged:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
-			self:handleMouseMovement(input)
+			-- Only handle mouse movement when locked
+			if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
+				self:handleMouseMovement(input)
+			end
 		end
 	end)
 

@@ -1,5 +1,5 @@
 -- AttachmentSystem.lua
--- Enhanced attachment system with proper weapon modification support
+-- Dynamic attachment system that detects weapon attachment points automatically
 -- Place in ReplicatedStorage.FPSSystem.Modules
 
 local AttachmentSystem = {}
@@ -13,9 +13,47 @@ local RunService = game:GetService("RunService")
 local ATTACHMENT_TYPES = {
 	SIGHT = "SIGHT",
 	BARREL = "BARREL",
-	UNDERBARREL = "UNDERBARREL",
+	UNDERBARREL = "UNDERBARREL", 
 	OTHER = "OTHER",
 	AMMO = "AMMO"
+}
+
+-- Dynamic attachment point detection patterns
+-- Maps attachment point names to attachment types
+local ATTACHMENT_POINT_PATTERNS = {
+	-- Sight/Optic attachments
+	["Optic"] = ATTACHMENT_TYPES.SIGHT,
+	["Sight"] = ATTACHMENT_TYPES.SIGHT,
+	["Scope"] = ATTACHMENT_TYPES.SIGHT,
+	["AimPoint"] = ATTACHMENT_TYPES.SIGHT,
+	["RedDot"] = ATTACHMENT_TYPES.SIGHT,
+	["ACOG"] = ATTACHMENT_TYPES.SIGHT,
+	
+	-- Barrel attachments  
+	["Barrel"] = ATTACHMENT_TYPES.BARREL,
+	["Muzzle"] = ATTACHMENT_TYPES.BARREL,
+	["Suppressor"] = ATTACHMENT_TYPES.BARREL,
+	["Compensator"] = ATTACHMENT_TYPES.BARREL,
+	["FlashHider"] = ATTACHMENT_TYPES.BARREL,
+	
+	-- Underbarrel attachments
+	["Underbarrel"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Grip"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Foregrip"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Bipod"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Laser"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Tactical"] = ATTACHMENT_TYPES.UNDERBARREL,
+	
+	-- Other attachments
+	["Stock"] = ATTACHMENT_TYPES.OTHER,
+	["Magazine"] = ATTACHMENT_TYPES.OTHER,
+	["Mag"] = ATTACHMENT_TYPES.OTHER,
+	["Battery"] = ATTACHMENT_TYPES.OTHER,
+	["Light"] = ATTACHMENT_TYPES.OTHER,
+	
+	-- Special points
+	["LeftGrip"] = ATTACHMENT_TYPES.OTHER,
+	["RightGrip"] = ATTACHMENT_TYPES.OTHER
 }
 
 -- Attachment category data - defines which slot each type corresponds to
@@ -31,7 +69,7 @@ local ATTACHMENT_CATEGORIES = {
 	["Muzzle Brake"] = ATTACHMENT_TYPES.BARREL,
 
 	["Vertical Grip"] = ATTACHMENT_TYPES.UNDERBARREL,
-	["Angled Grip"] = ATTACHMENT_TYPES.UNDERBARREL,
+	["Angled Grip"] = ATTACHMENT_TYPES.UNDERBARREL,  
 	["Laser"] = ATTACHMENT_TYPES.UNDERBARREL,
 	["Bipod"] = ATTACHMENT_TYPES.UNDERBARREL,
 
@@ -45,32 +83,70 @@ local ATTACHMENT_CATEGORIES = {
 	["Incendiary"] = ATTACHMENT_TYPES.AMMO
 }
 
--- Attachment mount positions (relative to weapon parts)
-local ATTACHMENT_MOUNTS = {
-	[ATTACHMENT_TYPES.SIGHT] = {
-		attachmentPoint = "SightMount",
-		defaultOffset = CFrame.new(0, 0.15, 0)
-	},
-	[ATTACHMENT_TYPES.BARREL] = {
-		attachmentPoint = "BarrelMount",
-		defaultOffset = CFrame.new(0, 0, -0.5)
-	},
-	[ATTACHMENT_TYPES.UNDERBARREL] = {
-		attachmentPoint = "UnderbarrelMount",
-		defaultOffset = CFrame.new(0, -0.15, -0.2)
-	},
-	[ATTACHMENT_TYPES.OTHER] = {
-		attachmentPoint = "OtherMount",
-		defaultOffset = CFrame.new(0, 0, 0)
-	},
-	[ATTACHMENT_TYPES.AMMO] = {
-		attachmentPoint = "AmmoMount",
-		defaultOffset = CFrame.new(0, 0, 0)
-	}
-}
-
 -- Cache for attachment asset models
 local attachmentModelCache = {}
+
+-- Cache for weapon attachment point scans
+local weaponAttachmentCache = {}
+
+-- Function to scan weapon model for attachment points
+function AttachmentSystem.scanWeaponAttachmentPoints(weaponModel)
+	if not weaponModel then return {} end
+	
+	-- Check cache first
+	local weaponName = weaponModel.Name
+	if weaponAttachmentCache[weaponName] then
+		return weaponAttachmentCache[weaponName]
+	end
+	
+	local attachmentPoints = {}
+	
+	-- Recursively search for attachment points
+	local function scanDescendants(parent)
+		for _, child in ipairs(parent:GetChildren()) do
+			if child:IsA("Attachment") then
+				-- Determine attachment type based on name patterns
+				local attachmentType = AttachmentSystem.getAttachmentTypeFromName(child.Name)
+				if attachmentType then
+					attachmentPoints[attachmentType] = child
+				end
+			elseif child:IsA("Model") or child:IsA("Part") then
+				scanDescendants(child)
+			end
+		end
+	end
+	
+	scanDescendants(weaponModel)
+	
+	-- Cache the result
+	weaponAttachmentCache[weaponName] = attachmentPoints
+	return attachmentPoints
+end
+
+-- Function to determine attachment type from attachment point name
+function AttachmentSystem.getAttachmentTypeFromName(attachmentName)
+	for pattern, attachmentType in pairs(ATTACHMENT_POINT_PATTERNS) do
+		if string.find(attachmentName:lower(), pattern:lower()) then
+			return attachmentType
+		end
+	end
+	return nil
+end
+
+-- Function to get compatible attachment points for a weapon
+function AttachmentSystem.getWeaponAttachmentPoints(weaponModel)
+	local points = AttachmentSystem.scanWeaponAttachmentPoints(weaponModel)
+	local organized = {}
+	
+	for attachmentType, attachment in pairs(points) do
+		if not organized[attachmentType] then
+			organized[attachmentType] = {}
+		end
+		table.insert(organized[attachmentType], attachment)
+	end
+	
+	return organized
+end
 
 -- Initialize attachment database
 function AttachmentSystem.init()
@@ -447,32 +523,42 @@ function AttachmentSystem.createPlaceholderAttachment(attachmentName, attachment
 	return model
 end
 
--- Attach an attachment to a weapon model
+-- Attach an attachment to a weapon model using dynamic attachment point detection
 function AttachmentSystem.attachToWeapon(weaponModel, attachmentName)
 	if not weaponModel then return nil end
 
 	local attachment = AttachmentSystem.getAttachment(attachmentName)
 	if not attachment then return nil end
 
-	-- Get attachment type and mounting info
+	-- Get attachment type
 	local attachmentType = attachment.type or AttachmentSystem.getAttachmentCategory(attachmentName)
-	local mountInfo = ATTACHMENT_MOUNTS[attachmentType]
-
-	if not mountInfo then return nil end
-
+	
 	-- Get or create attachment model
 	local attachmentModel = AttachmentSystem.getAttachmentModel(attachmentName)
 	if not attachmentModel then return nil end
 
-	-- Find attachment point on weapon
-	local attachmentPoint = weaponModel:FindFirstChild(mountInfo.attachmentPoint, true)
+	-- Scan weapon for compatible attachment points
+	local weaponAttachmentPoints = AttachmentSystem.scanWeaponAttachmentPoints(weaponModel)
+	local compatiblePoint = weaponAttachmentPoints[attachmentType]
+	
 	local mountPosition
-
-	if attachmentPoint and attachmentPoint:IsA("Attachment") then
-		mountPosition = attachmentPoint.WorldCFrame
+	if compatiblePoint and compatiblePoint:IsA("Attachment") then
+		-- Use the specific attachment point found on the weapon
+		mountPosition = compatiblePoint.WorldCFrame
+		print("Attached", attachmentName, "to", compatiblePoint.Name, "on", weaponModel.Name)
 	else
-		-- Use default position if no attachment point found
-		mountPosition = weaponModel.PrimaryPart.CFrame * mountInfo.defaultOffset
+		-- Fallback to default positions if no specific point found
+		local defaultOffsets = {
+			[ATTACHMENT_TYPES.SIGHT] = CFrame.new(0, 0.15, 0),
+			[ATTACHMENT_TYPES.BARREL] = CFrame.new(0, 0, -0.5), 
+			[ATTACHMENT_TYPES.UNDERBARREL] = CFrame.new(0, -0.15, -0.2),
+			[ATTACHMENT_TYPES.OTHER] = CFrame.new(0, 0, 0),
+			[ATTACHMENT_TYPES.AMMO] = CFrame.new(0, 0, 0)
+		}
+		
+		local defaultOffset = defaultOffsets[attachmentType] or CFrame.new(0, 0, 0)
+		mountPosition = weaponModel.PrimaryPart.CFrame * defaultOffset
+		print("Attached", attachmentName, "to default position on", weaponModel.Name, "(no specific attachment point found)")
 	end
 
 	-- Position attachment

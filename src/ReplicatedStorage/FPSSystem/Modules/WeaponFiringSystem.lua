@@ -52,29 +52,16 @@ end
 
 -- Setup remote events for server-side handling
 function WeaponFiringSystem:setupRemoteEvents()
-    -- Get or create RemoteEvent for weapon firing
-    self.fireEvent = ReplicatedStorage:FindFirstChild("WeaponFired")
-    if not self.fireEvent then
-        self.fireEvent = Instance.new("RemoteEvent")
-        self.fireEvent.Name = "WeaponFired"
-        self.fireEvent.Parent = ReplicatedStorage
-    end
+    -- Wait for FPS system folder
+    local fpsSystem = ReplicatedStorage:WaitForChild("FPSSystem")
+    local remoteEventsFolder = fpsSystem:WaitForChild("RemoteEvents")
 
-    -- Get or create RemoteEvent for hit registration
-    self.hitEvent = ReplicatedStorage:FindFirstChild("WeaponHit")
-    if not self.hitEvent then
-        self.hitEvent = Instance.new("RemoteEvent")
-        self.hitEvent.Name = "WeaponHit"
-        self.hitEvent.Parent = ReplicatedStorage
-    end
-
-    -- Get or create RemoteEvent for reloading
-    self.reloadEvent = ReplicatedStorage:FindFirstChild("WeaponReload")
-    if not self.reloadEvent then
-        self.reloadEvent = Instance.new("RemoteEvent")
-        self.reloadEvent.Name = "WeaponReload"
-        self.reloadEvent.Parent = ReplicatedStorage
-    end
+    -- Get remote events from the correct location
+    self.fireEvent = remoteEventsFolder:WaitForChild("WeaponFired")
+    self.hitEvent = remoteEventsFolder:WaitForChild("WeaponHit")
+    self.reloadEvent = remoteEventsFolder:WaitForChild("WeaponReload")
+    
+    print("WeaponFiringSystem: Remote events connected")
 end
 
 -- Set the current weapon
@@ -147,17 +134,19 @@ function WeaponFiringSystem:tryFire()
     -- Reduce ammo
     ammo.currentMagazine = ammo.currentMagazine - 1
 
-    -- Create visual effects
+    -- Create visual and audio effects
     self:createMuzzleFlash()
     self:createShellCasing()
+    self:playSound("Fire")
 
     -- Perform raycast to find target
     local hitInfo = self:performRaycast()
 
-    -- Create bullet tracer
+    -- Create bullet tracer and handle damage
     if hitInfo then
         self:createBulletTracer(hitInfo.hitPosition)
         self:createImpactEffect(hitInfo)
+        self:handleDamage(hitInfo)
     end
 
     -- Apply recoil
@@ -169,7 +158,7 @@ function WeaponFiringSystem:tryFire()
     return true
 end
 
--- Perform raycast to find hit target
+-- Perform raycast to find hit target with penetration
 function WeaponFiringSystem:performRaycast()
     -- Get muzzle position
     local muzzleAttachment = self:getMuzzleAttachment()
@@ -187,32 +176,126 @@ function WeaponFiringSystem:performRaycast()
         (math.random() - 0.5) * spreadFactor
     )
 
-    local rayDirection = (self.camera.CFrame.LookVector + randomSpread).Unit * DEFAULT_SETTINGS.MAX_DISTANCE
-
-    -- Setup raycast
+    local rayDirection = (self.camera.CFrame.LookVector + randomSpread).Unit
+    
+    -- Get weapon penetration power
+    local penetrationPower = self.currentWeapon:GetAttribute("PenetrationPower") or 1
+    local maxPenetrations = self.currentWeapon:GetAttribute("MaxPenetrations") or 2
+    
+    -- Perform multiple raycasts for penetration
+    local allHits = {}
+    local currentOrigin = rayOrigin
+    local currentDirection = rayDirection
+    local remainingDistance = DEFAULT_SETTINGS.MAX_DISTANCE
+    local remainingPenetration = penetrationPower
+    local penetrationCount = 0
+    
+    -- Setup raycast params
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude -- Updated from Blacklist (deprecated)
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.FilterDescendantsInstances = {self.player.Character, self.camera, self.viewmodel.container}
 
-    -- Perform raycast
-    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-
-    if raycastResult then
-        return {
-            hitPart = raycastResult.Instance,
-            hitPosition = raycastResult.Position,
-            hitNormal = raycastResult.Normal,
-            material = raycastResult.Material,
-            distance = (raycastResult.Position - rayOrigin).Magnitude
-        }
+    while remainingDistance > 0 and penetrationCount < maxPenetrations do
+        local raycastResult = workspace:Raycast(currentOrigin, currentDirection * remainingDistance, raycastParams)
+        
+        if raycastResult then
+            local hitInfo = {
+                hitPart = raycastResult.Instance,
+                hitPosition = raycastResult.Position,
+                hitNormal = raycastResult.Normal,
+                material = raycastResult.Material,
+                distance = (raycastResult.Position - currentOrigin).Magnitude,
+                penetrationIndex = penetrationCount
+            }
+            
+            table.insert(allHits, hitInfo)
+            
+            -- Calculate material penetration resistance
+            local materialResistance = self:getMaterialPenetrationResistance(raycastResult.Material)
+            
+            -- Check if we can penetrate this material
+            if remainingPenetration > materialResistance and penetrationCount < maxPenetrations then
+                -- Calculate thickness of the object (rough estimate)
+                local thickness = self:estimateObjectThickness(raycastResult.Instance, raycastResult.Position, currentDirection)
+                
+                -- Reduce penetration power based on material and thickness
+                remainingPenetration = remainingPenetration - (materialResistance * thickness)
+                
+                if remainingPenetration > 0 then
+                    -- Continue ray from exit point
+                    currentOrigin = raycastResult.Position + currentDirection * (thickness + 0.1)
+                    remainingDistance = remainingDistance - hitInfo.distance - thickness
+                    penetrationCount = penetrationCount + 1
+                    
+                    -- Add the hit part to filter so we don't hit it again
+                    table.insert(raycastParams.FilterDescendantsInstances, raycastResult.Instance)
+                else
+                    break
+                end
+            else
+                break
+            end
+        else
+            -- No more hits
+            break
+        end
+    end
+    
+    -- Return the first hit (primary target) or endpoint if no hits
+    if #allHits > 0 then
+        local primaryHit = allHits[1]
+        -- Create a safe copy of all hits without circular references
+        local safePenetrationHits = {}
+        for i, hit in ipairs(allHits) do
+            safePenetrationHits[i] = {
+                hitPart = hit.hitPart,
+                hitPosition = hit.hitPosition,
+                hitNormal = hit.hitNormal,
+                material = hit.material,
+                distance = hit.distance,
+                penetrationIndex = hit.penetrationIndex
+            }
+        end
+        primaryHit.penetrationHits = safePenetrationHits
+        return primaryHit
     else
-        -- No hit, return endpoint
         return {
-            hitPosition = rayOrigin + rayDirection,
+            hitPosition = rayOrigin + rayDirection * DEFAULT_SETTINGS.MAX_DISTANCE,
             distance = DEFAULT_SETTINGS.MAX_DISTANCE,
-            isMaxDistance = true
+            isMaxDistance = true,
+            penetrationHits = {}
         }
     end
+end
+
+-- Get material penetration resistance
+function WeaponFiringSystem:getMaterialPenetrationResistance(material)
+    local resistanceMap = {
+        [Enum.Material.Fabric] = 0.1,
+        [Enum.Material.Plastic] = 0.2,
+        [Enum.Material.Wood] = 0.3,
+        [Enum.Material.WoodPlanks] = 0.3,
+        [Enum.Material.Glass] = 0.4,
+        [Enum.Material.Concrete] = 0.7,
+        [Enum.Material.Brick] = 0.8,
+        [Enum.Material.Metal] = 0.9,
+        [Enum.Material.DiamondPlate] = 1.0,
+        [Enum.Material.CorrodedMetal] = 0.8,
+        [Enum.Material.ForceField] = 10.0  -- Unpenetrable
+    }
+    
+    return resistanceMap[material] or 0.5  -- Default resistance
+end
+
+-- Estimate object thickness for penetration calculation
+function WeaponFiringSystem:estimateObjectThickness(part, hitPosition, direction)
+    -- Simple thickness estimation based on part size and hit angle
+    local size = part.Size
+    local avgSize = (size.X + size.Y + size.Z) / 3
+    
+    -- For basic estimation, use a fraction of average size
+    -- This is a simplified approach - in reality you'd want more sophisticated thickness calculation
+    return math.min(avgSize * 0.3, 5)  -- Cap at 5 studs max thickness
 end
 
 -- Get the muzzle attachment from the weapon
@@ -463,27 +546,36 @@ end
 
 -- Play sound effect
 function WeaponFiringSystem:playSound(soundName)
-    -- This is a placeholder. In a real implementation, you would:
-    -- 1. Check if the weapon has the specific sound
-    -- 2. Or use a generic sound from a sound library
-    print("Playing sound: " .. soundName)
-
-    -- Example implementation:
     local soundId
-    if soundName == "Fire" then
-        soundId = "rbxassetid://1905367471" -- Placeholder
-    elseif soundName == "Reload" then
-        soundId = "rbxassetid://138084889" -- Placeholder
-    elseif soundName == "EmptyClick" then
-        soundId = "rbxassetid://255061173" -- Placeholder
+    
+    -- Try to get sound from weapon config first
+    if _G.FPSController and _G.FPSController.state and _G.FPSController.state.currentWeapon then
+        local weaponConfig = _G.FPSController.state.currentWeapon.config
+        if weaponConfig and weaponConfig.sounds then
+            local soundKey = soundName:lower()
+            soundId = weaponConfig.sounds[soundKey] or weaponConfig.sounds.fire
+        end
+    end
+    
+    -- Fallback to default sounds if weapon config not available
+    if not soundId then
+        if soundName == "Fire" then
+            soundId = "rbxassetid://4759267374" -- G36 fire sound
+        elseif soundName == "Reload" then
+            soundId = "rbxassetid://799954844" -- Reload sound
+        elseif soundName == "EmptyClick" then
+            soundId = "rbxassetid://91170486" -- Empty click sound
+        end
     end
 
     if soundId then
         local sound = Instance.new("Sound")
         sound.SoundId = soundId
-        sound.Volume = 1
+        sound.Volume = 0.5
+        sound.RollOffMode = Enum.RollOffMode.InverseTapered
+        sound.MaxDistance = 1000
 
-        -- Play from weapon if possible
+        -- Play from weapon if possible, otherwise from camera
         if self.currentWeapon and self.currentWeapon.PrimaryPart then
             sound.Parent = self.currentWeapon.PrimaryPart
         else
@@ -491,9 +583,54 @@ function WeaponFiringSystem:playSound(soundName)
         end
 
         sound:Play()
+        print("Playing weapon sound:", soundName, "ID:", soundId)
 
         -- Auto-cleanup
         game:GetService("Debris"):AddItem(sound, 2)
+    else
+        print("No sound ID found for:", soundName)
+    end
+end
+
+-- Handle damage from weapon hit
+function WeaponFiringSystem:handleDamage(hitInfo)
+    if not hitInfo or not hitInfo.target then return end
+    
+    local target = hitInfo.target
+    local hitPart = hitInfo.hitPart
+    
+    -- Check if target is a character with humanoid or test rig
+    local character = target.Parent
+    local humanoid = character and character:FindFirstChild("Humanoid")
+    
+    if not humanoid then
+        -- Check if it's a test rig directly
+        humanoid = target:FindFirstChild("Humanoid")
+        if humanoid then
+            character = target
+        else
+            return -- Not a valid damage target
+        end
+    end
+    
+    -- Get weapon damage
+    local damage = 30 -- Default damage
+    
+    -- Try to get damage from weapon config
+    if _G.FPSController and _G.FPSController.state and _G.FPSController.state.currentWeapon then
+        local weaponConfig = _G.FPSController.state.currentWeapon.config
+        if weaponConfig and weaponConfig.damage then
+            damage = weaponConfig.damage
+        end
+    end
+    
+    -- Apply damage through damage system if available
+    if _G.DamageSystem then
+        _G.DamageSystem:applyDamage(character, damage, hitPart and hitPart.Name or "Torso", "bullet", self.player)
+    else
+        -- Fallback direct damage
+        humanoid:TakeDamage(damage)
+        print("Applied", damage, "damage to", character.Name, "at", hitPart and hitPart.Name or "unknown")
     end
 end
 

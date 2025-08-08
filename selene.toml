@@ -1,0 +1,13 @@
+std = "roblox+luau"
+
+[rules]
+# Disable unused variable warnings for event parameters
+unused_variable = "allow"
+
+# Allow undefined variables for Roblox standard library
+undefined_variable = "allow"
+
+# Allow incorrect standard library use for modern Luau features
+incorrect_standard_library_use = "allow"
+
+# Standard Roblox configuration
