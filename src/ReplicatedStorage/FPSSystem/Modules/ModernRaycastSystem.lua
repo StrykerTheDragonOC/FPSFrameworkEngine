@@ -382,3 +382,50 @@ function ModernRaycastSystem:createPlayerDetectionConfig(excludePlayers)
     -- Include only players
     local playerCharacters = {}
     for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and not table.find(excludePlayers or {}, player) then
+            table.insert(playerCharacters, player.Character)
+        end
+    end
+
+    config:setIncludeFilter(playerCharacters)
+    return config
+end
+
+-- Create config for environment only (exclude all players and their objects)
+function ModernRaycastSystem:createEnvironmentConfig()
+    local config = self:createConfig()
+
+    -- Exclude all player characters
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            config:addToExcludeList(player.Character)
+        end
+    end
+
+    return config
+end
+
+-- Update default excludes (call when player spawns)
+function ModernRaycastSystem:updateDefaultExcludes()
+    self.defaultExcludes = {}
+    self:addDefaultExcludes()
+end
+
+-- Utility: Create exclude config from list
+function ModernRaycastSystem.createExcludeConfig(excludeList)
+    local config = RaycastConfig.new()
+    config:setExcludeFilter(excludeList)
+    return config
+end
+
+-- Utility: Create include config from list
+function ModernRaycastSystem.createIncludeConfig(includeList)
+    local config = RaycastConfig.new()
+    config:setIncludeFilter(includeList)
+    return config
+end
+
+-- Export classes
+ModernRaycastSystem.RaycastConfig = RaycastConfig
+
+return ModernRaycastSystem

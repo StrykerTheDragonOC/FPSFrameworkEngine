@@ -1,507 +1,730 @@
--- MainFPSController.lua
--- Complete FPS controller that integrates all systems
--- Place in StarterPlayer/StarterPlayerScripts/MainFPSController.lua
+-- EnhancedFPSController.client.lua
+-- Main FPS system controller with error handling and modern architecture
+-- Place in StarterPlayerScripts
 
-local FPSController = {}
-
--- Services
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local SoundService = game:GetService("SoundService")
 
--- Player references
 local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
 
--- System modules
-local systems = {}
-local modules = {}
+-- Enhanced FPS Controller
+local EnhancedFPSController = {}
+EnhancedFPSController.__index = EnhancedFPSController
 
--- Current state
-local state = {
-    currentWeapon = nil,
-    currentSlot = "PRIMARY",
-    isAiming = false,
-    isSprinting = false,
-    isReloading = false,
+-- System state management
+local SystemState = {
+    UNINITIALIZED = "UNINITIALIZED",
+    INITIALIZING = "INITIALIZING", 
+    READY = "READY",
+    ERROR = "ERROR"
+}
 
-    slots = {
+-- Constructor
+function EnhancedFPSController.new()
+    local self = setmetatable({}, EnhancedFPSController)
+
+    -- Core references
+    self.player = Players.LocalPlayer
+    self.character = nil
+    self.humanoid = nil
+    self.rootPart = nil
+    self.camera = workspace.CurrentCamera
+
+    -- System management
+    self.systems = {}
+    self.systemState = SystemState.UNINITIALIZED
+    self.initializationErrors = {}
+
+    -- Weapon management
+    self.weapons = {
         PRIMARY = nil,
         SECONDARY = nil,
         MELEE = nil,
         GRENADE = nil
     }
-}
+    self.currentWeapon = "PRIMARY"
+    self.weaponSwitching = false
 
--- Input mappings
-local inputActions = {
-    primaryFire = Enum.UserInputType.MouseButton1,
-    aim = Enum.UserInputType.MouseButton2,
-    reload = Enum.KeyCode.R,
-    sprint = Enum.KeyCode.LeftShift,
+    -- Input management
+    self.inputConnections = {}
+    self.inputEnabled = true
 
-    weaponPrimary = Enum.KeyCode.One,
-    weaponSecondary = Enum.KeyCode.Two,
-    weaponMelee = Enum.KeyCode.Three,
-    weaponGrenade = Enum.KeyCode.Four,
+    -- Performance monitoring
+    self.lastFrameTime = tick()
+    self.frameCount = 0
+    self.performanceStats = {
+        fps = 60,
+        memoryUsage = 0,
+        systemLoad = 0
+    }
 
-    throwGrenade = Enum.KeyCode.G,
-    spotEnemy = Enum.KeyCode.Q,
-    toggleAttachments = Enum.KeyCode.T,
+    -- Configuration
+    self.config = {
+        autoInit = true,
+        debugMode = true,
+        errorReporting = true,
+        performanceMonitoring = true
+    }
 
-    -- Movement
-    crouch = Enum.KeyCode.C,
-    prone = Enum.KeyCode.X,
-    dive = Enum.KeyCode.Space -- Combined with X
-}
+    return self
+end
+
+-- Safely require a module with comprehensive error handling
+function EnhancedFPSController:safeRequire(modulePath, isOptional)
+    local success, result = pcall(function()
+        local moduleScript = ReplicatedStorage.FPSSystem.Modules:FindFirstChild(modulePath)
+        if not moduleScript then
+            error("Module not found: " .. modulePath)
+        end
+        return require(moduleScript)
+    end)
+
+    if success then
+        if self.config.debugMode then
+            print("[FPS Controller] Successfully loaded:", modulePath)
+        end
+        return result
+    else
+        local errorMsg = "Failed to load " .. modulePath .. ": " .. tostring(result)
+        table.insert(self.initializationErrors, errorMsg)
+
+        if not isOptional then
+            warn("[FPS Controller] Critical error:", errorMsg)
+            self.systemState = SystemState.ERROR
+        else
+            warn("[FPS Controller] Optional module failed:", errorMsg)
+        end
+
+        return nil
+    end
+end
+
+-- Initialize all FPS systems
+function EnhancedFPSController:initialize()
+    print("[FPS Controller] Initializing Enhanced FPS System...")
+    self.systemState = SystemState.INITIALIZING
+
+    -- Wait for character
+    if not self.player.Character then
+        self.player.CharacterAdded:Wait()
+    end
+
+    self.character = self.player.Character
+    self.humanoid = self.character:WaitForChild("Humanoid")
+    self.rootPart = self.character:WaitForChild("HumanoidRootPart")
+
+    -- Initialize systems in order of dependency
+    local systemInitOrder = {
+        {"RaycastUtility", true},           -- Core utility (critical)
+        {"WeaponConfig", true},             -- Weapon configurations (critical)
+        {"ViewmodelSystem", false},         -- Viewmodel rendering (optional)
+        {"WeaponSystem", true},             -- Weapon mechanics (critical)
+        {"EnhancedGrenadeSystem", false},   -- Grenade system (optional)
+        {"EnhancedMeleeSystem", false},     -- Melee system (optional)
+        {"FPSCamera", true},                -- Camera system (critical)
+        {"AdvancedMovementSystem", false},  -- Movement system (optional)
+        {"AttachmentSystem", false},        -- Attachment system (optional)
+        {"DamageSystem", false}             -- Damage system (optional)
+    }
+
+    -- Initialize each system
+    for _, systemInfo in ipairs(systemInitOrder) do
+        local systemName, isCritical = systemInfo[1], systemInfo[2]
+        local system = self:initializeSystem(systemName, isCritical)
+
+        if system then
+            self.systems[systemName] = system
+        elseif isCritical then
+            self.systemState = SystemState.ERROR
+            error("[FPS Controller] Critical system failed to initialize: " .. systemName)
+            return false
+        end
+    end
+
+    -- Setup input handling
+    self:setupInputHandling()
+
+    -- Setup performance monitoring
+    if self.config.performanceMonitoring then
+        self:setupPerformanceMonitoring()
+    end
+
+    -- Load default loadout
+    self:loadDefaultLoadout()
+
+    self.systemState = SystemState.READY
+    print("[FPS Controller] Enhanced FPS System ready!")
+
+    -- Report any non-critical errors
+    if #self.initializationErrors > 0 then
+        print("[FPS Controller] Non-critical errors during initialization:")
+        for _, error in ipairs(self.initializationErrors) do
+            print(" - " .. error)
+        end
+    end
+
+    return true
+end
+
+-- Initialize a specific system
+function EnhancedFPSController:initializeSystem(systemName, isCritical)
+    if self.config.debugMode then
+        print("[FPS Controller] Initializing system:", systemName)
+    end
+
+    local module = self:safeRequire(systemName, not isCritical)
+    if not module then
+        return nil
+    end
+
+    -- Handle different system initialization patterns
+    local system = nil
+    local success, result = pcall(function()
+        if type(module.new) == "function" then
+            -- System with constructor
+            if systemName == "EnhancedGrenadeSystem" or systemName == "EnhancedMeleeSystem" then
+                system = module.new(self.systems.ViewmodelSystem)
+            else
+                system = module.new()
+            end
+        elseif type(module.initialize) == "function" then
+            -- System with initialize function
+            system = module
+            system:initialize()
+        else
+            -- Static module
+            system = module
+        end
+
+        return system
+    end)
+
+    if success then
+        if self.config.debugMode then
+            print("[FPS Controller] System initialized:", systemName)
+        end
+        return result
+    else
+        local errorMsg = "Failed to initialize " .. systemName .. ": " .. tostring(result)
+        table.insert(self.initializationErrors, errorMsg)
+
+        if isCritical then
+            warn("[FPS Controller] Critical system error:", errorMsg)
+        end
+
+        return nil
+    end
+end
+
+-- Setup comprehensive input handling
+function EnhancedFPSController:setupInputHandling()
+    print("[FPS Controller] Setting up input handling...")
+
+    -- Weapon switching (1-4 keys)
+    for i = 1, 4 do
+        local keyCode = Enum.KeyCode["Digit" .. i]
+        local weaponSlot = ({"PRIMARY", "SECONDARY", "MELEE", "GRENADE"})[i]
+
+        self.inputConnections["weapon_" .. i] = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed or not self.inputEnabled then return end
+            if input.KeyCode == keyCode then
+                self:switchToWeapon(weaponSlot)
+            end
+        end)
+    end
+
+    -- Firing (Mouse1)
+    self.inputConnections.fire_start = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            self:startFiring()
+        end
+    end)
+
+    self.inputConnections.fire_end = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            self:stopFiring()
+        end
+    end)
+
+    -- Aiming (Mouse2)
+    self.inputConnections.aim_start = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            self:startAiming()
+        end
+    end)
+
+    self.inputConnections.aim_end = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            self:stopAiming()
+        end
+    end)
+
+    -- Reload (R key)
+    self.inputConnections.reload = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.R then
+            self:reload()
+        end
+    end)
+
+    -- Grenade (G key)
+    self.inputConnections.grenade = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.G then
+            self:quickGrenade()
+        end
+    end)
+
+    -- Melee (V key)
+    self.inputConnections.melee = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.V then
+            self:quickMelee()
+        end
+    end)
+
+    -- Sprint (Left Shift)
+    self.inputConnections.sprint_start = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.LeftShift then
+            self:setSprint(true)
+        end
+    end)
+
+    self.inputConnections.sprint_end = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input.KeyCode == Enum.KeyCode.LeftShift then
+            self:setSprint(false)
+        end
+    end)
+
+    -- Crouch/Slide (C key)
+    self.inputConnections.crouch = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.C then
+            self:toggleCrouch()
+        end
+    end)
+
+    -- Prone (X key)
+    self.inputConnections.prone = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.X then
+            self:toggleProne()
+        end
+    end)
+
+    -- Lean (Q/E keys)
+    self.inputConnections.lean_left = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.Q then
+            self:setLean(-1)
+        end
+    end)
+
+    self.inputConnections.lean_right = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.E then
+            self:setLean(1)
+        end
+    end)
+
+    -- Stop leaning
+    self.inputConnections.lean_stop = UserInputService.InputEnded:Connect(function(input, gameProcessed)
+        if input.KeyCode == Enum.KeyCode.Q or input.KeyCode == Enum.KeyCode.E then
+            self:setLean(0)
+        end
+    end)
+
+    -- Attachment mode (T key)
+    self.inputConnections.attachment_mode = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.T then
+            self:toggleAttachmentMode()
+        end
+    end)
+
+    -- Loadout menu (L key)
+    self.inputConnections.loadout_menu = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not self.inputEnabled then return end
+        if input.KeyCode == Enum.KeyCode.L then
+            self:openLoadoutMenu()
+        end
+    end)
+
+    print("[FPS Controller] Input handling configured")
+end
+
+-- Setup performance monitoring
+function EnhancedFPSController:setupPerformanceMonitoring()
+    self.performanceConnection = RunService.Heartbeat:Connect(function()
+        self.frameCount = self.frameCount + 1
+        local currentTime = tick()
+
+        -- Update FPS every second
+        if currentTime - self.lastFrameTime >= 1 then
+            self.performanceStats.fps = self.frameCount / (currentTime - self.lastFrameTime)
+            self.performanceStats.memoryUsage = collectgarbage("count")
+
+            -- Reset counters
+            self.frameCount = 0
+            self.lastFrameTime = currentTime
+
+            -- Check for performance issues
+            if self.performanceStats.fps < 30 then
+                warn("[FPS Controller] Low FPS detected:", self.performanceStats.fps)
+            end
+        end
+    end)
+end
+
+-- Load default weapon loadout
+function EnhancedFPSController:loadDefaultLoadout()
+    print("[FPS Controller] Loading default loadout...")
+
+    local defaultLoadout = {
+        PRIMARY = "AK74",
+        SECONDARY = "M9",
+        MELEE = "KNIFE",
+        GRENADE = "M67 FRAG"
+    }
+
+    for slot, weaponName in pairs(defaultLoadout) do
+        self:loadWeapon(slot, weaponName)
+    end
+
+    -- Equip primary weapon
+    self:switchToWeapon("PRIMARY")
+end
+
+-- Load a weapon into a slot
+function EnhancedFPSController:loadWeapon(slot, weaponName)
+    if not self.systems.WeaponSystem then
+        warn("[FPS Controller] Cannot load weapon: WeaponSystem not available")
+        return false
+    end
+
+    local success = self.systems.WeaponSystem:loadWeapon(slot, weaponName)
+    if success then
+        self.weapons[slot] = weaponName
+        print("[FPS Controller] Loaded", weaponName, "into", slot, "slot")
+    else
+        warn("[FPS Controller] Failed to load", weaponName, "into", slot, "slot")
+    end
+
+    return success
+end
+
+-- Switch to a weapon slot
+function EnhancedFPSController:switchToWeapon(slot)
+    if self.weaponSwitching then return end
+    if not self.weapons[slot] then
+        warn("[FPS Controller] No weapon in slot:", slot)
+        return
+    end
+
+    if self.currentWeapon == slot then return end
+
+    self.weaponSwitching = true
+
+    -- Stop any current actions
+    self:stopFiring()
+    self:stopAiming()
+
+    -- Switch weapon
+    local oldWeapon = self.currentWeapon
+    self.currentWeapon = slot
+
+    -- Update systems
+    if self.systems.WeaponSystem then
+        self.systems.WeaponSystem:equipWeapon(slot)
+    end
+
+    if self.systems.ViewmodelSystem then
+        self.systems.ViewmodelSystem:switchWeapon(slot, self.weapons[slot])
+    end
+
+    -- Play switch sound
+    self:playWeaponSwitchSound()
+
+    print("[FPS Controller] Switched from", oldWeapon, "to", slot)
+
+    -- Reset switching flag after animation
+    task.delay(0.5, function()
+        self.weaponSwitching = false
+    end)
+end
+
+-- Weapon action methods
+function EnhancedFPSController:startFiring()
+    if self.weaponSwitching then return end
+
+    if self.currentWeapon == "PRIMARY" or self.currentWeapon == "SECONDARY" then
+        if self.systems.WeaponSystem then
+            self.systems.WeaponSystem:startFiring()
+        end
+    elseif self.currentWeapon == "MELEE" then
+        if self.systems.EnhancedMeleeSystem then
+            self.systems.EnhancedMeleeSystem:startAttack()
+        end
+    elseif self.currentWeapon == "GRENADE" then
+        if self.systems.EnhancedGrenadeSystem then
+            self.systems.EnhancedGrenadeSystem:startCooking()
+        end
+    end
+end
+
+function EnhancedFPSController:stopFiring()
+    if self.currentWeapon == "PRIMARY" or self.currentWeapon == "SECONDARY" then
+        if self.systems.WeaponSystem then
+            self.systems.WeaponSystem:stopFiring()
+        end
+    elseif self.currentWeapon == "MELEE" then
+        if self.systems.EnhancedMeleeSystem then
+            self.systems.EnhancedMeleeSystem:endAttack()
+        end
+    elseif self.currentWeapon == "GRENADE" then
+        if self.systems.EnhancedGrenadeSystem then
+            self.systems.EnhancedGrenadeSystem:throwGrenade()
+        end
+    end
+end
+
+function EnhancedFPSController:startAiming()
+    if self.weaponSwitching then return end
+    if self.currentWeapon ~= "PRIMARY" and self.currentWeapon ~= "SECONDARY" then return end
+
+    if self.systems.WeaponSystem then
+        self.systems.WeaponSystem:startAiming()
+    end
+
+    if self.systems.FPSCamera then
+        self.systems.FPSCamera:setAiming(true)
+    end
+end
+
+function EnhancedFPSController:stopAiming()
+    if self.systems.WeaponSystem then
+        self.systems.WeaponSystem:stopAiming()
+    end
+
+    if self.systems.FPSCamera then
+        self.systems.FPSCamera:setAiming(false)
+    end
+end
+
+function EnhancedFPSController:reload()
+    if self.weaponSwitching then return end
+    if self.currentWeapon ~= "PRIMARY" and self.currentWeapon ~= "SECONDARY" then return end
+
+    if self.systems.WeaponSystem then
+        self.systems.WeaponSystem:reload()
+    end
+end
+
+-- Movement methods
+function EnhancedFPSController:setSprint(sprinting)
+    if self.systems.AdvancedMovementSystem then
+        self.systems.AdvancedMovementSystem:setSprinting(sprinting)
+    end
+
+    if self.systems.FPSCamera then
+        self.systems.FPSCamera:setSprinting(sprinting)
+    end
+end
+
+function EnhancedFPSController:toggleCrouch()
+    if self.systems.AdvancedMovementSystem then
+        self.systems.AdvancedMovementSystem:toggleCrouch()
+    end
+end
+
+function EnhancedFPSController:toggleProne()
+    if self.systems.AdvancedMovementSystem then
+        self.systems.AdvancedMovementSystem:toggleProne()
+    end
+end
+
+function EnhancedFPSController:setLean(direction)
+    if self.systems.FPSCamera then
+        self.systems.FPSCamera:setLean(direction)
+    end
+end
+
+-- Quick actions
+function EnhancedFPSController:quickGrenade()
+    local previousWeapon = self.currentWeapon
+
+    self:switchToWeapon("GRENADE")
+
+    -- Auto-throw after delay
+    task.delay(0.5, function()
+        if self.currentWeapon == "GRENADE" then
+            self:startFiring()
+
+            -- Auto-throw and switch back
+            task.delay(1.5, function()
+                self:stopFiring()
+                task.delay(0.5, function()
+                    self:switchToWeapon(previousWeapon)
+                end)
+            end)
+        end
+    end)
+end
+
+function EnhancedFPSController:quickMelee()
+    local previousWeapon = self.currentWeapon
+
+    self:switchToWeapon("MELEE")
+
+    -- Auto-attack and switch back
+    task.delay(0.3, function()
+        if self.currentWeapon == "MELEE" then
+            self:startFiring()
+            task.delay(0.6, function()
+                self:switchToWeapon(previousWeapon)
+            end)
+        end
+    end)
+end
+
+-- UI Methods
+function EnhancedFPSController:toggleAttachmentMode()
+    self.inputEnabled = not self.inputEnabled
+
+    if self.systems.AttachmentSystem then
+        -- TODO: Open attachment customization UI
+        print("[FPS Controller] Attachment mode toggled:", not self.inputEnabled)
+    end
+
+    -- Toggle mouse lock
+    if _G.FPSCameraMouseControl then
+        if self.inputEnabled then
+            _G.FPSCameraMouseControl.lockMouse()
+        else
+            _G.FPSCameraMouseControl.unlockMouse()
+        end
+    end
+end
+
+function EnhancedFPSController:openLoadoutMenu()
+    if _G.ModernLoadout then
+        _G.ModernLoadout:openGUI()
+    else
+        warn("[FPS Controller] Modern Loadout system not available")
+    end
+end
+
+-- Audio methods
+function EnhancedFPSController:playWeaponSwitchSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://131961136"  -- Replace with actual switch sound
+    sound.Volume = 0.5
+    sound.Parent = self.camera
+    sound:Play()
+
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
+
+-- Error handling and recovery
+function EnhancedFPSController:handleSystemError(systemName, error)
+    warn("[FPS Controller] System error in", systemName, ":", error)
+
+    -- Attempt to restart the system
+    if self.systems[systemName] and type(self.systems[systemName].restart) == "function" then
+        print("[FPS Controller] Attempting to restart", systemName)
+        self.systems[systemName]:restart()
+    end
+end
+
+-- Cleanup
+function EnhancedFPSController:cleanup()
+    print("[FPS Controller] Cleaning up Enhanced FPS Controller...")
+
+    -- Disconnect all input connections
+    for name, connection in pairs(self.inputConnections) do
+        connection:Disconnect()
+    end
+
+    -- Disconnect performance monitoring
+    if self.performanceConnection then
+        self.performanceConnection:Disconnect()
+    end
+
+    -- Cleanup all systems
+    for systemName, system in pairs(self.systems) do
+        if type(system.cleanup) == "function" then
+            system:cleanup()
+        elseif type(system.destroy) == "function" then
+            system:destroy()
+        end
+    end
+
+    -- Clear references
+    self.systems = {}
+    self.inputConnections = {}
+
+    print("[FPS Controller] Cleanup complete")
+end
+
+-- Get system status
+function EnhancedFPSController:getSystemStatus()
+    local status = {
+        state = self.systemState,
+        loadedSystems = {},
+        errors = self.initializationErrors,
+        performance = self.performanceStats,
+        currentWeapon = self.currentWeapon,
+        weapons = self.weapons
+    }
+
+    for systemName, system in pairs(self.systems) do
+        status.loadedSystems[systemName] = system ~= nil
+    end
+
+    return status
+end
 
 -- Initialize controller
-function FPSController:init()
-    print("[FPS] Initializing main controller...")
+local controller = EnhancedFPSController.new()
 
-    -- Load all modules
-    self:loadModules()
+-- Character respawn handling
+Players.LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)  -- Wait for character to fully load
+    controller:cleanup()
+    controller = EnhancedFPSController.new()
+    controller:initialize()
+end)
 
-    -- Initialize systems
-    self:initSystems()
+-- Global access
+_G.EnhancedFPSController = controller
+_G.FPSController = controller  -- Backward compatibility
 
-    -- Setup input handlers
-    self:setupInputHandlers()
-
-    -- Export globally
-    _G.FPSController = self
-
-    print("[FPS] Controller initialized!")
+-- Auto-initialize
+if controller.config.autoInit then
+    controller:initialize()
 end
 
--- Load modules
-function FPSController:loadModules()
-    local fpsSystem = ReplicatedStorage:WaitForChild("FPSSystem")
-    local modulesFolder = fpsSystem:WaitForChild("Modules")
-
-    -- Required modules
-    local requiredModules = {
-        "ViewmodelSystem",
-        "WeaponFiringSystem",
-        "AdvancedMovementSystem",
-        "CrosshairSystem",
-        "AttachmentSystem",
-        "ScopeSystem"
+-- Debug commands
+if game:GetService("RunService"):IsStudio() then
+    _G.FPSDebug = {
+        getStatus = function() return controller:getSystemStatus() end,
+        restart = function() 
+            controller:cleanup()
+            controller:initialize()
+        end,
+        toggleDebug = function()
+            controller.config.debugMode = not controller.config.debugMode
+        end
     }
-
-    for _, moduleName in ipairs(requiredModules) do
-        local module = modulesFolder:FindFirstChild(moduleName)
-        if module and module:IsA("ModuleScript") then
-            local success, result = pcall(function()
-                return require(module)
-            end)
-
-            if success then
-                modules[moduleName] = result
-                print("[FPS] Loaded module:", moduleName)
-            else
-                warn("[FPS] Failed to load module:", moduleName, result)
-            end
-        else
-            warn("[FPS] Module not found:", moduleName)
-        end
-    end
-
-    -- Load weapon config
-    local configFolder = fpsSystem:FindFirstChild("Config")
-    if configFolder then
-        local weaponConfig = configFolder:FindFirstChild("WeaponConfigManager")
-        if weaponConfig then
-            modules.WeaponConfig = require(weaponConfig)
-            print("[FPS] Loaded weapon configuration")
-        end
-    end
 end
 
--- Initialize systems
-function FPSController:initSystems()
-    -- Initialize viewmodel system
-    if modules.ViewmodelSystem then
-        systems.viewmodel = modules.ViewmodelSystem.new()
-        systems.viewmodel:startUpdateLoop()
-        print("[FPS] Viewmodel system ready")
-    end
-
-    -- Initialize firing system
-    if modules.WeaponFiringSystem then
-        systems.firing = modules.WeaponFiringSystem.new(systems.viewmodel)
-        print("[FPS] Firing system ready")
-    end
-
-    -- Initialize movement system
-    if modules.AdvancedMovementSystem then
-        systems.movement = modules.AdvancedMovementSystem.new()
-        print("[FPS] Movement system ready")
-    end
-
-    -- Initialize crosshair
-    if modules.CrosshairSystem then
-        systems.crosshair = modules.CrosshairSystem.new()
-        print("[FPS] Crosshair system ready")
-    end
-
-    -- Initialize attachment system
-    if modules.AttachmentSystem then
-        systems.attachments = modules.AttachmentSystem
-        print("[FPS] Attachment system ready")
-    end
-
-    -- Initialize scope system
-    if modules.ScopeSystem then
-        systems.scope = modules.ScopeSystem.new()
-        print("[FPS] Scope system ready")
-    end
-end
-
--- Load weapon into slot
-function FPSController:loadWeapon(slot, weaponName)
-    if not modules.WeaponConfig then
-        warn("[FPS] No weapon config loaded")
-        return
-    end
-
-    local config = modules.WeaponConfig:getWeaponConfig(weaponName)
-    if not config then
-        warn("[FPS] No config for weapon:", weaponName)
-        return
-    end
-
-    -- Store weapon data
-    state.slots[slot] = {
-        name = weaponName,
-        config = config,
-        attachments = {}
-    }
-
-    print("[FPS] Loaded", weaponName, "into", slot, "slot")
-end
-
--- Equip weapon from slot
-function FPSController:equipWeapon(slot)
-    local weaponData = state.slots[slot]
-    if not weaponData then
-        warn("[FPS] No weapon in slot:", slot)
-        return
-    end
-
-    -- Update state
-    state.currentSlot = slot
-    state.currentWeapon = weaponData
-    state.isAiming = false
-
-    -- Equip in viewmodel
-    if systems.viewmodel then
-        systems.viewmodel:equipWeapon(weaponData.name, slot)
-    end
-
-    -- Set weapon in firing system
-    if systems.firing then
-        systems.firing:setWeapon(nil, weaponData.config)
-    end
-
-    -- Update crosshair
-    if systems.crosshair then
-        systems.crosshair:updateFromWeaponState(weaponData.config, false)
-    end
-
-    print("[FPS] Equipped", weaponData.name, "from", slot)
-end
-
--- Setup input handlers
-function FPSController:setupInputHandlers()
-    -- Input began
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        self:handleInputBegan(input)
-    end)
-
-    -- Input ended
-    UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        self:handleInputEnded(input)
-    end)
-
-    -- Mouse movement
-    UserInputService.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            if systems.viewmodel then
-                systems.viewmodel:handleMouseDelta(input.Delta)
-            end
-        end
-    end)
-end
-
--- Handle input began
-function FPSController:handleInputBegan(input)
-    -- Primary fire
-    if input.UserInputType == inputActions.primaryFire then
-        self:handlePrimaryFire(true)
-
-        -- Aim
-    elseif input.UserInputType == inputActions.aim then
-        self:handleAiming(true)
-
-        -- Reload
-    elseif input.KeyCode == inputActions.reload then
-        self:handleReload()
-
-        -- Sprint
-    elseif input.KeyCode == inputActions.sprint then
-        state.isSprinting = true
-        if systems.viewmodel then
-            systems.viewmodel:setSprinting(true)
-        end
-
-        -- Weapon switching
-    elseif input.KeyCode == inputActions.weaponPrimary then
-        self:equipWeapon("PRIMARY")
-    elseif input.KeyCode == inputActions.weaponSecondary then
-        self:equipWeapon("SECONDARY")
-    elseif input.KeyCode == inputActions.weaponMelee then
-        self:equipWeapon("MELEE")
-    elseif input.KeyCode == inputActions.weaponGrenade then
-        self:equipWeapon("GRENADE")
-
-        -- Grenade throw
-    elseif input.KeyCode == inputActions.throwGrenade then
-        self:throwGrenade()
-
-        -- Spot enemy
-    elseif input.KeyCode == inputActions.spotEnemy then
-        self:spotEnemy()
-
-        -- Toggle attachments
-    elseif input.KeyCode == inputActions.toggleAttachments then
-        self:toggleAttachmentMode()
-    end
-end
-
--- Handle input ended
-function FPSController:handleInputEnded(input)
-    -- Primary fire
-    if input.UserInputType == inputActions.primaryFire then
-        self:handlePrimaryFire(false)
-
-        -- Aim
-    elseif input.UserInputType == inputActions.aim then
-        self:handleAiming(false)
-
-        -- Sprint
-    elseif input.KeyCode == inputActions.sprint then
-        state.isSprinting = false
-        if systems.viewmodel then
-            systems.viewmodel:setSprinting(false)
-        end
-    end
-end
-
--- Handle primary fire
-function FPSController:handlePrimaryFire(isPressed)
-    if state.currentSlot == "PRIMARY" or state.currentSlot == "SECONDARY" then
-        -- Gun firing
-        if systems.firing then
-            systems.firing:handleFiring(isPressed)
-        end
-
-    elseif state.currentSlot == "MELEE" and isPressed then
-        -- Melee attack
-        self:meleeAttack()
-
-    elseif state.currentSlot == "GRENADE" and isPressed then
-        -- Start cooking grenade
-        self:startCookingGrenade()
-    end
-end
-
--- Handle aiming
-function FPSController:handleAiming(isAiming)
-    state.isAiming = isAiming
-
-    -- Update viewmodel
-    if systems.viewmodel then
-        systems.viewmodel:setAiming(isAiming)
-    end
-
-    -- Update scope
-    if systems.scope and state.currentWeapon then
-        local config = state.currentWeapon.config
-        if config.scope then
-            systems.scope:scope(state.currentWeapon, isAiming)
-        end
-    end
-
-    -- Update crosshair
-    if systems.crosshair and state.currentWeapon then
-        systems.crosshair:updateFromWeaponState(state.currentWeapon.config, isAiming)
-    end
-
-    -- Update camera FOV for aiming
-    if isAiming then
-        camera.FieldOfView = 60
-    else
-        camera.FieldOfView = 70
-    end
-end
-
--- Handle reload
-function FPSController:handleReload()
-    if state.currentSlot == "PRIMARY" or state.currentSlot == "SECONDARY" then
-        if systems.firing then
-            systems.firing:reload()
-        end
-    end
-end
-
--- Melee attack
-function FPSController:meleeAttack()
-    if not state.currentWeapon then return end
-
-    print("[FPS] Melee attack with", state.currentWeapon.name)
-
-    -- Play attack animation
-    if systems.viewmodel then
-        systems.viewmodel:playAnimation("attack1")
-    end
-
-    -- Perform melee raycast
-    local ray = workspace:Raycast(
-        camera.CFrame.Position,
-        camera.CFrame.LookVector * (state.currentWeapon.config.damage.range or 5),
-        RaycastParams.new()
-    )
-
-    if ray and ray.Instance then
-        local humanoid = ray.Instance.Parent:FindFirstChild("Humanoid")
-        if humanoid then
-            -- Check for backstab
-            local isBackstab = false
-            local targetLook = ray.Instance.Parent.HumanoidRootPart.CFrame.LookVector
-            local attackDirection = (ray.Position - camera.CFrame.Position).Unit
-
-            if targetLook:Dot(attackDirection) > 0.5 then
-                isBackstab = true
-            end
-
-            -- Deal damage
-            local damage = isBackstab and state.currentWeapon.config.damage.backstab 
-                or state.currentWeapon.config.damage.front
-
-            -- Send to server
-            local remoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
-            if remoteEvents then
-                local meleeEvent = remoteEvents:FindFirstChild("MeleeHit") or Instance.new("RemoteEvent")
-                meleeEvent.Name = "MeleeHit"
-                meleeEvent.Parent = remoteEvents
-
-                meleeEvent:FireServer(humanoid, damage, isBackstab)
-            end
-
-            print("[FPS] Melee hit for", damage, "damage", isBackstab and "(BACKSTAB)" or "")
-        end
-    end
-end
-
--- Throw grenade
-function FPSController:throwGrenade()
-    print("[FPS] Throwing grenade")
-
-    -- Quick grenade throw without switching
-    if state.currentSlot ~= "GRENADE" then
-        -- Remember current weapon
-        local previousSlot = state.currentSlot
-
-        -- Quick switch and throw
-        self:equipWeapon("GRENADE")
-
-        wait(0.5)
-
-        -- Throw animation
-        if systems.viewmodel then
-            systems.viewmodel:playAnimation("throw")
-        end
-
-        -- Return to previous weapon
-        wait(1)
-        self:equipWeapon(previousSlot)
-    else
-        -- Already holding grenade
-        if systems.viewmodel then
-            systems.viewmodel:playAnimation("throw")
-        end
-    end
-end
-
--- Start cooking grenade
-function FPSController:startCookingGrenade()
-    if state.currentSlot == "GRENADE" then
-        print("[FPS] Cooking grenade")
-        -- Grenade cooking logic here
-    end
-end
-
--- Spot enemy
-function FPSController:spotEnemy()
-    -- Cast ray from camera
-    local ray = workspace:Raycast(
-        camera.CFrame.Position,
-        camera.CFrame.LookVector * 1000,
-        RaycastParams.new()
-    )
-
-    if ray and ray.Instance then
-        local humanoid = ray.Instance.Parent:FindFirstChild("Humanoid")
-        if humanoid and humanoid.Parent ~= player.Character then
-            print("[FPS] Spotted:", humanoid.Parent.Name)
-
-            -- Create spot marker (UI element)
-            -- This would be implemented based on your UI system
-        end
-    end
-end
-
--- Toggle attachment mode
-function FPSController:toggleAttachmentMode()
-    print("[FPS] Toggling attachment mode")
-
-    -- Unlock/lock mouse
-    if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        UserInputService.MouseIconEnabled = true
-
-        -- Open attachment UI
-        -- This would open your attachment selection UI
-    else
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        UserInputService.MouseIconEnabled = false
-    end
-end
-
--- Get ammo info
-function FPSController:getAmmoInfo()
-    if systems.firing then
-        return systems.firing:getAmmoInfo()
-    end
-
-    return {current = 0, magazine = 0, reserve = 0}
-end
-
--- Get current weapon
-function FPSController:getCurrentWeapon()
-    return state.currentWeapon
-end
-
--- Get current slot
-function FPSController:getCurrentSlot()
-    return state.currentSlot
-end
-
--- Initialize on script run
-FPSController:init()
-
-return FPSController
+return controller

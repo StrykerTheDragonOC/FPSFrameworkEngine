@@ -13,7 +13,7 @@ local RunService = game:GetService("RunService")
 
 -- Get required systems
 local AttachmentSystem = require(ReplicatedStorage.FPSSystem.Modules.AttachmentSystem)
-local ScopeSystem = require(ReplicatedStorage.FPSSystem.Modules.EnhancedScopeSystem)
+local ScopeSystem = require(ReplicatedStorage.FPSSystem.Modules.AdvancedAttachmentSystem)
 
 -- Constructor
 function WeaponIntegration.new(fpsController)

@@ -100,7 +100,7 @@ local function loadModules()
 		"ViewmodelSystem",
 		"CrosshairSystem",
 		"FPSCamera",
-		"ScopeSystem",
+        "AdvancedAttachmentSystem",
 		"WeaponConverter",
 		"FPSFramework"
 	}
