@@ -1,4 +1,5 @@
--- Weapon Firing System
+-- Enhanced Weapon Firing System with Fixed Arithmetic Operations
+-- Place in ReplicatedStorage.FPSSystem.Modules.WeaponFiringSystem
 local WeaponFiringSystem = {}
 WeaponFiringSystem.__index = WeaponFiringSystem
 
@@ -7,6 +8,7 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 
 -- Constants
 local DEFAULT_SETTINGS = {
@@ -18,7 +20,9 @@ local DEFAULT_SETTINGS = {
     HIT_EFFECT_LIFETIME = 0.5,
     SHELL_CASING_LIFETIME = 2,
     DEFAULT_RECOIL = 0.3,
-    MUZZLE_FLASH_DURATION = 0.05
+    MUZZLE_FLASH_DURATION = 0.05,
+    PENETRATION_POWER = 1.0,
+    MAX_PENETRATIONS = 3
 }
 
 function WeaponFiringSystem.new(viewmodelSystem)
@@ -52,15 +56,13 @@ end
 
 -- Setup remote events for server-side handling
 function WeaponFiringSystem:setupRemoteEvents()
-    -- Wait for FPS system folder
     local fpsSystem = ReplicatedStorage:WaitForChild("FPSSystem")
     local remoteEventsFolder = fpsSystem:WaitForChild("RemoteEvents")
 
-    -- Get remote events from the correct location
     self.fireEvent = remoteEventsFolder:WaitForChild("WeaponFired")
     self.hitEvent = remoteEventsFolder:WaitForChild("WeaponHit")
     self.reloadEvent = remoteEventsFolder:WaitForChild("WeaponReload")
-    
+
     print("WeaponFiringSystem: Remote events connected")
 end
 
@@ -79,97 +81,16 @@ function WeaponFiringSystem:setWeapon(weaponModel, weaponData)
         }
     end
 
-    print("Weapon set:", weaponModel.Name, "with", self.ammoData[weaponModel.Name].currentMagazine, "rounds")
+    print("Weapon set:", weaponModel.Name)
 end
 
--- Handle firing input
-function WeaponFiringSystem:handleFiring(isPressed)
-    -- Update firing state
-    self.isFiring = isPressed
-
-    -- Start continuous firing check if pressed
-    if isPressed and not self.firingConnection then
-        self.firingConnection = RunService.Heartbeat:Connect(function()
-            self:tryFire()
-        end)
-    elseif not isPressed and self.firingConnection then
-        self.firingConnection:Disconnect()
-        self.firingConnection = nil
-    end
-
-    return true
-end
-
--- Try to fire the current weapon
-function WeaponFiringSystem:tryFire()
-    if not self.isFiring or not self.canFire or not self.currentWeapon or self.isReloading then
-        return false
-    end
-
-    local ammo = self.ammoData[self.currentWeapon.Name]
-    if not ammo or ammo.currentMagazine <= 0 then
-        -- Click sound for empty magazine
-        self:playSound("EmptyClick")
-
-        -- Auto-reload when empty
-        if ammo and ammo.currentMagazine <= 0 and ammo.reserveAmmo > 0 then
-            self:reload()
-        end
-
-        return false
-    end
-
-    -- Check fire rate
-    local fireRate = self.currentWeapon:GetAttribute("FireRate") or 600
-    local timeBetweenShots = 60 / fireRate
-
-    local now = tick()
-    if now - self.lastFireTime < timeBetweenShots then
-        return false
-    end
-
-    -- Fire the weapon
-    self.lastFireTime = now
-
-    -- Reduce ammo
-    ammo.currentMagazine = ammo.currentMagazine - 1
-
-    -- Create visual and audio effects
-    self:createMuzzleFlash()
-    self:createShellCasing()
-    self:playSound("Fire")
-
-    -- Perform raycast to find target
-    local hitInfo = self:performRaycast()
-
-    -- Create bullet tracer and handle damage
-    if hitInfo then
-        self:createBulletTracer(hitInfo.hitPosition)
-        self:createImpactEffect(hitInfo)
-        self:handleDamage(hitInfo)
-    end
-
-    -- Apply recoil
-    self:applyRecoil()
-
-    -- Notify server about firing
-    self.fireEvent:FireServer(self.currentWeapon.Name, hitInfo)
-
-    return true
-end
-
--- Perform raycast to find hit target with penetration
-function WeaponFiringSystem:performRaycast()
-    -- Get muzzle position
+-- Enhanced raycast with penetration and Include/Exclude terminology
+function WeaponFiringSystem:performAdvancedRaycast()
     local muzzleAttachment = self:getMuzzleAttachment()
     local rayOrigin = muzzleAttachment and muzzleAttachment.WorldPosition or self.camera.CFrame.Position
 
-    -- Direction with random spread
-    local spreadFactor = 0.01
-    if self.viewmodel.isAiming then
-        spreadFactor = 0.003 -- Less spread when aiming
-    end
-
+    -- Direction with dynamic spread based on weapon state
+    local spreadFactor = self:calculateSpread()
     local randomSpread = Vector3.new(
         (math.random() - 0.5) * spreadFactor,
         (math.random() - 0.5) * spreadFactor,
@@ -177,11 +98,11 @@ function WeaponFiringSystem:performRaycast()
     )
 
     local rayDirection = (self.camera.CFrame.LookVector + randomSpread).Unit
-    
-    -- Get weapon penetration power
-    local penetrationPower = self.currentWeapon:GetAttribute("PenetrationPower") or 1
-    local maxPenetrations = self.currentWeapon:GetAttribute("MaxPenetrations") or 2
-    
+
+    -- Get weapon stats with safe number checking
+    local penetrationPower = self:getWeaponStat("PenetrationPower", DEFAULT_SETTINGS.PENETRATION_POWER)
+    local maxPenetrations = self:getWeaponStat("MaxPenetrations", DEFAULT_SETTINGS.MAX_PENETRATIONS)
+
     -- Perform multiple raycasts for penetration
     local allHits = {}
     local currentOrigin = rayOrigin
@@ -189,15 +110,29 @@ function WeaponFiringSystem:performRaycast()
     local remainingDistance = DEFAULT_SETTINGS.MAX_DISTANCE
     local remainingPenetration = penetrationPower
     local penetrationCount = 0
-    
-    -- Setup raycast params
+
+    -- Setup raycast params with Include/Exclude terminology
     local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {self.player.Character, self.camera, self.viewmodel.container}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude  -- Using EXCLUDE instead of blacklist
+    raycastParams.FilterDescendantsInstances = {
+        self.player.Character, 
+        self.camera, 
+        self.viewmodel and self.viewmodel.container or nil,
+        self.effectsFolder
+    }
+
+    -- Clean nil values from filter
+    local cleanFilter = {}
+    for _, instance in ipairs(raycastParams.FilterDescendantsInstances) do
+        if instance then
+            table.insert(cleanFilter, instance)
+        end
+    end
+    raycastParams.FilterDescendantsInstances = cleanFilter
 
     while remainingDistance > 0 and penetrationCount < maxPenetrations do
         local raycastResult = workspace:Raycast(currentOrigin, currentDirection * remainingDistance, raycastParams)
-        
+
         if raycastResult then
             local hitInfo = {
                 hitPart = raycastResult.Instance,
@@ -207,27 +142,26 @@ function WeaponFiringSystem:performRaycast()
                 distance = (raycastResult.Position - currentOrigin).Magnitude,
                 penetrationIndex = penetrationCount
             }
-            
+
             table.insert(allHits, hitInfo)
-            
+
             -- Calculate material penetration resistance
             local materialResistance = self:getMaterialPenetrationResistance(raycastResult.Material)
-            
+
             -- Check if we can penetrate this material
             if remainingPenetration > materialResistance and penetrationCount < maxPenetrations then
-                -- Calculate thickness of the object (rough estimate)
                 local thickness = self:estimateObjectThickness(raycastResult.Instance, raycastResult.Position, currentDirection)
-                
+
                 -- Reduce penetration power based on material and thickness
                 remainingPenetration = remainingPenetration - (materialResistance * thickness)
-                
+
                 if remainingPenetration > 0 then
                     -- Continue ray from exit point
                     currentOrigin = raycastResult.Position + currentDirection * (thickness + 0.1)
                     remainingDistance = remainingDistance - hitInfo.distance - thickness
                     penetrationCount = penetrationCount + 1
-                    
-                    -- Add the hit part to filter so we don't hit it again
+
+                    -- Add hit part to exclude list
                     table.insert(raycastParams.FilterDescendantsInstances, raycastResult.Instance)
                 else
                     break
@@ -236,35 +170,147 @@ function WeaponFiringSystem:performRaycast()
                 break
             end
         else
-            -- No more hits
             break
         end
     end
-    
-    -- Return the first hit (primary target) or endpoint if no hits
-    if #allHits > 0 then
-        local primaryHit = allHits[1]
-        -- Create a safe copy of all hits without circular references
-        local safePenetrationHits = {}
-        for i, hit in ipairs(allHits) do
-            safePenetrationHits[i] = {
-                hitPart = hit.hitPart,
-                hitPosition = hit.hitPosition,
-                hitNormal = hit.hitNormal,
-                material = hit.material,
-                distance = hit.distance,
-                penetrationIndex = hit.penetrationIndex
-            }
+
+    return allHits
+end
+
+-- Safe weapon stat getter to prevent table multiplication errors
+function WeaponFiringSystem:getWeaponStat(statName, defaultValue)
+    if not self.currentWeapon then 
+        return defaultValue or 0 
+    end
+
+    local value = self.currentWeapon:GetAttribute(statName)
+
+    -- Ensure we return a number, not a table
+    if type(value) == "number" then
+        return value
+    elseif type(value) == "table" then
+        -- If it's a table, try to get a reasonable number value
+        if value.base then
+            return tonumber(value.base) or defaultValue or 0
+        elseif value[1] then
+            return tonumber(value[1]) or defaultValue or 0
+        else
+            warn("Weapon stat '" .. statName .. "' is a table but cannot extract number value")
+            return defaultValue or 0
         end
-        primaryHit.penetrationHits = safePenetrationHits
-        return primaryHit
     else
-        return {
-            hitPosition = rayOrigin + rayDirection * DEFAULT_SETTINGS.MAX_DISTANCE,
-            distance = DEFAULT_SETTINGS.MAX_DISTANCE,
-            isMaxDistance = true,
-            penetrationHits = {}
-        }
+        return defaultValue or 0
+    end
+end
+
+-- Calculate weapon spread
+function WeaponFiringSystem:calculateSpread()
+    local baseSpread = self:getWeaponStat("BaseSpread", 0.01)
+    local aimingSpread = self:getWeaponStat("AimingSpread", 0.003)
+    local movementSpread = self:getWeaponStat("MovementSpread", 0.005)
+
+    local currentSpread = baseSpread
+
+    -- Reduce spread when aiming
+    if self.viewmodel and self.viewmodel.isAiming then
+        currentSpread = aimingSpread
+    end
+
+    -- Increase spread when moving
+    if self.player.Character and self.player.Character:FindFirstChild("Humanoid") then
+        local humanoid = self.player.Character.Humanoid
+        if humanoid.MoveDirection.Magnitude > 0 then
+            currentSpread = currentSpread + movementSpread
+        end
+    end
+
+    return currentSpread
+end
+
+-- Fire the weapon
+function WeaponFiringSystem:fire()
+    if not self.canFire or not self.currentWeapon then return false end
+
+    local currentTime = tick()
+    local fireRate = self:getWeaponStat("FireRate", 600) -- RPM
+    local fireInterval = 60 / fireRate
+
+    -- Check fire rate
+    if currentTime - self.lastFireTime < fireInterval then
+        return false
+    end
+
+    -- Check ammo
+    local ammo = self.ammoData[self.currentWeapon.Name]
+    if not ammo or ammo.currentMagazine <= 0 then
+        print("Out of ammo!")
+        return false
+    end
+
+    -- Perform raycast
+    local hits = self:performAdvancedRaycast()
+
+    -- Process hits
+    if #hits > 0 then
+        local primaryHit = hits[1]
+        self:handleHit(primaryHit, hits)
+
+        -- Create visual effects
+        self:createBulletTracer(primaryHit.hitPosition)
+        self:createImpactEffect(primaryHit.hitPosition, primaryHit.hitNormal, primaryHit.material)
+    end
+
+    -- Create weapon effects
+    self:createMuzzleFlash()
+    self:createShellCasing()
+
+    -- Apply recoil
+    self:applyRecoil()
+
+    -- Update ammo
+    ammo.currentMagazine = ammo.currentMagazine - 1
+
+    -- Update last fire time
+    self.lastFireTime = currentTime
+
+    -- Send to server
+    if self.fireEvent then
+        self.fireEvent:FireServer(hits)
+    end
+
+    return true
+end
+
+-- Handle weapon hit
+function WeaponFiringSystem:handleHit(primaryHit, allHits)
+    local hitPart = primaryHit.hitPart
+    local hitPosition = primaryHit.hitPosition
+
+    -- Find character and humanoid
+    local character = hitPart:FindFirstAncestorOfClass("Model")
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if humanoid and character ~= self.player.Character then
+        -- Calculate damage
+        local baseDamage = self:getWeaponStat("Damage", 25)
+        local headMultiplier = self:getWeaponStat("HeadMultiplier", 2.0)
+        local limbMultiplier = self:getWeaponStat("LimbMultiplier", 0.9)
+
+        local damage = baseDamage
+
+        -- Apply multipliers based on hit location
+        if hitPart.Name == "Head" then
+            damage = damage * headMultiplier
+        elseif hitPart.Name:find("Arm") or hitPart.Name:find("Leg") then
+            damage = damage * limbMultiplier
+        end
+
+        -- Apply damage through server
+        if self.hitEvent then
+            self.hitEvent:FireServer(character, damage, hitPart.Name, allHits)
+        end
+
+        print("Hit " .. character.Name .. " for " .. damage .. " damage")
     end
 end
 
@@ -281,27 +327,22 @@ function WeaponFiringSystem:getMaterialPenetrationResistance(material)
         [Enum.Material.Metal] = 0.9,
         [Enum.Material.DiamondPlate] = 1.0,
         [Enum.Material.CorrodedMetal] = 0.8,
-        [Enum.Material.ForceField] = 10.0  -- Unpenetrable
+        [Enum.Material.ForceField] = 10.0
     }
-    
-    return resistanceMap[material] or 0.5  -- Default resistance
+
+    return resistanceMap[material] or 0.5
 end
 
--- Estimate object thickness for penetration calculation
+-- Estimate object thickness
 function WeaponFiringSystem:estimateObjectThickness(part, hitPosition, direction)
-    -- Simple thickness estimation based on part size and hit angle
     local size = part.Size
     local avgSize = (size.X + size.Y + size.Z) / 3
-    
-    -- For basic estimation, use a fraction of average size
-    -- This is a simplified approach - in reality you'd want more sophisticated thickness calculation
-    return math.min(avgSize * 0.3, 5)  -- Cap at 5 studs max thickness
+    return math.min(avgSize * 0.3, 5)
 end
 
--- Get the muzzle attachment from the weapon
+-- Get muzzle attachment
 function WeaponFiringSystem:getMuzzleAttachment()
-    if not self.currentWeapon then return nil end
-
+    if not self.currentWeapon or not self.currentWeapon.PrimaryPart then return nil end
     return self.currentWeapon.PrimaryPart:FindFirstChild("MuzzlePoint")
 end
 
@@ -330,8 +371,8 @@ function WeaponFiringSystem:createMuzzleFlash()
     flashPart.Parent = self.effectsFolder
 
     -- Auto-cleanup
-    game:GetService("Debris"):AddItem(muzzleLight, DEFAULT_SETTINGS.MUZZLE_FLASH_DURATION)
-    game:GetService("Debris"):AddItem(flashPart, DEFAULT_SETTINGS.MUZZLE_FLASH_DURATION)
+    Debris:AddItem(muzzleLight, DEFAULT_SETTINGS.MUZZLE_FLASH_DURATION)
+    Debris:AddItem(flashPart, DEFAULT_SETTINGS.MUZZLE_FLASH_DURATION)
 
     -- Fade out flash
     TweenService:Create(
@@ -343,14 +384,16 @@ end
 
 -- Create shell casing ejection
 function WeaponFiringSystem:createShellCasing()
-    local shellPoint = self.currentWeapon.PrimaryPart:FindFirstChild("ShellEjectPoint")
+    local weapon = self.currentWeapon
+    if not weapon or not weapon.PrimaryPart then return end
+
+    local shellPoint = weapon.PrimaryPart:FindFirstChild("ShellEjectPoint")
     if not shellPoint then return end
 
-    -- Create shell casing
     local shell = Instance.new("Part")
     shell.Size = Vector3.new(0.05, 0.15, 0.05)
     shell.CFrame = shellPoint.WorldCFrame
-    shell.Color = Color3.fromRGB(200, 180, 0) -- Brass color
+    shell.Color = Color3.fromRGB(200, 180, 0)
     shell.Material = Enum.Material.Metal
     shell.CanCollide = true
     shell.Parent = self.effectsFolder
@@ -363,8 +406,7 @@ function WeaponFiringSystem:createShellCasing()
         math.random(-20, 20)
     )
 
-    -- Auto-cleanup
-    game:GetService("Debris"):AddItem(shell, DEFAULT_SETTINGS.SHELL_CASING_LIFETIME)
+    Debris:AddItem(shell, DEFAULT_SETTINGS.SHELL_CASING_LIFETIME)
 end
 
 -- Create bullet tracer
@@ -375,17 +417,13 @@ function WeaponFiringSystem:createBulletTracer(hitPosition)
     local startPos = muzzleAttachment.WorldPosition
     local endPos = hitPosition
 
-    -- Create tracer part
     local tracer = Instance.new("Part")
     tracer.Size = Vector3.new(
         DEFAULT_SETTINGS.TRACER_WIDTH, 
         DEFAULT_SETTINGS.TRACER_WIDTH, 
         (endPos - startPos).Magnitude
     )
-    tracer.CFrame = CFrame.lookAt(
-        startPos, 
-        endPos
-    ) * CFrame.new(0, 0, -tracer.Size.Z/2)
+    tracer.CFrame = CFrame.lookAt(startPos, endPos) * CFrame.new(0, 0, -tracer.Size.Z/2)
     tracer.Anchored = true
     tracer.CanCollide = false
     tracer.Material = Enum.Material.Neon
@@ -393,10 +431,8 @@ function WeaponFiringSystem:createBulletTracer(hitPosition)
     tracer.Transparency = 0.2
     tracer.Parent = self.effectsFolder
 
-    -- Auto-cleanup
-    game:GetService("Debris"):AddItem(tracer, DEFAULT_SETTINGS.TRACER_LIFETIME)
+    Debris:AddItem(tracer, DEFAULT_SETTINGS.TRACER_LIFETIME)
 
-    -- Fade out tracer
     TweenService:Create(
         tracer, 
         TweenInfo.new(DEFAULT_SETTINGS.TRACER_LIFETIME), 
@@ -404,246 +440,84 @@ function WeaponFiringSystem:createBulletTracer(hitPosition)
     ):Play()
 end
 
--- Create impact effect at hit position
-function WeaponFiringSystem:createImpactEffect(hitInfo)
-    if hitInfo.isMaxDistance then return end
+-- Create impact effect
+function WeaponFiringSystem:createImpactEffect(position, normal, material)
+    local impactPart = Instance.new("Part")
+    impactPart.Size = Vector3.new(DEFAULT_SETTINGS.IMPACT_SIZE, DEFAULT_SETTINGS.IMPACT_SIZE, DEFAULT_SETTINGS.IMPACT_SIZE)
+    impactPart.CFrame = CFrame.new(position, position + normal)
+    impactPart.Anchored = true
+    impactPart.CanCollide = false
+    impactPart.Material = Enum.Material.Neon
+    impactPart.Color = Color3.fromRGB(255, 255, 0)
+    impactPart.Shape = Enum.PartType.Ball
+    impactPart.Parent = self.effectsFolder
 
-    -- Create impact point
-    local impact = Instance.new("Part")
-    impact.Size = Vector3.new(
-        DEFAULT_SETTINGS.IMPACT_SIZE, 
-        DEFAULT_SETTINGS.IMPACT_SIZE, 
-        DEFAULT_SETTINGS.IMPACT_SIZE / 10
-    )
-    impact.CFrame = CFrame.lookAt(
-        hitInfo.hitPosition + hitInfo.hitNormal * 0.01, 
-        hitInfo.hitPosition + hitInfo.hitNormal
-    )
-    impact.Anchored = true
-    impact.CanCollide = false
-    impact.Parent = self.effectsFolder
+    Debris:AddItem(impactPart, DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME)
 
-    -- Set material-based properties
-    if hitInfo.material == Enum.Material.Concrete then
-        impact.Color = Color3.fromRGB(150, 150, 150)
-        impact.Material = Enum.Material.Concrete
-    elseif hitInfo.material == Enum.Material.Metal then
-        impact.Color = Color3.fromRGB(200, 200, 200)
-        impact.Material = Enum.Material.Metal
-    elseif hitInfo.material == Enum.Material.Wood then
-        impact.Color = Color3.fromRGB(120, 80, 60)
-        impact.Material = Enum.Material.Wood
-    else
-        impact.Color = Color3.fromRGB(100, 100, 100)
-    end
-
-    -- Auto-cleanup
-    game:GetService("Debris"):AddItem(impact, DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME)
-
-    -- Fade out impact
     TweenService:Create(
-        impact, 
-        TweenInfo.new(DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME), 
-        {Transparency = 1}
+        impactPart,
+        TweenInfo.new(DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME),
+        {Size = Vector3.new(0, 0, 0), Transparency = 1}
     ):Play()
-
-    -- Check if we hit a character
-    if hitInfo.hitPart then
-        local character = hitInfo.hitPart:FindFirstAncestorOfClass("Model")
-        if character and character:FindFirstChild("Humanoid") then
-            -- Create blood effect
-            local blood = Instance.new("Part")
-            blood.Size = Vector3.new(0.3, 0.3, 0.01)
-            blood.CFrame = CFrame.lookAt(
-                hitInfo.hitPosition + hitInfo.hitNormal * 0.02, 
-                hitInfo.hitPosition + hitInfo.hitNormal
-            )
-            blood.Anchored = true
-            blood.CanCollide = false
-            blood.Color = Color3.fromRGB(150, 0, 0)
-            blood.Material = Enum.Material.SmoothPlastic
-            blood.Parent = self.effectsFolder
-
-            -- Auto-cleanup
-            game:GetService("Debris"):AddItem(blood, DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME)
-
-            -- Fade out blood
-            TweenService:Create(
-                blood, 
-                TweenInfo.new(DEFAULT_SETTINGS.HIT_EFFECT_LIFETIME), 
-                {Transparency = 1, Size = blood.Size * 1.5}
-            ):Play()
-
-            -- Notify server about hit
-            self.hitEvent:FireServer(character, hitInfo.hitPart.Name, self.currentWeapon.Name)
-        end
-    end
 end
 
--- Apply recoil to camera
+-- Apply recoil
 function WeaponFiringSystem:applyRecoil()
     if not self.viewmodel then return end
 
-    local recoilAmount = self.currentWeapon:GetAttribute("Recoil") or DEFAULT_SETTINGS.DEFAULT_RECOIL
-    if self.viewmodel.isAiming then
-        recoilAmount = recoilAmount * 0.7 -- Less recoil when aiming
-    end
+    local verticalRecoil = self:getWeaponStat("VerticalRecoil", 0.3)
+    local horizontalRecoil = self:getWeaponStat("HorizontalRecoil", 0.1)
 
-    -- Vertical recoil
-    local verticalRecoil = recoilAmount * (0.8 + math.random() * 0.4)
-
-    -- Horizontal recoil (random direction)
-    local horizontalRecoil = recoilAmount * (math.random() - 0.5) * 0.5
-
-    -- Apply to camera (if available)
-    if self.viewmodel.addRecoil then
-        self.viewmodel:addRecoil(verticalRecoil, horizontalRecoil)
+    -- Apply recoil to viewmodel
+    if self.viewmodel.applyRecoil then
+        self.viewmodel:applyRecoil(verticalRecoil, horizontalRecoil)
     end
 end
 
--- Reload the current weapon
+-- Reload weapon
 function WeaponFiringSystem:reload()
     if self.isReloading or not self.currentWeapon then return false end
 
     local ammo = self.ammoData[self.currentWeapon.Name]
-    if not ammo then return false end
-
-    -- Check if we need to reload
-    if ammo.currentMagazine >= ammo.magazineSize or ammo.reserveAmmo <= 0 then
+    if not ammo or ammo.currentMagazine >= ammo.magazineSize or ammo.reserveAmmo <= 0 then
         return false
     end
 
-    -- Start reloading
     self.isReloading = true
 
-    -- Get reload time
-    local reloadTime = self.currentWeapon:GetAttribute("ReloadTime") or 2.5
+    local reloadTime = self:getWeaponStat("ReloadTime", 2.5)
 
-    -- Play reload animation/sound
-    self:playSound("Reload")
+    -- Play reload animation
+    if self.viewmodel and self.viewmodel.playAnimation then
+        self.viewmodel:playAnimation("reload")
+    end
 
-    -- Notify server
-    self.reloadEvent:FireServer(self.currentWeapon.Name)
+    -- Complete reload after delay
+    wait(reloadTime)
 
-    -- Schedule reload completion
-    task.delay(reloadTime, function()
-        -- Calculate ammo to add
-        local ammoNeeded = ammo.magazineSize - ammo.currentMagazine
-        local ammoToAdd = math.min(ammoNeeded, ammo.reserveAmmo)
+    -- Calculate ammo to reload
+    local ammoNeeded = ammo.magazineSize - ammo.currentMagazine
+    local ammoToReload = math.min(ammoNeeded, ammo.reserveAmmo)
 
-        -- Update ammo counts
-        ammo.currentMagazine = ammo.currentMagazine + ammoToAdd
-        ammo.reserveAmmo = ammo.reserveAmmo - ammoToAdd
+    ammo.currentMagazine = ammo.currentMagazine + ammoToReload
+    ammo.reserveAmmo = ammo.reserveAmmo - ammoToReload
 
-        -- Complete reload
-        self.isReloading = false
+    self.isReloading = false
 
-        print("Reload complete. Magazine: " .. ammo.currentMagazine .. ", Reserve: " .. ammo.reserveAmmo)
-    end)
+    -- Send to server
+    if self.reloadEvent then
+        self.reloadEvent:FireServer()
+    end
 
     return true
 end
 
--- Play sound effect
-function WeaponFiringSystem:playSound(soundName)
-    local soundId
-    
-    -- Try to get sound from weapon config first
-    if _G.FPSController and _G.FPSController.state and _G.FPSController.state.currentWeapon then
-        local weaponConfig = _G.FPSController.state.currentWeapon.config
-        if weaponConfig and weaponConfig.sounds then
-            local soundKey = soundName:lower()
-            soundId = weaponConfig.sounds[soundKey] or weaponConfig.sounds.fire
-        end
-    end
-    
-    -- Fallback to default sounds if weapon config not available
-    if not soundId then
-        if soundName == "Fire" then
-            soundId = "rbxassetid://4759267374" -- G36 fire sound
-        elseif soundName == "Reload" then
-            soundId = "rbxassetid://799954844" -- Reload sound
-        elseif soundName == "EmptyClick" then
-            soundId = "rbxassetid://91170486" -- Empty click sound
-        end
-    end
-
-    if soundId then
-        local sound = Instance.new("Sound")
-        sound.SoundId = soundId
-        sound.Volume = 0.5
-        sound.RollOffMode = Enum.RollOffMode.InverseTapered
-        sound.MaxDistance = 1000
-
-        -- Play from weapon if possible, otherwise from camera
-        if self.currentWeapon and self.currentWeapon.PrimaryPart then
-            sound.Parent = self.currentWeapon.PrimaryPart
-        else
-            sound.Parent = self.camera
-        end
-
-        sound:Play()
-        print("Playing weapon sound:", soundName, "ID:", soundId)
-
-        -- Auto-cleanup
-        game:GetService("Debris"):AddItem(sound, 2)
-    else
-        print("No sound ID found for:", soundName)
-    end
-end
-
--- Handle damage from weapon hit
-function WeaponFiringSystem:handleDamage(hitInfo)
-    if not hitInfo or not hitInfo.target then return end
-    
-    local target = hitInfo.target
-    local hitPart = hitInfo.hitPart
-    
-    -- Check if target is a character with humanoid or test rig
-    local character = target.Parent
-    local humanoid = character and character:FindFirstChild("Humanoid")
-    
-    if not humanoid then
-        -- Check if it's a test rig directly
-        humanoid = target:FindFirstChild("Humanoid")
-        if humanoid then
-            character = target
-        else
-            return -- Not a valid damage target
-        end
-    end
-    
-    -- Get weapon damage
-    local damage = 30 -- Default damage
-    
-    -- Try to get damage from weapon config
-    if _G.FPSController and _G.FPSController.state and _G.FPSController.state.currentWeapon then
-        local weaponConfig = _G.FPSController.state.currentWeapon.config
-        if weaponConfig and weaponConfig.damage then
-            damage = weaponConfig.damage
-        end
-    end
-    
-    -- Apply damage through damage system if available
-    if _G.DamageSystem then
-        _G.DamageSystem:applyDamage(character, damage, hitPart and hitPart.Name or "Torso", "bullet", self.player)
-    else
-        -- Fallback direct damage
-        humanoid:TakeDamage(damage)
-        print("Applied", damage, "damage to", character.Name, "at", hitPart and hitPart.Name or "unknown")
-    end
-end
-
--- Get ammo display information
+-- Get ammo display
 function WeaponFiringSystem:getAmmoDisplay()
-    if not self.currentWeapon then
-        return "0 / 0"
-    end
+    if not self.currentWeapon then return "0 / 0" end
 
     local ammo = self.ammoData[self.currentWeapon.Name]
-    if not ammo then
-        return "0 / 0"
-    end
+    if not ammo then return "0 / 0" end
 
     return ammo.currentMagazine .. " / " .. ammo.reserveAmmo
 end

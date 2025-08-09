@@ -1,461 +1,460 @@
 -- MeleeSystem.lua
--- Place this in ReplicatedStorage.FPSSystem.Modules
+-- Advanced melee combat system for FPS game
+-- Place in ReplicatedStorage/FPSSystem/Modules/MeleeSystem.lua
+
 local MeleeSystem = {}
 MeleeSystem.__index = MeleeSystem
 
 -- Services
-local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local SoundService = game:GetService("SoundService")
 
 -- Constants
 local MELEE_SETTINGS = {
-    ATTACK_RANGE = 4,           -- How far the melee attack reaches
-    ATTACK_RADIUS = 1.5,        -- Radius of the attack cone
-    ATTACK_DAMAGE = 85,         -- Base damage
-    ATTACK_COOLDOWN = 0.6,      -- Time between attacks
-    ATTACK_DURATION = 0.4,      -- Time for attack animation
-    BACKSTAB_MULTIPLIER = 2,    -- Damage multiplier for backstabs
-    HIT_EFFECT_DURATION = 0.3   -- Duration of hit effect
+    DEFAULT_RANGE = 8,
+    BACKSTAB_ANGLE = 45, -- Degrees for backstab detection
+    COMBO_WINDOW = 1.5,  -- Seconds to chain attacks
+    LUNGE_FORCE = 50,
+    BLOCK_REDUCTION = 0.7, -- Damage reduction when blocking
 }
 
--- Create a new MeleeSystem
+-- Melee weapon configurations
+local MELEE_CONFIGS = {
+    Knife = {
+        damage = 55,
+        backstabDamage = 100,
+        range = 6,
+        attackSpeed = 0.8,
+        lungePower = 30,
+        sounds = {
+            swing = "rbxassetid://131961136",
+            hit = "rbxassetid://131961136",
+            backstab = "rbxassetid://131961136"
+        },
+        animations = {
+            swing = "MeleeSwing",
+            stab = "MeleeStab",
+            block = "MeleeBlock"
+        }
+    },
+    Machete = {
+        damage = 70,
+        backstabDamage = 120,
+        range = 8,
+        attackSpeed = 1.0,
+        lungePower = 40,
+        sounds = {
+            swing = "rbxassetid://131961136",
+            hit = "rbxassetid://131961136",
+            backstab = "rbxassetid://131961136"
+        },
+        animations = {
+            swing = "MeleeSwing",
+            stab = "MeleeStab",
+            block = "MeleeBlock"
+        }
+    },
+    Katana = {
+        damage = 80,
+        backstabDamage = 140,
+        range = 10,
+        attackSpeed = 1.2,
+        lungePower = 50,
+        sounds = {
+            swing = "rbxassetid://131961136",
+            hit = "rbxassetid://131961136",
+            backstab = "rbxassetid://131961136"
+        },
+        animations = {
+            swing = "MeleeSwing",
+            stab = "MeleeStab",
+            block = "MeleeBlock"
+        }
+    },
+    ["Baseball Bat"] = {
+        damage = 65,
+        backstabDamage = 110,
+        range = 7,
+        attackSpeed = 1.1,
+        lungePower = 60,
+        sounds = {
+            swing = "rbxassetid://131961136",
+            hit = "rbxassetid://131961136",
+            backstab = "rbxassetid://131961136"
+        },
+        animations = {
+            swing = "MeleeSwing",
+            stab = "MeleeStab",
+            block = "MeleeBlock"
+        }
+    }
+}
+
+-- Constructor
 function MeleeSystem.new(viewmodelSystem)
     local self = setmetatable({}, MeleeSystem)
 
-    -- Core references
+    -- References
     self.player = Players.LocalPlayer
-    self.viewmodelSystem = viewmodelSystem
     self.camera = workspace.CurrentCamera
-    self.remoteEvent = nil
+    self.viewmodelSystem = viewmodelSystem
 
-    -- State tracking
+    -- Current weapon
+    self.currentWeapon = nil
+    self.currentConfig = nil
+
+    -- Combat state
     self.isAttacking = false
+    self.isBlocking = false
     self.lastAttackTime = 0
-    self.attackCooldown = MELEE_SETTINGS.ATTACK_COOLDOWN
+    self.comboCount = 0
 
-    -- Set up raycast params
-    self:setupRaycastParams()
+    -- Effects
+    self.soundCache = {}
+    self.effectsFolder = workspace:FindFirstChild("MeleeEffects")
+    if not self.effectsFolder then
+        self.effectsFolder = Instance.new("Folder")
+        self.effectsFolder.Name = "MeleeEffects"
+        self.effectsFolder.Parent = workspace
+    end
 
-    -- Find or create remote event
-    self:setupRemoteEvent()
+    -- Setup remote events
+    self:setupRemoteEvents()
 
-    print("MeleeSystem initialized")
+    print("[Melee] System initialized")
     return self
 end
 
--- Set up raycast parameters
-function MeleeSystem:setupRaycastParams()
-    self.raycastParams = RaycastParams.new()
-    self.raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    self.raycastParams.FilterDescendantsInstances = {self.player.Character}
-end
-
--- Set up remote event for server communication
-function MeleeSystem:setupRemoteEvent()
-    -- Find existing or create remote event
-    local remoteFolder = ReplicatedStorage:FindFirstChild("RemoteEvents")
-    if not remoteFolder then
-        remoteFolder = Instance.new("Folder")
-        remoteFolder.Name = "RemoteEvents"
-        remoteFolder.Parent = ReplicatedStorage
+-- Setup remote events
+function MeleeSystem:setupRemoteEvents()
+    local remoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
+    if not remoteEvents then
+        remoteEvents = Instance.new("Folder")
+        remoteEvents.Name = "RemoteEvents"
+        remoteEvents.Parent = ReplicatedStorage
     end
 
-    self.remoteEvent = remoteFolder:FindFirstChild("MeleeEvent")
-    if not self.remoteEvent then
-        self.remoteEvent = Instance.new("RemoteEvent")
-        self.remoteEvent.Name = "MeleeEvent"
-        self.remoteEvent.Parent = remoteFolder
-        print("Created MeleeEvent RemoteEvent")
+    -- Melee attack event
+    self.attackEvent = remoteEvents:FindFirstChild("MeleeAttack")
+    if not self.attackEvent then
+        self.attackEvent = Instance.new("RemoteEvent")
+        self.attackEvent.Name = "MeleeAttack"
+        self.attackEvent.Parent = remoteEvents
+    end
+
+    -- Melee hit event
+    self.hitEvent = remoteEvents:FindFirstChild("MeleeHit")
+    if not self.hitEvent then
+        self.hitEvent = Instance.new("RemoteEvent")
+        self.hitEvent.Name = "MeleeHit"
+        self.hitEvent.Parent = remoteEvents
     end
 end
 
--- Perform a melee attack
-function MeleeSystem:attack()
-    -- Check cooldown
-    local now = tick()
-    if now - self.lastAttackTime < self.attackCooldown then
+-- Set current melee weapon
+function MeleeSystem:setWeapon(weaponName)
+    self.currentWeapon = weaponName
+    self.currentConfig = MELEE_CONFIGS[weaponName] or MELEE_CONFIGS.Knife
+
+    -- Preload sounds
+    self:preloadSounds()
+
+    print("[Melee] Weapon set:", weaponName)
+end
+
+-- Preload sounds
+function MeleeSystem:preloadSounds()
+    if not self.currentConfig.sounds then return end
+
+    for soundName, soundId in pairs(self.currentConfig.sounds) do
+        if not self.soundCache[soundName] then
+            local sound = Instance.new("Sound")
+            sound.SoundId = soundId
+            sound.Volume = 0.7
+            sound.Parent = SoundService
+
+            self.soundCache[soundName] = sound
+            game:GetService("ContentProvider"):PreloadAsync({sound})
+        end
+    end
+end
+
+-- Primary attack (left click)
+function MeleeSystem:primaryAttack()
+    if self.isAttacking or self.isBlocking then return end
+
+    local currentTime = tick()
+
+    -- Check combo timing
+    if currentTime - self.lastAttackTime <= MELEE_SETTINGS.COMBO_WINDOW then
+        self.comboCount = self.comboCount + 1
+    else
+        self.comboCount = 1
+    end
+
+    self.lastAttackTime = currentTime
+    self.isAttacking = true
+
+    -- Play animation
+    if self.viewmodelSystem then
+        self.viewmodelSystem:playAnimation(self.currentConfig.animations.swing, 0.1)
+    end
+
+    -- Play sound
+    self:playSound("swing")
+
+    -- Perform attack after brief delay
+    task.wait(0.2)
+    self:performAttack("swing")
+
+    -- Reset attack state
+    task.wait(self.currentConfig.attackSpeed)
+    self.isAttacking = false
+end
+
+-- Secondary attack (right click - stab/lunge)
+function MeleeSystem:secondaryAttack()
+    if self.isAttacking or self.isBlocking then return end
+
+    self.isAttacking = true
+
+    -- Play stab animation
+    if self.viewmodelSystem then
+        self.viewmodelSystem:playAnimation(self.currentConfig.animations.stab, 0.1)
+    end
+
+    -- Play sound
+    self:playSound("swing")
+
+    -- Lunge forward
+    if self.player.Character and self.player.Character:FindFirstChild("HumanoidRootPart") then
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
+        bodyVelocity.Velocity = self.camera.CFrame.LookVector * self.currentConfig.lungePower
+        bodyVelocity.Parent = self.player.Character.HumanoidRootPart
+
+        Debris:AddItem(bodyVelocity, 0.3)
+    end
+
+    -- Perform attack
+    task.wait(0.3)
+    self:performAttack("stab")
+
+    -- Reset attack state
+    task.wait(self.currentConfig.attackSpeed * 1.5)
+    self.isAttacking = false
+end
+
+-- Block (hold right click)
+function MeleeSystem:startBlocking()
+    if self.isAttacking then return end
+
+    self.isBlocking = true
+
+    -- Play block animation
+    if self.viewmodelSystem then
+        self.viewmodelSystem:playAnimation(self.currentConfig.animations.block, 0.2)
+    end
+
+    print("[Melee] Blocking started")
+end
+
+-- Stop blocking
+function MeleeSystem:stopBlocking()
+    self.isBlocking = false
+
+    -- Stop block animation
+    if self.viewmodelSystem then
+        self.viewmodelSystem:stopAnimation(self.currentConfig.animations.block)
+        self.viewmodelSystem:playAnimation("idle", 0.2)
+    end
+
+    print("[Melee] Blocking stopped")
+end
+
+-- Perform the actual attack
+function MeleeSystem:performAttack(attackType)
+    local origin = self.camera.CFrame.Position
+    local direction = self.camera.CFrame.LookVector
+    local range = self.currentConfig.range
+
+    -- Perform raycast
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {
+        self.player.Character,
+        self.effectsFolder,
+        self.camera
+    }
+
+    local hitResult = workspace:Raycast(origin, direction * range, raycastParams)
+
+    if hitResult then
+        self:handleHit(hitResult, attackType)
+    else
+        -- Miss effect
+        self:createMissEffect()
+    end
+
+    -- Send to server
+    self.attackEvent:FireServer(origin, direction, range, attackType, self.comboCount)
+end
+
+-- Handle hit detection
+function MeleeSystem:handleHit(hitResult, attackType)
+    local hit = hitResult.Instance
+    local humanoid = hit.Parent:FindFirstChild("Humanoid") or 
+        hit.Parent.Parent:FindFirstChild("Humanoid")
+
+    if humanoid and humanoid.Parent ~= self.player.Character then
+        local damage = self.currentConfig.damage
+        local isBackstab = false
+
+        -- Check for backstab
+        if attackType == "stab" then
+            isBackstab = self:checkBackstab(humanoid.Parent)
+            if isBackstab then
+                damage = self.currentConfig.backstabDamage
+            end
+        end
+
+        -- Apply combo multiplier
+        local comboMultiplier = 1 + (self.comboCount - 1) * 0.1
+        damage = damage * comboMultiplier
+
+        -- Send hit to server
+        self.hitEvent:FireServer(humanoid, damage, isBackstab, hitResult.Position, attackType)
+
+        -- Play hit sound
+        if isBackstab then
+            self:playSound("backstab")
+        else
+            self:playSound("hit")
+        end
+
+        -- Create hit effect
+        self:createHitEffect(hitResult.Position, isBackstab)
+
+        print("[Melee] Hit for " .. damage .. " damage" .. (isBackstab and " (BACKSTAB!)" or ""))
+    else
+        -- Hit environment
+        self:createImpactEffect(hitResult.Position, hitResult.Normal)
+    end
+end
+
+-- Check if attack is a backstab
+function MeleeSystem:checkBackstab(targetCharacter)
+    if not targetCharacter or not targetCharacter:FindFirstChild("HumanoidRootPart") then
         return false
     end
 
-    -- Set attacking state
-    self.isAttacking = true
-    self.lastAttackTime = now
+    local attackerPos = self.player.Character.HumanoidRootPart.Position
+    local targetPos = targetCharacter.HumanoidRootPart.Position
+    local targetLook = targetCharacter.HumanoidRootPart.CFrame.LookVector
 
-    print("Melee attack started")
+    -- Vector from target to attacker
+    local attackVector = (attackerPos - targetPos).Unit
 
-    -- Play attack animation
-    self:playAttackAnimation(function()
-        -- Perform hit detection in the middle of the animation
-        self:performHitDetection()
+    -- Check if attacker is behind target
+    local angle = math.deg(math.acos(targetLook:Dot(attackVector)))
 
-        -- Reset state after animation
-        self.isAttacking = false
-    end)
-
-    return true
+    return angle <= MELEE_SETTINGS.BACKSTAB_ANGLE
 end
 
--- Play the attack animation
-function MeleeSystem:playAttackAnimation(callback)
-    -- Ensure we have a weapon and viewmodel
-    if not self.viewmodelSystem or not self.viewmodelSystem.currentWeapon then
-        if callback then callback() end
-        return
-    end
-
-    local weapon = self.viewmodelSystem.currentWeapon
-
-    -- Create animation sequence
-    self:animateSlash(weapon, callback)
-end
-
--- Animate a slashing motion
-function MeleeSystem:animateSlash(weapon, callback)
-    if not weapon or not weapon.PrimaryPart then
-        if callback then callback() end
-        return
-    end
-
-    -- Original position and rotation
-    local originalCFrame = weapon.PrimaryPart.CFrame
-
-    -- Wind-up position (pulled back)
-    local windupCFrame = originalCFrame * 
-        CFrame.Angles(0, math.rad(-30), math.rad(20)) * 
-        CFrame.new(-0.2, 0.1, 0)
-
-    -- Slash position (extended forward)
-    local slashCFrame = originalCFrame * 
-        CFrame.Angles(0, math.rad(60), math.rad(-40)) * 
-        CFrame.new(0.4, -0.2, 0.3)
-
-    -- Recovery position (slightly off center)
-    local recoveryCFrame = originalCFrame * 
-        CFrame.Angles(0, math.rad(20), math.rad(-10)) * 
-        CFrame.new(0.1, -0.05, 0.1)
-
-    -- Animation phases
-    local phases = {
-        -- Wind-up
-        {
-            target = windupCFrame,
-            duration = MELEE_SETTINGS.ATTACK_DURATION * 0.2,
-            easing = Enum.EasingStyle.Quad,
-            direction = Enum.EasingDirection.Out
-        },
-        -- Slash 
-        {
-            target = slashCFrame,
-            duration = MELEE_SETTINGS.ATTACK_DURATION * 0.3,
-            easing = Enum.EasingStyle.Quad,
-            direction = Enum.EasingDirection.In,
-            halfway = true -- Perform hit detection at halfway point
-        },
-        -- Recovery
-        {
-            target = recoveryCFrame,
-            duration = MELEE_SETTINGS.ATTACK_DURATION * 0.2,
-            easing = Enum.EasingStyle.Quad,
-            direction = Enum.EasingDirection.Out
-        },
-        -- Return to original
-        {
-            target = originalCFrame,
-            duration = MELEE_SETTINGS.ATTACK_DURATION * 0.3,
-            easing = Enum.EasingStyle.Quad,
-            direction = Enum.EasingDirection.InOut
-        }
-    }
-
-    -- Execute animation phases
-    self:animatePhases(weapon, phases, callback)
-end
-
--- Animate through a series of phases
-function MeleeSystem:animatePhases(weapon, phases, callback, currentPhase)
-    currentPhase = currentPhase or 1
-
-    if currentPhase > #phases then
-        -- Animation complete
-        if callback then callback() end
-        return
-    end
-
-    -- Get current phase
-    local phase = phases[currentPhase]
-
-    -- Create tween info
-    local tweenInfo = TweenInfo.new(
-        phase.duration,
-        phase.easing,
-        phase.direction
-    )
-
-    -- Create dummy part to tween
-    local dummy = Instance.new("Part")
-    dummy.Anchored = true
-    dummy.CanCollide = false
-    dummy.Transparency = 1
-    dummy.CFrame = weapon.PrimaryPart.CFrame
-    dummy.Parent = workspace
-
-    -- Create tween
-    local tween = TweenService:Create(
-        dummy,
-        tweenInfo,
-        {CFrame = phase.target}
-    )
-
-    -- Connect update (fix connection scope)
-    local updateConnection
-    updateConnection = RunService.RenderStepped:Connect(function()
-        if weapon and weapon.Parent then
-            weapon:PivotTo(dummy.CFrame)
-        else
-            if updateConnection then
-                updateConnection:Disconnect()
-            end
-        end
-    end)
-
-    -- Check if we need to perform hit detection at halfway point
-    if phase.halfway then
-        task.delay(phase.duration * 0.5, function()
-            self:performHitDetection()
-        end)
-    end
-
-    -- Move to next phase when done
-    tween.Completed:Connect(function()
-        if updateConnection then
-            updateConnection:Disconnect()
-        end
-        dummy:Destroy()
-
-        self:animatePhases(weapon, phases, callback, currentPhase + 1)
-    end)
-
-    -- Play the tween
-    tween:Play()
-end
-
--- Perform hit detection using Raycast
-function MeleeSystem:performHitDetection()
-    -- Calculate attack properties
-    local attackOrigin = self.camera.CFrame.Position
-    local attackDirection = self.camera.CFrame.LookVector
-
-    -- Update raycast params to exclude current character
-    if self.player.Character then
-        self.raycastParams.FilterDescendantsInstances = {self.player.Character}
-    end
-
-    -- Perform multiple raycasts in a cone pattern for better hit detection
-    local hits = {}
-    local directions = {
-        attackDirection, -- Center
-        (self.camera.CFrame * CFrame.Angles(0, math.rad(10), 0)).LookVector, -- Right
-        (self.camera.CFrame * CFrame.Angles(0, math.rad(-10), 0)).LookVector, -- Left
-        (self.camera.CFrame * CFrame.Angles(math.rad(10), 0, 0)).LookVector, -- Up
-        (self.camera.CFrame * CFrame.Angles(math.rad(-10), 0, 0)).LookVector, -- Down
-    }
-
-    -- Cast rays in multiple directions
-    for _, direction in ipairs(directions) do
-        local raycastResult = workspace:Raycast(
-            attackOrigin,
-            direction * MELEE_SETTINGS.ATTACK_RANGE,
-            self.raycastParams
-        )
-
-        if raycastResult then
-            table.insert(hits, raycastResult)
-        end
-    end
-
-    -- Process the closest hit
-    if #hits > 0 then
-        -- Find the closest hit
-        local closestHit = hits[1]
-        local closestDistance = (attackOrigin - closestHit.Position).Magnitude
-
-        for i = 2, #hits do
-            local distance = (attackOrigin - hits[i].Position).Magnitude
-            if distance < closestDistance then
-                closestHit = hits[i]
-                closestDistance = distance
-            end
-        end
-
-        self:handleMeleeHit(closestHit, attackDirection)
-    else
-        print("Melee attack missed")
-    end
-
-    print("Melee attack raycast performed")
-end
-
--- Handle melee hit using raycast result
-function MeleeSystem:handleMeleeHit(raycastResult, attackDirection)
-    if not raycastResult then
-        print("Melee attack missed")
-        return
-    end
-
-    -- Check if we hit a player's character
-    local hitPart = raycastResult.Instance
-    local hitPosition = raycastResult.Position
-
-    -- Find character and humanoid
-    local character = hitPart:FindFirstAncestorOfClass("Model")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
-    if humanoid then
-        -- Check if this is a backstab
-        local isBackstab = self:checkBackstab(character, attackDirection)
-
-        -- Apply damage multiplier for backstab
-        local damage = MELEE_SETTINGS.ATTACK_DAMAGE
-        if isBackstab then
-            damage = damage * MELEE_SETTINGS.BACKSTAB_MULTIPLIER
-            print("BACKSTAB!")
-        end
-
-        print("Melee hit detected on " .. (character.Name or "character"))
-
-        -- Notify server of hit
-        if self.remoteEvent then
-            self.remoteEvent:FireServer("MeleeHit", {
-                Target = character,
-                HitPart = hitPart,
-                HitPosition = hitPosition,
-                Damage = damage,
-                IsBackstab = isBackstab
-            })
-        end
-
-        -- Create local hit effect
-        self:createHitEffect(hitPosition, isBackstab)
-    else
-        -- Hit something that's not a character
-        print("Melee hit terrain or object")
-
-        -- Create impact effect
-        self:createImpactEffect(hitPosition, raycastResult.Normal)
-    end
-end
-
--- Check if this is a backstab
-function MeleeSystem:checkBackstab(character, attackDirection)
-    -- Need HumanoidRootPart to check facing
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-
-    -- Get character look direction
-    local characterLookVector = rootPart.CFrame.LookVector
-
-    -- Dot product > 0.5 means attack is coming from behind
-    local dot = attackDirection:Dot(characterLookVector)
-
-    return dot > 0.5 -- Attacking from behind
-end
-
--- Create a hit effect at the point of impact
+-- Create hit effect
 function MeleeSystem:createHitEffect(position, isBackstab)
-    -- Create a part to hold effects
-    local effectPart = Instance.new("Part")
-    effectPart.Size = Vector3.new(0.1, 0.1, 0.1)
-    effectPart.Transparency = 1
-    effectPart.CanCollide = false
-    effectPart.Anchored = true
-    effectPart.Position = position
-    effectPart.Parent = workspace
+    -- Blood splatter effect
+    local effect = Instance.new("Explosion")
+    effect.Position = position
+    effect.BlastRadius = isBackstab and 15 or 10
+    effect.BlastPressure = 0
+    effect.Parent = workspace
 
-    -- Create blood particle effect
-    local bloodEffect = Instance.new("ParticleEmitter")
-    bloodEffect.Color = ColorSequence.new(Color3.new(0.8, 0, 0))
-    bloodEffect.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.1),
-        NumberSequenceKeypoint.new(0.5, 0.3),
-        NumberSequenceKeypoint.new(1, 0.1)
-    })
-    bloodEffect.Lifetime = NumberRange.new(0.3, 0.6)
-    bloodEffect.Rate = 0
-    bloodEffect.Speed = NumberRange.new(3, 6)
-    bloodEffect.SpreadAngle = Vector2.new(50, 50)
-    bloodEffect.Parent = effectPart
+    -- Remove explosion sound
+    effect.Visible = false
 
-    -- Emit more particles for backstab
-    local particleCount = isBackstab and 20 or 10
-    bloodEffect:Emit(particleCount)
+    -- Create custom particle effect
+    local attachment = Instance.new("Attachment")
+    attachment.Position = position
+    attachment.Parent = workspace.Terrain
 
-    -- Create sound effect
-    local sound = Instance.new("Sound")
-    sound.SoundId = isBackstab and "rbxassetid://4471648128" or "rbxassetid://5951833277"
-    sound.Volume = 0.5
-    sound.Parent = effectPart
-    sound:Play()
+    local particle = Instance.new("ParticleEmitter")
+    particle.Texture = "rbxasset://textures/particles/smoke_main.dds"
+    particle.Rate = 0
+    particle.Lifetime = NumberRange.new(0.5, 1.0)
+    particle.Speed = NumberRange.new(20)
+    particle.SpreadAngle = Vector2.new(45, 45)
+    particle.Color = ColorSequence.new(Color3.fromRGB(139, 0, 0))
+    particle.Parent = attachment
 
-    -- Clean up after effect completes
-    task.delay(MELEE_SETTINGS.HIT_EFFECT_DURATION, function()
-        effectPart:Destroy()
-    end)
+    particle:Emit(isBackstab and 30 or 15)
+
+    Debris:AddItem(attachment, 2)
 end
 
--- Create an impact effect for hitting non-character objects
+-- Create miss effect
+function MeleeSystem:createMissEffect()
+    -- Whoosh sound effect or visual
+    print("[Melee] Attack missed")
+end
+
+-- Create impact effect for environment hits
 function MeleeSystem:createImpactEffect(position, normal)
-    -- Create a part to hold effects
-    local effectPart = Instance.new("Part")
-    effectPart.Size = Vector3.new(0.1, 0.1, 0.1)
-    effectPart.Transparency = 1
-    effectPart.CanCollide = false
-    effectPart.Anchored = true
-    effectPart.Position = position
-    effectPart.Parent = workspace
+    -- Sparks for metal, dust for concrete, etc.
+    local attachment = Instance.new("Attachment")
+    attachment.Position = position
+    attachment.Parent = workspace.Terrain
 
-    -- Create spark particle effect
-    local sparkEffect = Instance.new("ParticleEmitter")
-    sparkEffect.Color = ColorSequence.new(Color3.new(1, 0.8, 0.5))
-    sparkEffect.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.05),
-        NumberSequenceKeypoint.new(0.5, 0.1),
-        NumberSequenceKeypoint.new(1, 0.02)
-    })
-    sparkEffect.Lifetime = NumberRange.new(0.2, 0.4)
-    sparkEffect.Rate = 0
-    sparkEffect.Speed = NumberRange.new(2, 5)
-    sparkEffect.SpreadAngle = Vector2.new(60, 60)
-    sparkEffect.Parent = effectPart
+    local particle = Instance.new("ParticleEmitter")
+    particle.Texture = "rbxasset://textures/particles/smoke_main.dds"
+    particle.Rate = 0
+    particle.Lifetime = NumberRange.new(0.3, 0.6)
+    particle.Speed = NumberRange.new(10)
+    particle.SpreadAngle = Vector2.new(30, 30)
+    particle.Color = ColorSequence.new(Color3.fromRGB(200, 200, 200))
+    particle.Parent = attachment
 
-    -- Emit particles
-    sparkEffect:Emit(8)
+    particle:Emit(10)
 
-    -- Create sound effect
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://142082167" -- Metal impact sound
-    sound.Volume = 0.3
-    sound.Parent = effectPart
-    sound:Play()
-
-    -- Clean up after effect completes
-    task.delay(MELEE_SETTINGS.HIT_EFFECT_DURATION, function()
-        effectPart:Destroy()
-    end)
+    Debris:AddItem(attachment, 1)
 end
 
--- Handle mouse button input
-function MeleeSystem:handleMouseButton1(isDown)
-    if isDown and not self.isAttacking then
-        return self:attack()
+-- Play sound
+function MeleeSystem:playSound(soundName)
+    local sound = self.soundCache[soundName]
+    if sound then
+        sound:Play()
     end
-    return false
 end
 
--- Clean up system
+-- Get melee info
+function MeleeSystem:getInfo()
+    return {
+        weapon = self.currentWeapon,
+        damage = self.currentConfig.damage,
+        range = self.currentConfig.range,
+        isAttacking = self.isAttacking,
+        isBlocking = self.isBlocking,
+        comboCount = self.comboCount
+    }
+end
+
+-- Cleanup
 function MeleeSystem:cleanup()
-    print("MeleeSystem cleaned up")
+    self.isAttacking = false
+    self.isBlocking = false
+
+    -- Clear sound cache
+    for _, sound in pairs(self.soundCache) do
+        sound:Destroy()
+    end
+    self.soundCache = {}
+
+    print("[Melee] Cleanup complete")
 end
 
 return MeleeSystem

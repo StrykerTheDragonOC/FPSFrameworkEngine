@@ -1,687 +1,809 @@
--- FPSFramework.lua
--- Main controller for the FPS system
--- Place in ReplicatedStorage
+-- Phantom Forces Style FPS Framework
+-- Complete high-tech FPS system with advanced features
+-- Place in ReplicatedStorage.FPSSystem.FPSFramework
 
 local FPSFramework = {}
 FPSFramework.__index = FPSFramework
 
 -- Services
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
-local ContentProvider = game:GetService("ContentProvider")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local Lighting = game:GetService("Lighting")
 
--- Constants
-local SYSTEM_NAMES = {
-	VIEWMODEL = "ViewmodelSystem",
-	WEAPON = "WeaponSystem",
-	FIRING = "FiringSystem",
-	CAMERA = "CameraSystem",
-	CROSSHAIR = "CrosshairSystem",
-	EFFECTS = "EffectsSystem",
-	GRENADE = "GrenadeSystem",
-	MELEE = "MeleeSystem",
-	ATTACHMENT = "AttachmentSystem",
-	INPUT = "InputSystem",
-	DEBUG = "DebugSystem"
+-- Framework Configuration
+local FRAMEWORK_CONFIG = {
+    -- Advanced graphics settings
+    GRAPHICS = {
+        ENABLE_BLOOM = true,
+        ENABLE_MOTION_BLUR = true,
+        ENABLE_DEPTH_OF_FIELD = true,
+        ENABLE_COLOR_CORRECTION = true,
+        ENABLE_ATMOSPHERIC_FOG = true,
+        MUZZLE_FLASH_INTENSITY = 2.0,
+        PARTICLE_DENSITY = 1.0
+    },
+
+    -- Audio settings
+    AUDIO = {
+        MASTER_VOLUME = 0.8,
+        SFX_VOLUME = 1.0,
+        MUSIC_VOLUME = 0.3,
+        ENABLE_3D_AUDIO = true,
+        BULLET_WHIZ_DISTANCE = 5.0
+    },
+
+    -- Performance settings
+    PERFORMANCE = {
+        MAX_BULLET_HOLES = 100,
+        MAX_SHELL_CASINGS = 50,
+        MAX_PARTICLES = 200,
+        EFFECTS_DISTANCE = 500,
+        LOD_DISTANCE = 300
+    },
+
+    -- Gameplay settings
+    GAMEPLAY = {
+        FRIENDLY_FIRE = false,
+        KILL_FEED = true,
+        DAMAGE_INDICATORS = true,
+        HIT_MARKERS = true,
+        ADVANCED_BALLISTICS = true,
+        BULLET_DROP = true,
+        WIND_EFFECTS = false
+    }
 }
 
-local FOLDER_STRUCTURE = {
-	FPSSystem = {
-		"Modules",
-		"WeaponModels",
-		"ViewModels",
-		"Attachments",
-		"Effects",
-		"Animations",
-		"Config",
-		"RemoteEvents"
-	}
-}
-
--- Initialize framework for a player
 function FPSFramework.new()
-	local self = setmetatable({}, FPSFramework)
+    local self = setmetatable({}, FPSFramework)
 
-	-- Core components
-	self.player = Players.LocalPlayer
-	self.camera = workspace.CurrentCamera
-	self.systems = {}
-	self.initialized = false
-	self.debug = false
+    -- Core references
+    self.player = Players.LocalPlayer
+    self.character = nil
+    self.humanoid = nil
+    self.camera = workspace.CurrentCamera
 
-	-- Weapon state
-	self.currentWeapon = nil
-	self.weaponSlots = {
-		PRIMARY = nil,
-		SECONDARY = nil,
-		MELEE = nil,
-		GRENADES = nil
-	}
+    -- System modules
+    self.systems = {
+        raycast = nil,
+        firing = nil,
+        viewmodel = nil,
+        movement = nil,
+        ui = nil,
+        audio = nil,
+        effects = nil,
+        networking = nil
+    }
 
-	-- Player state
-	self.isAiming = false
-	self.isSprinting = false
-	self.isReloading = false
-	self.isCrouching = false
+    -- Weapon management
+    self.currentLoadout = {
+        PRIMARY = nil,
+        SECONDARY = nil,
+        MELEE = nil,
+        GRENADE = nil
+    }
+    self.currentWeapon = nil
+    self.currentSlot = "PRIMARY"
 
-	-- Remote events
-	self.remoteEvents = {}
+    -- Input management
+    self.inputConnections = {}
+    self.mouseControl = {
+        sensitivity = 0.3,
+        isLocked = true,
+        invertY = false
+    }
 
-	return self
+    -- Statistics tracking
+    self.stats = {
+        kills = 0,
+        deaths = 0,
+        accuracy = 0,
+        shotsFired = 0,
+        shotsHit = 0,
+        headshotPercentage = 0,
+        favoriteWeapon = "",
+        playtime = 0
+    }
+
+    -- Initialize framework
+    self:initialize()
+
+    return self
 end
 
--- Initialize the framework
-function FPSFramework:init()
-	print("Initializing FPS Framework...")
+-- Initialize the complete framework
+function FPSFramework:initialize()
+    print("Initializing Phantom Forces Framework...")
 
-	-- Ensure folders exist
-	self:ensureFolders()
+    -- Setup character references
+    self:setupCharacter()
 
-	-- Pre-load assets
-	self:preloadAssets()
+    -- Initialize core systems
+    self:initializeSystems()
 
-	-- Initialize systems in order
-	self:initSystems()
+    -- Setup input handling
+    self:setupInputHandling()
 
-	-- Set up remote events
-	self:setupRemoteEvents()
+    -- Setup UI
+    self:setupUI()
 
-	-- Set up input handlers
-	if self.systems.INPUT then
-		self.systems.INPUT:setupInputHandlers()
-	else
-		self:setupDefaultInputHandlers()
-	end
+    -- Setup graphics
+    self:setupGraphics()
 
-	-- Use default configuration if not overridden
-	self:loadDefaultConfiguration()
+    -- Setup audio
+    self:setupAudio()
 
-	-- Load default weapons
-	self:loadDefaultWeapons()
+    -- Start main loop
+    self:startMainLoop()
 
-	-- Start render loop
-	self:startRenderLoop()
-
-	-- Mark as initialized
-	self.initialized = true
-
-	print("FPS Framework initialized!")
-	return true
+    print("Phantom Forces Framework initialized successfully!")
 end
 
--- Ensure the necessary folder structure exists
-function FPSFramework:ensureFolders()
-	for parentName, subfolders in pairs(FOLDER_STRUCTURE) do
-		local parent = ReplicatedStorage:FindFirstChild(parentName)
-		if not parent then
-			parent = Instance.new("Folder")
-			parent.Name = parentName
-			parent.Parent = ReplicatedStorage
-		end
+-- Setup character references
+function FPSFramework:setupCharacter()
+    local function onCharacterAdded(character)
+        self.character = character
+        self.humanoid = character:WaitForChild("Humanoid")
 
-		for _, folderName in ipairs(subfolders) do
-			local folder = parent:FindFirstChild(folderName)
-			if not folder then
-				folder = Instance.new("Folder")
-				folder.Name = folderName
-				folder.Parent = parent
-			end
-		end
-	end
+        -- Update systems with new character
+        if self.systems.raycast then
+            self.systems.raycast:updateDefaultExcludes()
+        end
 
-	print("Folder structure verified")
+        print("Character setup complete")
+    end
+
+    if self.player.Character then
+        onCharacterAdded(self.player.Character)
+    end
+
+    self.player.CharacterAdded:Connect(onCharacterAdded)
 end
 
--- Preload assets for smoother experience
-function FPSFramework:preloadAssets()
-	local assets = {}
+-- Initialize all core systems
+function FPSFramework:initializeSystems()
+    -- Load system modules
+    local function loadModule(name, path)
+        local success, module = pcall(function()
+            return require(ReplicatedStorage.FPSSystem.Modules[path])
+        end)
 
-	-- Add weapon models to preload
-	local weaponModels = ReplicatedStorage.FPSSystem.WeaponModels:GetChildren()
-	for _, model in ipairs(weaponModels) do
-		table.insert(assets, model)
-	end
+        if success then
+            return module
+        else
+            warn("Failed to load " .. name .. ": " .. tostring(module))
+            return nil
+        end
+    end
 
-	-- Add viewmodels to preload
-	local viewModels = ReplicatedStorage.FPSSystem.ViewModels:GetChildren()
-	for _, model in ipairs(viewModels) do
-		table.insert(assets, model)
-	end
+    -- Initialize Modern Raycast System
+    local ModernRaycastSystem = loadModule("ModernRaycastSystem", "ModernRaycastSystem")
+    if ModernRaycastSystem then
+        self.systems.raycast = ModernRaycastSystem.new()
+    end
 
-	-- Preload assets
-	if #assets > 0 then
-		ContentProvider:PreloadAsync(assets)
-	end
+    -- Initialize Weapon Firing System
+    local WeaponFiringSystem = loadModule("WeaponFiringSystem", "WeaponFiringSystem")
+    if WeaponFiringSystem then
+        self.systems.firing = WeaponFiringSystem.new(self.systems.viewmodel)
+    end
 
-	print("Assets preloaded")
+    -- Initialize Viewmodel System
+    local ViewmodelSystem = loadModule("ViewmodelSystem", "ViewmodelSystem")
+    if ViewmodelSystem then
+        self.systems.viewmodel = ViewmodelSystem.new()
+    end
+
+    -- Initialize Advanced Movement System
+    local AdvancedMovementSystem = loadModule("AdvancedMovementSystem", "AdvancedMovementSystem")
+    if AdvancedMovementSystem then
+        self.systems.movement = AdvancedMovementSystem.new()
+    end
+
+    -- Initialize Effects System
+    self.systems.effects = self:createEffectsSystem()
+
+    -- Initialize Audio System
+    self.systems.audio = self:createAudioSystem()
+
+    -- Initialize Networking System
+    self.systems.networking = self:createNetworkingSystem()
 end
 
--- Initialize all systems
-function FPSFramework:initSystems()
-	-- Define system initialization order for dependency management
-	local initOrder = {
-		SYSTEM_NAMES.VIEWMODEL,
-		SYSTEM_NAMES.WEAPON,
-		SYSTEM_NAMES.INPUT,
-		SYSTEM_NAMES.CAMERA,
-		SYSTEM_NAMES.FIRING,
-		SYSTEM_NAMES.EFFECTS,
-		SYSTEM_NAMES.CROSSHAIR,
-		SYSTEM_NAMES.ATTACHMENT,
-		SYSTEM_NAMES.GRENADE,
-		SYSTEM_NAMES.MELEE,
-		SYSTEM_NAMES.DEBUG
-	}
+-- Setup input handling
+function FPSFramework:setupInputHandling()
+    -- Mouse control
+    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    UserInputService.MouseIconEnabled = false
 
-	-- Initialize each system in order
-	for _, systemName in ipairs(initOrder) do
-		self:initSystem(systemName)
-	end
+    -- Input connections
+    self.inputConnections.inputBegan = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        self:handleInputBegan(input)
+    end)
 
-	print("All systems initialized")
+    self.inputConnections.inputEnded = UserInputService.InputEnded:Connect(function(input, processed)
+        if processed then return end
+        self:handleInputEnded(input)
+    end)
+
+    self.inputConnections.inputChanged = UserInputService.InputChanged:Connect(function(input, processed)
+        if processed then return end
+        self:handleInputChanged(input)
+    end)
 end
 
--- Initialize a specific system
-function FPSFramework:initSystem(systemName)
-	-- Check if already initialized
-	if self.systems[systemName] then
-		return self.systems[systemName]
-	end
+-- Handle input began
+function FPSFramework:handleInputBegan(input)
+    local keyCode = input.KeyCode
 
-	-- Try to require the module
-	local module = self:requireModule(systemName)
-	if not module then
-		warn("Failed to require module: " .. systemName)
-		return nil
-	end
+    -- Weapon firing
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        self:startFiring()
 
-	-- Initialize the system
-	local system
+        -- Weapon switching
+    elseif keyCode == Enum.KeyCode.One then
+        self:switchWeapon("PRIMARY")
+    elseif keyCode == Enum.KeyCode.Two then
+        self:switchWeapon("SECONDARY")
+    elseif keyCode == Enum.KeyCode.Three then
+        self:switchWeapon("MELEE")
+    elseif keyCode == Enum.KeyCode.Four or keyCode == Enum.KeyCode.G then
+        self:switchWeapon("GRENADE")
 
-	-- Special initialization logic based on system type
-	if systemName == SYSTEM_NAMES.VIEWMODEL then
-		system = module.new()
-		if system then
-			system:setupArms()
-			system:startUpdateLoop()
-		end
-	elseif systemName == SYSTEM_NAMES.WEAPON then
-		system = module
-	elseif systemName == SYSTEM_NAMES.FIRING then
-		system = module.new(self.systems[SYSTEM_NAMES.VIEWMODEL])
-	elseif systemName == SYSTEM_NAMES.GRENADE then
-		system = module.new(self.systems[SYSTEM_NAMES.VIEWMODEL])
-	elseif systemName == SYSTEM_NAMES.MELEE then
-		system = module.new(self.systems[SYSTEM_NAMES.VIEWMODEL])
-	elseif systemName == SYSTEM_NAMES.INPUT then
-		system = module.new(self)
-	elseif systemName == SYSTEM_NAMES.DEBUG and self.debug then
-		system = module:init()
-		if system and self.systems[SYSTEM_NAMES.VIEWMODEL] then
-			module:injectIntoViewmodelSystem(self.systems[SYSTEM_NAMES.VIEWMODEL])
-		end
-	else
-		-- Standard initialization
-		if typeof(module.new) == "function" then
-			system = module.new()
-		else
-			system = module
-		end
-	end
+        -- Aiming
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        self:startAiming()
 
-	-- Store the initialized system
-	if system then
-		self.systems[systemName] = system
-		print("Initialized system: " .. systemName)
-	else
-		warn("Failed to initialize system: " .. systemName)
-	end
+        -- Reloading
+    elseif keyCode == Enum.KeyCode.R then
+        self:reload()
 
-	return system
+        -- Sprinting
+    elseif keyCode == Enum.KeyCode.LeftShift then
+        if self.systems.movement then
+            self.systems.movement:setSprinting(true)
+        end
+
+        -- Crouching
+    elseif keyCode == Enum.KeyCode.LeftControl or keyCode == Enum.KeyCode.C then
+        if self.systems.movement then
+            self.systems.movement:toggleCrouch()
+        end
+
+        -- Prone
+    elseif keyCode == Enum.KeyCode.X then
+        if self.systems.movement then
+            self.systems.movement:toggleProne()
+        end
+
+        -- Leaning
+    elseif keyCode == Enum.KeyCode.Q then
+        if self.systems.movement then
+            self.systems.movement:leanLeft(true)
+        end
+    elseif keyCode == Enum.KeyCode.E then
+        if self.systems.movement then
+            self.systems.movement:leanRight(true)
+        end
+
+        -- Tactical features
+    elseif keyCode == Enum.KeyCode.T then
+        self:toggleFlashlight()
+    elseif keyCode == Enum.KeyCode.B then
+        self:toggleLaser()
+    elseif keyCode == Enum.KeyCode.V then
+        self:toggleNightVision()
+
+        -- Interface
+    elseif keyCode == Enum.KeyCode.Tab then
+        self:toggleScoreboard()
+    elseif keyCode == Enum.KeyCode.M then
+        self:toggleMap()
+    elseif keyCode == Enum.KeyCode.L then
+        if _G.LoadoutSelector then
+            _G.LoadoutSelector:openGUI()
+        end
+    end
 end
 
--- Safely require a module
-function FPSFramework:requireModule(moduleName)
-	local modulesFolder = ReplicatedStorage.FPSSystem.Modules
-	local moduleScript = modulesFolder:FindFirstChild(moduleName)
+-- Handle input ended
+function FPSFramework:handleInputEnded(input)
+    -- Stop firing
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        self:stopFiring()
 
-	if not moduleScript then
-		warn("Module not found: " .. moduleName)
-		return nil
-	end
+        -- Stop aiming
+    elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+        self:stopAiming()
 
-	local success, result = pcall(function()
-		return require(moduleScript)
-	end)
+        -- Stop sprinting
+    elseif input.KeyCode == Enum.KeyCode.LeftShift then
+        if self.systems.movement then
+            self.systems.movement:setSprinting(false)
+        end
 
-	if success then
-		return result
-	else
-		warn("Error requiring module " .. moduleName .. ": " .. tostring(result))
-		return nil
-	end
+        -- Stop leaning
+    elseif input.KeyCode == Enum.KeyCode.Q then
+        if self.systems.movement then
+            self.systems.movement:leanLeft(false)
+        end
+    elseif input.KeyCode == Enum.KeyCode.E then
+        if self.systems.movement then
+            self.systems.movement:leanRight(false)
+        end
+    end
 end
 
--- Set up remote events
-function FPSFramework:setupRemoteEvents()
-	local eventNames = {
-		"WeaponFired",
-		"WeaponReload",
-		"WeaponEquipped",
-		"CharacterAnimationEvent",
-		"HitRegistration",
-		"GrenadeEvent",
-		"MeleeEvent"
-	}
-
-	local eventsFolder = ReplicatedStorage.FPSSystem.RemoteEvents
-
-	for _, eventName in ipairs(eventNames) do
-		local remoteEvent = eventsFolder:FindFirstChild(eventName)
-		if not remoteEvent then
-			remoteEvent = Instance.new("RemoteEvent")
-			remoteEvent.Name = eventName
-			remoteEvent.Parent = eventsFolder
-		end
-
-		self.remoteEvents[eventName] = remoteEvent
-	end
-
-	print("Remote events set up")
+-- Handle input changed (mouse movement)
+function FPSFramework:handleInputChanged(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        self:handleMouseMovement(input.Delta)
+    end
 end
 
--- Set up default input handlers if InputSystem isn't available
-function FPSFramework:setupDefaultInputHandlers()
-	UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
+-- Handle mouse movement for camera control
+function FPSFramework:handleMouseMovement(delta)
+    if not self.mouseControl.isLocked then return end
 
-		-- Handle basic weapons switching
-		if input.KeyCode == Enum.KeyCode.One then
-			self:equipWeapon("PRIMARY")
-		elseif input.KeyCode == Enum.KeyCode.Two then
-			self:equipWeapon("SECONDARY")
-		elseif input.KeyCode == Enum.KeyCode.Three then
-			self:equipWeapon("MELEE")
-		elseif input.KeyCode == Enum.KeyCode.Four then
-			self:equipWeapon("GRENADES")
-		end
-	end)
+    local sensitivity = self.mouseControl.sensitivity
+    local yInvert = self.mouseControl.invertY and -1 or 1
 
-	print("Default input handlers set up")
+    -- Apply mouse movement to camera
+    local rotationX = delta.X * sensitivity
+    local rotationY = delta.Y * sensitivity * yInvert
+
+    -- Update camera rotation
+    if self.systems.viewmodel and self.systems.viewmodel.updateCameraRotation then
+        self.systems.viewmodel:updateCameraRotation(rotationX, rotationY)
+    end
 end
 
--- Load default configuration
-function FPSFramework:loadDefaultConfiguration()
-	-- Load WeaponConfig module if available
-	local WeaponConfig = self:requireModule("WeaponConfig")
-	if WeaponConfig then
-		self.config = WeaponConfig
-	else
-		-- Use default configs
-		self.config = {
-			DefaultWeapons = {
-				PRIMARY = "G36",
-				SECONDARY = "M9",
-				MELEE = "PocketKnife",
-				GRENADES = "FragGrenade"
-			}
-		}
-	end
-
-	print("Default configuration loaded")
+-- Weapon firing
+function FPSFramework:startFiring()
+    if self.systems.firing and self.currentWeapon then
+        self.systems.firing.isFiring = true
+        self:fire()
+    end
 end
 
--- Load default weapons
-function FPSFramework:loadDefaultWeapons()
-	if not self.systems[SYSTEM_NAMES.WEAPON] then
-		warn("Cannot load weapons - WeaponSystem not initialized")
-		return
-	end
-
-	-- Load weapons into slots
-	for slot, weaponName in pairs(self.config.DefaultWeapons) do
-		self:loadWeapon(slot, weaponName)
-	end
-
-	-- Equip primary weapon
-	self:equipWeapon("PRIMARY")
-
-	print("Default weapons loaded")
+function FPSFramework:stopFiring()
+    if self.systems.firing then
+        self.systems.firing.isFiring = false
+    end
 end
 
--- Load a weapon into a slot
+function FPSFramework:fire()
+    if self.systems.firing and self.systems.firing:fire() then
+        -- Update statistics
+        self.stats.shotsFired = self.stats.shotsFired + 1
+
+        -- Play audio
+        if self.systems.audio then
+            self.systems.audio:playWeaponSound("fire", self.currentWeapon)
+        end
+
+        -- Create effects
+        if self.systems.effects then
+            self.systems.effects:createMuzzleFlash(self.currentWeapon)
+        end
+    end
+end
+
+-- Weapon aiming
+function FPSFramework:startAiming()
+    if self.systems.viewmodel then
+        self.systems.viewmodel:setAiming(true)
+    end
+end
+
+function FPSFramework:stopAiming()
+    if self.systems.viewmodel then
+        self.systems.viewmodel:setAiming(false)
+    end
+end
+
+-- Weapon reloading
+function FPSFramework:reload()
+    if self.systems.firing and self.currentWeapon then
+        self.systems.firing:reload()
+
+        -- Play reload audio
+        if self.systems.audio then
+            self.systems.audio:playWeaponSound("reload", self.currentWeapon)
+        end
+    end
+end
+
+-- Weapon switching
+function FPSFramework:switchWeapon(slot)
+    if self.currentSlot == slot then return end
+
+    local weapon = self.currentLoadout[slot]
+    if not weapon then
+        print("No weapon in slot: " .. slot)
+        return
+    end
+
+    self.currentSlot = slot
+    self.currentWeapon = weapon
+
+    -- Update firing system
+    if self.systems.firing then
+        self.systems.firing:setWeapon(weapon.model, weapon.config)
+    end
+
+    -- Update viewmodel
+    if self.systems.viewmodel then
+        self.systems.viewmodel:equipWeapon(weapon.model, slot)
+    end
+
+    -- Play switch audio
+    if self.systems.audio then
+        self.systems.audio:playWeaponSound("switch", weapon)
+    end
+
+    print("Switched to " .. slot .. ": " .. weapon.name)
+end
+
+-- Load weapon into loadout slot
 function FPSFramework:loadWeapon(slot, weaponName)
-	if not self.systems[SYSTEM_NAMES.WEAPON] then
-		warn("Cannot load weapon: WeaponSystem not initialized")
-		return
-	end
+    -- Find weapon configuration
+    local weaponConfig = self:getWeaponConfig(weaponName)
+    if not weaponConfig then
+        warn("Weapon config not found: " .. weaponName)
+        return false
+    end
 
-	-- Load weapon model
-	local weaponModel
-	local weaponSystem = self.systems[SYSTEM_NAMES.WEAPON]
+    -- Load weapon model
+    local weaponModel = self:loadWeaponModel(weaponName, slot)
+    if not weaponModel then
+        warn("Weapon model not found: " .. weaponName)
+        return false
+    end
 
-	if typeof(weaponSystem.loadWeapon) == "function" then
-		weaponModel = weaponSystem.loadWeapon(weaponName, slot)
-	elseif weaponName == "G36" and typeof(weaponSystem.getG36) == "function" then
-		weaponModel = weaponSystem.getG36()
-	else
-		-- Create placeholder as fallback
-		weaponModel = self:createPlaceholderWeapon(slot, weaponName)
-	end
+    -- Create weapon data
+    self.currentLoadout[slot] = {
+        name = weaponName,
+        model = weaponModel,
+        config = weaponConfig,
+        slot = slot
+    }
 
-	-- Store the weapon data
-	if weaponModel then
-		local weaponConfig
-
-		-- Get config from WeaponConfig if available
-		if self.config.Weapons and self.config.Weapons[weaponName] then
-			weaponConfig = self.config.Weapons[weaponName]
-		else
-			-- Use basic defaults
-			weaponConfig = {
-				name = weaponName,
-				damage = 25,
-				fireRate = 600,
-				magazineSize = 30,
-				reloadTime = 2.5
-			}
-		end
-
-		self.weaponSlots[slot] = {
-			name = weaponName,
-			model = weaponModel,
-			config = weaponConfig
-		}
-
-		print("Loaded " .. weaponName .. " into " .. slot .. " slot")
-	else
-		warn("Failed to load weapon: " .. weaponName)
-	end
+    print("Loaded " .. weaponName .. " into " .. slot .. " slot")
+    return true
 end
 
--- Create a placeholder weapon model
-function FPSFramework:createPlaceholderWeapon(slot, weaponName)
-	local model = Instance.new("Model")
-	model.Name = weaponName
-
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(0.5, 0.3, 2)
-	handle.Anchored = true
-	handle.CanCollide = false
-	handle.Color = Color3.fromRGB(80, 80, 80)
-	handle.Material = Enum.Material.Metal
-
-	-- Configure based on weapon type
-	if slot == "PRIMARY" then
-		-- Add barrel for primary weapons
-		local barrel = Instance.new("Part")
-		barrel.Name = "Barrel"
-		barrel.Size = Vector3.new(0.2, 0.2, 1)
-		barrel.Position = handle.Position + Vector3.new(0, 0, -1.5)
-		barrel.Anchored = true
-		barrel.CanCollide = false
-		barrel.Color = Color3.fromRGB(60, 60, 60)
-		barrel.Parent = model
-
-		-- Add muzzle attachment
-		local muzzlePoint = Instance.new("Attachment")
-		muzzlePoint.Name = "MuzzlePoint"
-		muzzlePoint.Position = Vector3.new(0, 0, -0.5)
-		muzzlePoint.Parent = barrel
-	elseif slot == "SECONDARY" then
-		handle.Size = Vector3.new(0.3, 0.8, 0.2)
-	elseif slot == "MELEE" then
-		handle.Size = Vector3.new(0.2, 0.8, 0.2)
-
-		-- Add blade for melee
-		local blade = Instance.new("Part")
-		blade.Name = "Blade"
-		blade.Size = Vector3.new(0.05, 0.8, 0.3)
-		blade.Position = handle.Position + Vector3.new(0, 0.8, 0)
-		blade.Anchored = true
-		blade.CanCollide = false
-		blade.Color = Color3.fromRGB(200, 200, 200)
-		blade.Material = Enum.Material.Metal
-		blade.Parent = model
-	elseif slot == "GRENADES" then
-		handle.Size = Vector3.new(0.4, 0.4, 0.4)
-		handle.Shape = Enum.PartType.Ball
-		handle.Color = Color3.fromRGB(50, 80, 50)
-	end
-
-	handle.Parent = model
-	model.PrimaryPart = handle
-
-	-- Add attachment points
-	local attachments = {
-		MuzzlePoint = CFrame.new(0, 0, -handle.Size.Z/2),
-		RightGripPoint = CFrame.new(0.1, -0.1, 0),
-		LeftGripPoint = CFrame.new(-0.1, -0.1, 0),
-		SightMount = CFrame.new(0, 0.1, 0),
-		BarrelMount = CFrame.new(0, 0, -handle.Size.Z/2)
-	}
-
-	for name, cframe in pairs(attachments) do
-		local attachment = Instance.new("Attachment")
-		attachment.Name = name
-		attachment.CFrame = cframe
-		attachment.Parent = handle
-	end
-
-	return model
+-- Get weapon configuration
+function FPSFramework:getWeaponConfig(weaponName)
+    local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
+    return WeaponConfig.getWeapon(weaponName)
 end
 
--- Equip a weapon from a slot
-function FPSFramework:equipWeapon(slot)
-	local weaponData = self.weaponSlots[slot]
-	if not weaponData then
-		warn("No weapon in slot: " .. slot)
-		return
-	end
-
-	-- Update current weapon
-	self.currentWeapon = weaponData
-	self.isAiming = false
-
-	-- Update viewmodel
-	if self.systems[SYSTEM_NAMES.VIEWMODEL] then
-		self.systems[SYSTEM_NAMES.VIEWMODEL]:equipWeapon(weaponData.model, slot)
-	end
-
-	-- Update firing system
-	if self.systems[SYSTEM_NAMES.FIRING] then
-		self.systems[SYSTEM_NAMES.FIRING]:setWeapon(weaponData.model, weaponData.config)
-	end
-
-	-- Update crosshair
-	if self.systems[SYSTEM_NAMES.CROSSHAIR] then
-		self.systems[SYSTEM_NAMES.CROSSHAIR]:updateFromWeaponState(weaponData.config, false)
-	end
-
-	-- Notify server
-	if self.remoteEvents.WeaponEquipped then
-		self.remoteEvents.WeaponEquipped:FireServer(slot, weaponData.name)
-	end
-
-	print("Equipped " .. weaponData.name)
+-- Load weapon model
+function FPSFramework:loadWeaponModel(weaponName, slot)
+    local WeaponManager = require(ReplicatedStorage.FPSSystem.Modules.WeaponManager)
+    return WeaponManager.loadWeapon(weaponName, slot)
 end
 
--- Start the render loop
-function FPSFramework:startRenderLoop()
-	-- Connect to RenderStepped for smooth updates
-	RunService.RenderStepped:Connect(function(deltaTime)
-		self:update(deltaTime)
-	end)
+-- Setup advanced graphics
+function FPSFramework:setupGraphics()
+    if not FRAMEWORK_CONFIG.GRAPHICS.ENABLE_BLOOM then return end
 
-	print("Render loop started")
+    -- Create post-processing effects
+    local blur = Instance.new("BlurEffect")
+    blur.Size = 0
+    blur.Parent = Lighting
+
+    local bloom = Instance.new("BloomEffect")
+    bloom.Intensity = 0.5
+    bloom.Size = 24
+    bloom.Threshold = 1.2
+    bloom.Parent = Lighting
+
+    local colorCorrection = Instance.new("ColorCorrectionEffect")
+    colorCorrection.Brightness = 0.05
+    colorCorrection.Contrast = 0.1
+    colorCorrection.Saturation = 0.2
+    colorCorrection.Parent = Lighting
+
+    -- Atmospheric effects
+    if FRAMEWORK_CONFIG.GRAPHICS.ENABLE_ATMOSPHERIC_FOG then
+        local atmosphere = Instance.new("Atmosphere")
+        atmosphere.Density = 0.3
+        atmosphere.Offset = 0.25
+        atmosphere.Color = Color3.fromRGB(199, 199, 199)
+        atmosphere.Decay = Color3.fromRGB(92, 60, 13)
+        atmosphere.Glare = 0.02
+        atmosphere.Haze = 1.7
+        atmosphere.Parent = Lighting
+    end
+end
+
+-- Setup advanced audio system
+function FPSFramework:setupAudio()
+    -- Set master audio settings
+    game.SoundService.AmbientReverb = Enum.ReverbType.Hangar
+    game.SoundService.DistanceFactor = 3.33
+    game.SoundService.DopplerScale = 1
+    game.SoundService.RolloffScale = 1
+end
+
+-- Create effects system
+function FPSFramework:createEffectsSystem()
+    local effectsSystem = {
+        bulletHoles = {},
+        muzzleFlashes = {},
+        explosions = {}
+    }
+
+    function effectsSystem:createMuzzleFlash(weapon)
+        -- Advanced muzzle flash with multiple particle systems
+        if not weapon or not weapon.PrimaryPart then return end
+
+        local muzzlePoint = weapon.PrimaryPart:FindFirstChild("MuzzlePoint")
+        if not muzzlePoint then return end
+
+        -- Create flash effect
+        local flash = Instance.new("Explosion")
+        flash.Position = muzzlePoint.WorldPosition
+        flash.BlastRadius = 0
+        flash.BlastPressure = 0
+        flash.Visible = false
+        flash.Parent = workspace
+
+        -- Create light effect
+        local light = Instance.new("PointLight")
+        light.Brightness = 5
+        light.Range = 10
+        light.Color = Color3.fromRGB(255, 200, 100)
+        light.Parent = muzzlePoint
+
+        -- Auto cleanup
+        game:GetService("Debris"):AddItem(light, 0.05)
+    end
+
+    function effectsSystem:createBulletHole(position, normal, material)
+        -- Create realistic bullet hole based on material
+        local hole = Instance.new("Part")
+        hole.Size = Vector3.new(0.1, 0.1, 0.1)
+        hole.Shape = Enum.PartType.Cylinder
+        hole.Material = Enum.Material.Plastic
+        hole.Color = Color3.fromRGB(20, 20, 20)
+        hole.Anchored = true
+        hole.CanCollide = false
+        hole.CFrame = CFrame.lookAt(position, position + normal)
+        hole.Parent = workspace
+
+        -- Add to cleanup list
+        table.insert(self.bulletHoles, hole)
+
+        -- Cleanup old bullet holes
+        if #self.bulletHoles > FRAMEWORK_CONFIG.PERFORMANCE.MAX_BULLET_HOLES then
+            local oldHole = table.remove(self.bulletHoles, 1)
+            if oldHole and oldHole.Parent then
+                oldHole:Destroy()
+            end
+        end
+    end
+
+    return effectsSystem
+end
+
+-- Create audio system
+function FPSFramework:createAudioSystem()
+    local audioSystem = {
+        sounds = {},
+        musicTracks = {}
+    }
+
+    function audioSystem:playWeaponSound(soundType, weapon)
+        -- Play appropriate weapon sound
+        local soundName = weapon.name .. "_" .. soundType
+        local sound = self.sounds[soundName]
+
+        if sound then
+            sound:Play()
+        else
+            -- Create and cache sound if it doesn't exist
+            local newSound = self:createWeaponSound(soundType, weapon)
+            if newSound then
+                self.sounds[soundName] = newSound
+                newSound:Play()
+            end
+        end
+    end
+
+    function audioSystem:createWeaponSound(soundType, weapon)
+        -- Create weapon sound based on type
+        local sound = Instance.new("Sound")
+        sound.Volume = FRAMEWORK_CONFIG.AUDIO.SFX_VOLUME
+
+        -- Set sound ID based on weapon and type
+        local soundIds = {
+            fire = {
+                G36 = "rbxassetid://131961136",
+                AWP = "rbxassetid://131961136",
+                M9 = "rbxassetid://131961136"
+            },
+            reload = {
+                default = "rbxassetid://131961136"
+            },
+            switch = {
+                default = "rbxassetid://131961136"
+            }
+        }
+
+        local soundId = soundIds[soundType][weapon.name] or soundIds[soundType].default
+        if soundId then
+            sound.SoundId = soundId
+            sound.Parent = self.player.Character and self.player.Character:FindFirstChild("Head")
+            return sound
+        end
+
+        return nil
+    end
+
+    return audioSystem
+end
+
+-- Create networking system
+function FPSFramework:createNetworkingSystem()
+    local networkingSystem = {
+        remoteEvents = {},
+        remoteFunctions = {}
+    }
+
+    function networkingSystem:initialize()
+        -- Setup remote events and functions
+        local remoteFolder = ReplicatedStorage:FindFirstChild("RemoteEvents")
+        if remoteFolder then
+            self.remoteEvents.weaponFired = remoteFolder:FindFirstChild("WeaponFired")
+            self.remoteEvents.weaponHit = remoteFolder:FindFirstChild("WeaponHit")
+            self.remoteEvents.weaponReload = remoteFolder:FindFirstChild("WeaponReload")
+        end
+    end
+
+    networkingSystem:initialize()
+    return networkingSystem
+end
+
+-- Setup UI
+function FPSFramework:setupUI()
+    -- Hide default Roblox UI
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+
+    -- Create custom HUD
+    self:createHUD()
+end
+
+-- Create HUD
+function FPSFramework:createHUD()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PhantomForcesHUD"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = self.player.PlayerGui
+
+    -- Crosshair
+    local crosshair = Instance.new("Frame")
+    crosshair.Name = "Crosshair"
+    crosshair.Size = UDim2.new(0, 20, 0, 20)
+    crosshair.Position = UDim2.new(0.5, -10, 0.5, -10)
+    crosshair.BackgroundTransparency = 1
+    crosshair.Parent = screenGui
+
+    -- Crosshair center dot
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 2, 0, 2)
+    dot.Position = UDim2.new(0.5, -1, 0.5, -1)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    dot.BorderSizePixel = 0
+    dot.Parent = crosshair
+
+    -- Ammo counter
+    local ammoFrame = Instance.new("Frame")
+    ammoFrame.Name = "AmmoCounter"
+    ammoFrame.Size = UDim2.new(0, 200, 0, 60)
+    ammoFrame.Position = UDim2.new(1, -220, 1, -80)
+    ammoFrame.BackgroundTransparency = 1
+    ammoFrame.Parent = screenGui
+
+    local ammoLabel = Instance.new("TextLabel")
+    ammoLabel.Size = UDim2.new(1, 0, 1, 0)
+    ammoLabel.BackgroundTransparency = 1
+    ammoLabel.Text = "30 / 120"
+    ammoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ammoLabel.TextScaled = true
+    ammoLabel.Font = Enum.Font.GothamBold
+    ammoLabel.Parent = ammoFrame
+
+    -- Store UI references
+    self.ui = {
+        screenGui = screenGui,
+        crosshair = crosshair,
+        ammoLabel = ammoLabel
+    }
+end
+
+-- Toggle features
+function FPSFramework:toggleFlashlight()
+    print("Flashlight toggled")
+end
+
+function FPSFramework:toggleLaser()
+    print("Laser toggled")
+end
+
+function FPSFramework:toggleNightVision()
+    print("Night vision toggled")
+end
+
+function FPSFramework:toggleScoreboard()
+    print("Scoreboard toggled")
+end
+
+function FPSFramework:toggleMap()
+    print("Map toggled")
+end
+
+-- Main update loop
+function FPSFramework:startMainLoop()
+    self.mainConnection = RunService.Heartbeat:Connect(function(dt)
+        self:update(dt)
+    end)
 end
 
 -- Main update function
-function FPSFramework:update(deltaTime)
-	-- Update subsystems that need per-frame updates
-	if not self.initialized then return end
+function FPSFramework:update(dt)
+    -- Update systems
+    if self.systems.movement then
+        self.systems.movement:update(dt)
+    end
 
-	-- Update movement state for crosshair
-	self:updateMovementState()
+    if self.systems.viewmodel then
+        self.systems.viewmodel:update(dt)
+    end
 
-	-- Add other update steps as needed
+    -- Update UI
+    self:updateUI()
+
+    -- Update statistics
+    self.stats.playtime = self.stats.playtime + dt
 end
 
--- Update player movement state
-function FPSFramework:updateMovementState()
-	local isMoving = false
-	local character = self.player.Character
-
-	if character and character:FindFirstChild("Humanoid") then
-		local humanoid = character.Humanoid
-		isMoving = humanoid.MoveDirection.Magnitude > 0.1
-
-		-- Update crosshair with movement state
-		if self.systems[SYSTEM_NAMES.CROSSHAIR] then
-			self.systems[SYSTEM_NAMES.CROSSHAIR]:setMovementState("moving", isMoving)
-			self.systems[SYSTEM_NAMES.CROSSHAIR]:setMovementState("jumping", humanoid:GetState() == Enum.HumanoidStateType.Jumping)
-			self.systems[SYSTEM_NAMES.CROSSHAIR]:setMovementState("crouching", self.isCrouching)
-		end
-	end
+-- Update UI
+function FPSFramework:updateUI()
+    if self.ui and self.ui.ammoLabel and self.systems.firing then
+        local ammoDisplay = self.systems.firing:getAmmoDisplay()
+        self.ui.ammoLabel.Text = ammoDisplay
+    end
 end
 
--- Handle aiming state
-function FPSFramework:setAiming(isAiming)
-	self.isAiming = isAiming
+-- Cleanup
+function FPSFramework:cleanup()
+    -- Disconnect connections
+    for name, connection in pairs(self.inputConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
 
-	-- Update viewmodel
-	if self.systems[SYSTEM_NAMES.VIEWMODEL] then
-		self.systems[SYSTEM_NAMES.VIEWMODEL]:setAiming(isAiming)
-	end
+    if self.mainConnection then
+        self.mainConnection:Disconnect()
+    end
 
-	-- Update camera
-	if self.systems[SYSTEM_NAMES.CAMERA] then
-		self.systems[SYSTEM_NAMES.CAMERA]:setAiming(isAiming)
-	end
-
-	-- Update crosshair
-	if self.systems[SYSTEM_NAMES.CROSSHAIR] and self.currentWeapon then
-		self.systems[SYSTEM_NAMES.CROSSHAIR]:updateFromWeaponState(self.currentWeapon.config, isAiming)
-	end
-
-	return true
+    -- Cleanup systems
+    for _, system in pairs(self.systems) do
+        if system and system.cleanup then
+            system:cleanup()
+        end
+    end
 end
 
--- Handle sprinting state
-function FPSFramework:setSprinting(isSprinting)
-	-- Can't sprint while aiming
-	if isSprinting and self.isAiming then
-		return false
-	end
-
-	self.isSprinting = isSprinting
-
-	-- Update viewmodel
-	if self.systems[SYSTEM_NAMES.VIEWMODEL] then
-		self.systems[SYSTEM_NAMES.VIEWMODEL]:setSprinting(isSprinting)
-	end
-
-	-- Update camera
-	if self.systems[SYSTEM_NAMES.CAMERA] then
-		self.systems[SYSTEM_NAMES.CAMERA]:setSprinting(isSprinting)
-	end
-
-	return true
-end
-
--- Handle crouching state
-function FPSFramework:setCrouching(isCrouching)
-	self.isCrouching = isCrouching
-
-	-- Update character
-	local character = self.player.Character
-	if character and character:FindFirstChild("Humanoid") then
-		-- Toggle between standing and crouching height
-		if isCrouching then
-			character.Humanoid.CameraOffset = Vector3.new(0, -1, 0)
-			character.Humanoid.WalkSpeed = 8 -- Reduced speed when crouched
-		else
-			character.Humanoid.CameraOffset = Vector3.new(0, 0, 0)
-			character.Humanoid.WalkSpeed = 16 -- Normal speed
-		end
-	end
-
-	return true
-end
-
--- Fire the current weapon
-function FPSFramework:fireWeapon(isPressed)
-	if not self.currentWeapon then return false end
-
-	local slot = self:getCurrentWeaponSlot()
-
-	if slot == "PRIMARY" or slot == "SECONDARY" then
-		-- Handle gun firing
-		if self.systems[SYSTEM_NAMES.FIRING] then
-			return self.systems[SYSTEM_NAMES.FIRING]:handleFiring(isPressed)
-		end
-	elseif slot == "MELEE" and isPressed then
-		-- Handle melee attack
-		if self.systems[SYSTEM_NAMES.MELEE] then
-			return self.systems[SYSTEM_NAMES.MELEE]:attack()
-		end
-	elseif slot == "GRENADES" then
-		-- Handle grenade
-		if self.systems[SYSTEM_NAMES.GRENADE] then
-			if isPressed then
-				return self.systems[SYSTEM_NAMES.GRENADE]:startCooking()
-			else
-				return self.systems[SYSTEM_NAMES.GRENADE]:stopCooking(true) -- Throw
-			end
-		end
-	end
-
-	return false
-end
-
--- Handle reload action
-function FPSFramework:reloadWeapon()
-	if not self.currentWeapon then return false end
-
-	local slot = self:getCurrentWeaponSlot()
-
-	if (slot == "PRIMARY" or slot == "SECONDARY") and self.systems[SYSTEM_NAMES.FIRING] then
-		return self.systems[SYSTEM_NAMES.FIRING]:reload()
-	end
-
-	return false
-end
-
--- Get current weapon slot
-function FPSFramework:getCurrentWeaponSlot()
-	if not self.currentWeapon then return nil end
-
-	for slot, weaponData in pairs(self.weaponSlots) do
-		if weaponData == self.currentWeapon then
-			return slot
-		end
-	end
-
-	return nil
-end
-
--- Clean up and destroy framework
-function FPSFramework:destroy()
-	-- Clean up systems in reverse creation order
-	for systemName, system in pairs(self.systems) do
-		if typeof(system) == "table" and typeof(system.cleanup) == "function" then
-			system:cleanup()
-		end
-	end
-
-	-- Clear all systems
-	self.systems = {}
-	self.initialized = false
-
-	print("FPS Framework cleaned up")
-end
+-- Export framework globally
+_G.FPSFramework = FPSFramework
 
 return FPSFramework
