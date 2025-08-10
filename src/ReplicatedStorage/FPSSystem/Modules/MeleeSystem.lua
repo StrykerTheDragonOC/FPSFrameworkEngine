@@ -134,7 +134,7 @@ local MELEE_WEAPONS = {
         sounds = {
             swing = "rbxassetid://131961136",
             hit = "rbxassetid://131961136",
-            break = "rbxassetid://131961136"
+            Break = "rbxassetid://131961136"
         }
     }
 }

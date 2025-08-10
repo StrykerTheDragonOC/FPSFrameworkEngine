@@ -53,10 +53,12 @@ local GRENADE_SETTINGS = {
         MIN_DAMAGE = 15,                 -- Minimum edge damage
         FORCE = 6500,                    -- Explosion force
         UPWARD_BIAS = 0.4,              -- Upward force multiplier
-        PENETRATION = 3,                 -- Wall penetration studs
+        PENETRATION = 3,       
+        SHAKE_DISTANCE = 50,  -- ADD THIS LINE - this was missing
         SHAKE_INTENSITY = 2.5,           -- Camera shake intensity
         SHAKE_DURATION = 0.8,            -- Shake duration
-        LIGHT_BRIGHTNESS = 8,            -- Explosion light
+        LIGHT_BRIGHTNESS = 8, 
+        -- Explosion light
         LIGHT_RANGE = 25,                -- Light range
         SOUND_RANGE = 150,               -- Sound hearing range
     },
@@ -608,12 +610,11 @@ end
 -- Create camera shake effect
 function GrenadeSystem:createCameraShake(position)
     local distance = (position - self.camera.CFrame.Position).Magnitude
-    if distance > GRENADE_SETTINGS.EXPLOSION.SHAKE_DISTANCE then return end
+    if distance > GRENADE_SETTINGS.EXPLOSION.SHAKE_DISTANCE then return end  -- This should work now
 
     local shakeFactor = 1 - (distance / GRENADE_SETTINGS.EXPLOSION.SHAKE_DISTANCE)
     local intensity = GRENADE_SETTINGS.EXPLOSION.SHAKE_INTENSITY * shakeFactor
 
-    -- Implement camera shake (placeholder)
     print("Camera shake intensity:", intensity)
 end
 

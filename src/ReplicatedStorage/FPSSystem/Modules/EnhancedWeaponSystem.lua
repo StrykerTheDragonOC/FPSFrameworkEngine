@@ -2,8 +2,8 @@
 -- Advanced weapon system with proper categorization and Include/Exclude raycasting
 -- Place in ReplicatedStorage.FPSSystem.Modules
 
-local WeaponSystem = {}
-WeaponSystem.__index = WeaponSystem
+local EnhancedWeaponSystem = {}
+EnhancedWeaponSystem.__index = EnhancedWeaponSystem
 
 -- Services
 local RunService = game:GetService("RunService")
@@ -273,8 +273,8 @@ local FIRING_MODES = {
 }
 
 -- Constructor
-function WeaponSystem.new()
-    local self = setmetatable({}, WeaponSystem)
+function EnhancedWeaponSystem.new()
+    local self = setmetatable({}, EnhancedWeaponSystem)
 
     -- Core references
     self.player = Players.LocalPlayer
@@ -315,7 +315,7 @@ function WeaponSystem.new()
 end
 
 -- Create effects folder
-function WeaponSystem:createEffectsFolder()
+function EnhancedWeaponSystem:createEffectsFolder()
     local folder = Instance.new("Folder")
     folder.Name = "WeaponEffects"
     folder.Parent = workspace
@@ -323,13 +323,13 @@ function WeaponSystem:createEffectsFolder()
 end
 
 -- Set raycast utility reference
-function WeaponSystem:setRaycastUtility(utility)
+function EnhancedWeaponSystem:setRaycastUtility(utility)
     self.raycastUtility = utility
     print("Weapon System: Raycast utility connected")
 end
 
 -- Load weapon into system
-function WeaponSystem:loadWeapon(slot, weaponName)
+function EnhancedWeaponSystem:loadWeapon(slot, weaponName)
     local weaponConfig = WEAPON_DATABASE[weaponName]
     if not weaponConfig then
         warn("Weapon System: Unknown weapon:", weaponName)
@@ -351,7 +351,7 @@ function WeaponSystem:loadWeapon(slot, weaponName)
 end
 
 -- Equip weapon from slot
-function WeaponSystem:equipWeapon(slot)
+function EnhancedWeaponSystem:equipWeapon(slot)
     local weaponData = self.weaponData[slot]
     if not weaponData then
         warn("Weapon System: No weapon in slot:", slot)
@@ -375,7 +375,7 @@ function WeaponSystem:equipWeapon(slot)
 end
 
 -- Start firing weapon
-function WeaponSystem:startFiring()
+function EnhancedWeaponSystem:startFiring()
     if not self.currentWeapon then return end
     if self.isReloading then return end
     if self.currentAmmo <= 0 then
@@ -395,13 +395,13 @@ function WeaponSystem:startFiring()
 end
 
 -- Stop firing weapon
-function WeaponSystem:stopFiring()
+function EnhancedWeaponSystem:stopFiring()
     self.isFiring = false
     self.shotsInBurst = 0
 end
 
 -- Begin automatic firing
-function WeaponSystem:beginAutoFire()
+function EnhancedWeaponSystem:beginAutoFire()
     if not self.isFiring then return end
 
     local config = self.currentWeapon.config
@@ -422,7 +422,7 @@ function WeaponSystem:beginAutoFire()
 end
 
 -- Fire a single shot
-function WeaponSystem:fireSingleShot()
+function EnhancedWeaponSystem:fireSingleShot()
     if not self.currentWeapon or self.currentAmmo <= 0 then return end
 
     local config = self.currentWeapon.config
@@ -465,7 +465,7 @@ function WeaponSystem:fireSingleShot()
 end
 
 -- Calculate damage with range falloff
-function WeaponSystem:calculateDamage()
+function EnhancedWeaponSystem:calculateDamage()
     local config = self.currentWeapon.config
     local baseDamage = config.damage
 
@@ -480,7 +480,7 @@ function WeaponSystem:calculateDamage()
 end
 
 -- Calculate shot direction with spread
-function WeaponSystem:calculateShotDirection()
+function EnhancedWeaponSystem:calculateShotDirection()
     local config = self.currentWeapon.config
     local baseDirection = self.camera.CFrame.LookVector
 
@@ -510,13 +510,13 @@ function WeaponSystem:calculateShotDirection()
 end
 
 -- Get muzzle position for raycast origin
-function WeaponSystem:getMuzzlePosition()
+function EnhancedWeaponSystem:getMuzzlePosition()
     -- Use camera position for first-person accuracy
     return self.camera.CFrame.Position + self.camera.CFrame.LookVector * 2
 end
 
 -- Process raycast hits
-function WeaponSystem:processHits(hits, baseDamage)
+function EnhancedWeaponSystem:processHits(hits, baseDamage)
     for _, hit in ipairs(hits) do
         local character = hit.instance.Parent
 
@@ -555,12 +555,12 @@ function WeaponSystem:processHits(hits, baseDamage)
 end
 
 -- Check if hit was a headshot
-function WeaponSystem:isHeadshot(hitPart)
+function EnhancedWeaponSystem:isHeadshot(hitPart)
     return hitPart.Name == "Head" or hitPart.Parent.Name == "Head"
 end
 
 -- Apply range-based damage falloff
-function WeaponSystem:applyRangeFalloff(damage, distance)
+function EnhancedWeaponSystem:applyRangeFalloff(damage, distance)
     local config = self.currentWeapon.config
 
     if distance <= config.minRange then
@@ -575,7 +575,7 @@ function WeaponSystem:applyRangeFalloff(damage, distance)
 end
 
 -- Register hit with damage system
-function WeaponSystem:registerHit(player, damage, hitInfo)
+function EnhancedWeaponSystem:registerHit(player, damage, hitInfo)
     self.hitsRegistered = self.hitsRegistered + 1
 
     -- TODO: Integrate with damage system
@@ -584,7 +584,7 @@ function WeaponSystem:registerHit(player, damage, hitInfo)
 end
 
 -- Apply weapon recoil
-function WeaponSystem:applyRecoil()
+function EnhancedWeaponSystem:applyRecoil()
     local config = self.currentWeapon.config
     local recoil = config.recoil
 
@@ -609,7 +609,7 @@ function WeaponSystem:applyRecoil()
 end
 
 -- Update weapon spread from continuous fire
-function WeaponSystem:updateSpread()
+function EnhancedWeaponSystem:updateSpread()
     local config = self.currentWeapon.config
 
     -- Increase spread with each shot
@@ -630,7 +630,7 @@ function WeaponSystem:updateSpread()
 end
 
 -- Play firing effects
-function WeaponSystem:playFireEffects()
+function EnhancedWeaponSystem:playFireEffects()
     local config = self.currentWeapon.config
 
     -- Play fire sound
@@ -649,7 +649,7 @@ function WeaponSystem:playFireEffects()
 end
 
 -- Create muzzle flash effect
-function WeaponSystem:createMuzzleFlash()
+function EnhancedWeaponSystem:createMuzzleFlash()
     local muzzlePos = self:getMuzzlePosition()
 
     local flash = Instance.new("Part")
@@ -673,7 +673,7 @@ function WeaponSystem:createMuzzleFlash()
 end
 
 -- Create shell ejection
-function WeaponSystem:createShellEjection()
+function EnhancedWeaponSystem:createShellEjection()
     local shellPos = self.rootPart.Position + self.rootPart.CFrame.RightVector * 0.8
 
     local shell = Instance.new("Part")
@@ -700,7 +700,7 @@ function WeaponSystem:createShellEjection()
 end
 
 -- Create impact effect
-function WeaponSystem:createImpactEffect(position, material)
+function EnhancedWeaponSystem:createImpactEffect(position, material)
     -- Different effects based on material
     local effectColor = Color3.fromRGB(255, 255, 255)
     local particleCount = 3
@@ -757,7 +757,7 @@ function WeaponSystem:createImpactEffect(position, material)
 end
 
 -- Reload weapon
-function WeaponSystem:reload()
+function EnhancedWeaponSystem:reload()
     if not self.currentWeapon then return end
     if self.isReloading then return end
     if self.reserveAmmo <= 0 then return end
@@ -792,29 +792,29 @@ function WeaponSystem:reload()
 end
 
 -- Aiming methods
-function WeaponSystem:startAiming()
+function EnhancedWeaponSystem:startAiming()
     if not self.currentWeapon then return end
     self.isAiming = true
     print("Weapon System: Started aiming")
 end
 
-function WeaponSystem:stopAiming()
+function EnhancedWeaponSystem:stopAiming()
     self.isAiming = false
     print("Weapon System: Stopped aiming")
 end
 
 -- Utility methods
-function WeaponSystem:isMoving()
+function EnhancedWeaponSystem:isMoving()
     return self.humanoid.MoveDirection.Magnitude > 0.1
 end
 
-function WeaponSystem:isCrouching()
+function EnhancedWeaponSystem:isCrouching()
     -- Would integrate with movement system
     return false
 end
 
 -- Audio methods
-function WeaponSystem:playSound(soundId, volume, position)
+function EnhancedWeaponSystem:playSound(soundId, volume, position)
     local sound = Instance.new("Sound")
     sound.SoundId = soundId
     sound.Volume = volume or 1
@@ -842,7 +842,7 @@ function WeaponSystem:playSound(soundId, volume, position)
     end
 end
 
-function WeaponSystem:playEmptySound()
+function EnhancedWeaponSystem:playEmptySound()
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://131961136"  -- Empty click sound
     sound.Volume = 0.5
@@ -852,13 +852,13 @@ function WeaponSystem:playEmptySound()
     Debris:AddItem(sound, 1)
 end
 
-function WeaponSystem:applyScreenShake(intensity)
+function EnhancedWeaponSystem:applyScreenShake(intensity)
     -- Would integrate with camera system
     print("Screen shake applied:", intensity)
 end
 
 -- Get weapon information
-function WeaponSystem:getCurrentWeaponInfo()
+function EnhancedWeaponSystem:getCurrentWeaponInfo()
     if not self.currentWeapon then return nil end
 
     return {
@@ -871,13 +871,13 @@ function WeaponSystem:getCurrentWeaponInfo()
     }
 end
 
-function WeaponSystem:calculateAccuracy()
+function EnhancedWeaponSystem:calculateAccuracy()
     if self.shotsFired == 0 then return 100 end
     return math.floor((self.hitsRegistered / self.shotsFired) * 100)
 end
 
 -- Get available weapons by category
-function WeaponSystem:getWeaponsByCategory(category)
+function EnhancedWeaponSystem:getWeaponsByCategory(category)
     local weapons = {}
     for name, config in pairs(WEAPON_DATABASE) do
         if config.category == category then
@@ -895,7 +895,7 @@ function WeaponSystem:getWeaponsByCategory(category)
 end
 
 -- Cleanup
-function WeaponSystem:cleanup()
+function EnhancedWeaponSystem:cleanup()
     print("Cleaning up Enhanced Weapon System")
 
     -- Reset state
@@ -910,4 +910,4 @@ function WeaponSystem:cleanup()
     print("Enhanced Weapon System cleanup complete")
 end
 
-return WeaponSystem
+return EnhancedWeaponSystem
