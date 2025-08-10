@@ -1,68 +1,63 @@
--- FixedAdvancedMovementSystem.lua
--- Place in ReplicatedStorage/FPSSystem/Modules/AdvancedMovementSystem.lua
+-- AdvancedMovementSystem.lua
+-- Enhanced movement system with diving, sliding, and advanced mechanics
+-- Place in ReplicatedStorage/FPSSystem/Modules
 
 local AdvancedMovementSystem = {}
 AdvancedMovementSystem.__index = AdvancedMovementSystem
 
 -- Services
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
--- Movement Constants
-local MOVEMENT_SETTINGS = {
-    -- Walking and running
+-- Movement configuration
+local MOVEMENT_CONFIG = {
+    -- Sprint settings
+    SPRINT_SPEED = 22,
     WALK_SPEED = 16,
-    SPRINT_SPEED = 24,
-    ADS_WALK_SPEED = 10,
-
-    -- Crouching
     CROUCH_SPEED = 8,
-    CROUCH_HEIGHT_SCALE = 0.6,
-    CROUCH_JUMP_POWER = 35,
+    PRONE_SPEED = 4,
 
-    -- Prone
-    PRONE_SPEED = 3,
-    PRONE_HEIGHT_SCALE = 0.2,
-    PRONE_JUMP_POWER = 0,
-
-    -- Sliding
-    SLIDE_SPEED = 32,
-    SLIDE_DURATION = 1.2,
-    SLIDE_FRICTION = 0.96, -- Higher = less friction
-    SLIDE_MIN_SPEED = 20,
-    SLIDE_COOLDOWN = 0.8,
-
-    -- Diving (Fixed values)
-    DIVE_FORWARD_FORCE = 35,  -- Reduced from 45
-    DIVE_UP_FORCE = 8,        -- Reduced from 15
-    DIVE_DURATION = 0.6,      -- Reduced from 0.8
-    DIVE_RECOVERY_TIME = 0.8,
+    -- Diving settings
+    DIVE_FORCE = 50,
+    DIVE_UPWARD_FORCE = 10,
+    DIVE_DURATION = 0.8,
     DIVE_COOLDOWN = 2.0,
+    MIN_DIVE_SPEED = 10, -- Minimum speed required to dive
 
-    -- Fall damage
-    FALL_DAMAGE_ENABLED = true,
-    SAFE_FALL_HEIGHT = 20,
-    MAX_FALL_HEIGHT = 80,
-    MAX_FALL_DAMAGE = 35,
+    -- Sliding settings
+    SLIDE_FORCE = 30,
+    SLIDE_DURATION = 1.2,
+    SLIDE_DECELERATION = 0.85,
+    MIN_SLIDE_SPEED = 15,
 
-    -- Physics
-    GROUND_CHECK_DISTANCE = 5.5,
-    SLOPE_ANGLE_MAX = 45
+    -- Stance settings
+    CROUCH_HEIGHT = 0.5,
+    PRONE_HEIGHT = 0.25,
+    STANCE_TRANSITION_TIME = 0.3,
+
+    -- Leaning settings
+    LEAN_ANGLE = 15, -- degrees
+    LEAN_SPEED = 0.2,
+
+    -- Stamina settings
+    MAX_STAMINA = 100,
+    SPRINT_STAMINA_DRAIN = 20, -- per second
+    DIVE_STAMINA_COST = 30,
+    STAMINA_REGEN_RATE = 25 -- per second when not sprinting
 }
 
--- Movement States
-local MovementStates = {
-    STANDING = "STANDING",
+-- Movement states
+local MovementState = {
+    WALKING = "WALKING",
+    SPRINTING = "SPRINTING", 
     CROUCHING = "CROUCHING",
     PRONE = "PRONE",
     SLIDING = "SLIDING",
-    DIVING = "DIVING",
-    SPRINTING = "SPRINTING"
+    DIVING = "DIVING"
 }
 
--- Constructor
 function AdvancedMovementSystem.new()
     local self = setmetatable({}, AdvancedMovementSystem)
 
@@ -74,524 +69,526 @@ function AdvancedMovementSystem.new()
     self.camera = workspace.CurrentCamera
 
     -- Movement state
-    self.currentState = MovementStates.STANDING
-    self.previousState = MovementStates.STANDING
-    self.isGrounded = true
-    self.groundNormal = Vector3.new(0, 1, 0)
-    self.lastGroundHeight = 0
-    self.fallStartHeight = 0
-
-    -- Input tracking
-    self.keysPressed = {}
-    self.lastSlideTime = 0
-    self.lastDiveTime = 0
-
-    -- Physics objects
-    self.slideBodyVelocity = nil
-    self.diveBodyVelocity = nil
-
-    -- Slide state
-    self.slideStartTime = 0
-    self.slideDirection = Vector3.new()
-    self.slideSpeed = 0
-
-    -- Dive state
-    self.diveStartTime = 0
+    self.currentState = MovementState.WALKING
+    self.isSprinting = false
+    self.isCrouching = false
+    self.isProne = false
+    self.isSliding = false
     self.isDiving = false
 
-    -- Character properties backup
-    self.originalWalkSpeed = MOVEMENT_SETTINGS.WALK_SPEED
-    self.originalJumpPower = 50
-    self.originalHipHeight = 2
+    -- Diving state
+    self.lastDiveTime = 0
+    self.diveBodyVelocity = nil
+    self.diveConnection = nil
 
-    -- Setup
-    self:setupCharacterHandling()
-    self:setupInputHandling()
+    -- Sliding state
+    self.slideBodyVelocity = nil
+    self.slideConnection = nil
 
-    -- Export globally
-    _G.AdvancedMovementSystem = self
+    -- Leaning state
+    self.leanDirection = 0 -- -1 for left, 1 for right, 0 for center
+    self.currentLeanAngle = 0
 
-    print("[Movement] System initialized")
+    -- Stamina system
+    self.stamina = MOVEMENT_CONFIG.MAX_STAMINA
+    self.staminaConnection = nil
+
+    -- Stance system
+    self.originalHipHeight = nil
+    self.stanceConnections = {}
+
+    -- Initialize
+    self:initialize()
+
     return self
 end
 
--- Setup character handling
-function AdvancedMovementSystem:setupCharacterHandling()
+-- Initialize the movement system
+function AdvancedMovementSystem:initialize()
+    print("[AdvancedMovement] Initializing Advanced Movement System...")
+
+    -- Wait for character
+    self:waitForCharacter()
+
+    -- Setup stamina system
+    self:setupStaminaSystem()
+
+    print("[AdvancedMovement] Advanced Movement System initialized")
+end
+
+-- Wait for character spawn
+function AdvancedMovementSystem:waitForCharacter()
     if self.player.Character then
-        self:setupCharacter(self.player.Character)
+        self:onCharacterSpawned(self.player.Character)
     end
 
     self.player.CharacterAdded:Connect(function(character)
-        wait(0.1) -- Wait for character to load
-        self:setupCharacter(character)
+        self:onCharacterSpawned(character)
     end)
 end
 
--- Setup character
-function AdvancedMovementSystem:setupCharacter(character)
+-- Handle character spawning
+function AdvancedMovementSystem:onCharacterSpawned(character)
     self.character = character
     self.humanoid = character:WaitForChild("Humanoid")
     self.rootPart = character:WaitForChild("HumanoidRootPart")
 
-    -- Store original values
-    self.originalWalkSpeed = self.humanoid.WalkSpeed
-    self.originalJumpPower = self.humanoid.JumpPower or self.humanoid.JumpHeight * 7.2
+    -- Store original hip height for stance changes
     self.originalHipHeight = self.humanoid.HipHeight
 
-    -- Disable default climbing to prevent jiggling
-    self.humanoid:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-    self.humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    -- Reset movement state
+    self:resetMovementState()
 
-    -- Start update loop
-    if self.updateConnection then
-        self.updateConnection:Disconnect()
+    print("[AdvancedMovement] Character spawned, movement system ready")
+end
+
+-- Reset movement state on spawn
+function AdvancedMovementSystem:resetMovementState()
+    self.currentState = MovementState.WALKING
+    self.isSprinting = false
+    self.isCrouching = false
+    self.isProne = false
+    self.isSliding = false
+    self.isDiving = false
+    self.leanDirection = 0
+    self.currentLeanAngle = 0
+    self.stamina = MOVEMENT_CONFIG.MAX_STAMINA
+
+    -- Reset humanoid properties
+    if self.humanoid then
+        self.humanoid.WalkSpeed = MOVEMENT_CONFIG.WALK_SPEED
+        self.humanoid.HipHeight = self.originalHipHeight
     end
 
-    self.updateConnection = RunService.Heartbeat:Connect(function(dt)
-        self:update(dt)
+    -- Clean up any active movement effects
+    self:stopDiving()
+    self:stopSliding()
+end
+
+-- Setup stamina system
+function AdvancedMovementSystem:setupStaminaSystem()
+    self.staminaConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        self:updateStamina(deltaTime)
     end)
-
-    print("[Movement] Character setup complete")
 end
 
--- Setup input handling
-function AdvancedMovementSystem:setupInputHandling()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        self:handleInputBegan(input)
-    end)
+-- Update stamina based on current actions
+function AdvancedMovementSystem:updateStamina(deltaTime)
+    if self.isSprinting and self.stamina > 0 then
+        -- Drain stamina while sprinting
+        self.stamina = math.max(0, self.stamina - (MOVEMENT_CONFIG.SPRINT_STAMINA_DRAIN * deltaTime))
 
-    UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        self:handleInputEnded(input)
-    end)
-end
-
--- Handle input began
-function AdvancedMovementSystem:handleInputBegan(input)
-    if not self.character then return end
-
-    local keyCode = input.KeyCode
-    self.keysPressed[keyCode] = true
-
-    -- C key - Crouch/Slide
-    if keyCode == Enum.KeyCode.C then
-        if self:canSlide() then
-            self:startSlide()
-        else
-            self:toggleCrouch()
+        -- Stop sprinting if stamina is depleted
+        if self.stamina <= 0 then
+            self:setSprinting(false)
         end
-
-        -- X key - Prone (check for dive combo)
-    elseif keyCode == Enum.KeyCode.X then
-        -- Space must be held FIRST, then X for dive
-        if self.keysPressed[Enum.KeyCode.Space] and self:canDive() then
-            self:startDive()
-        else
-            -- Regular prone
-            self:toggleProne()
-        end
-
-        -- Space key - Jump (or start dive combo)
-    elseif keyCode == Enum.KeyCode.Space then
-        -- Check if X is pressed after space for dive
-        task.wait(0.1) -- Small window for combo
-        if self.keysPressed[Enum.KeyCode.X] and self:canDive() then
-            self:startDive()
-        end
-
-        -- Left Shift - Sprint
-    elseif keyCode == Enum.KeyCode.LeftShift then
-        self:setSprinting(true)
+    elseif not self.isSprinting and self.stamina < MOVEMENT_CONFIG.MAX_STAMINA then
+        -- Regenerate stamina when not sprinting
+        self.stamina = math.min(MOVEMENT_CONFIG.MAX_STAMINA, 
+            self.stamina + (MOVEMENT_CONFIG.STAMINA_REGEN_RATE * deltaTime))
     end
 end
 
--- Handle input ended
-function AdvancedMovementSystem:handleInputEnded(input)
-    local keyCode = input.KeyCode
-    self.keysPressed[keyCode] = false
-
-    if keyCode == Enum.KeyCode.LeftShift then
-        self:setSprinting(false)
-    end
-end
-
--- Toggle crouch
-function AdvancedMovementSystem:toggleCrouch()
-    if self.currentState == MovementStates.CROUCHING then
-        self:setState(MovementStates.STANDING)
-    else
-        self:setState(MovementStates.CROUCHING)
-    end
-end
-
--- Toggle prone
-function AdvancedMovementSystem:toggleProne()
-    if self.currentState == MovementStates.PRONE then
-        self:setState(MovementStates.STANDING)
-    else
-        self:setState(MovementStates.PRONE)
-    end
-end
-
--- Set sprinting
+-- Set sprinting state
 function AdvancedMovementSystem:setSprinting(sprinting)
-    if sprinting and self.currentState == MovementStates.STANDING then
-        self:setState(MovementStates.SPRINTING)
-    elseif not sprinting and self.currentState == MovementStates.SPRINTING then
-        self:setState(MovementStates.STANDING)
+    if not self.humanoid then return end
+
+    -- Can't sprint while crouching, prone, sliding, or diving
+    if sprinting and (self.isCrouching or self.isProne or self.isSliding or self.isDiving) then
+        return
+    end
+
+    -- Can't sprint without stamina
+    if sprinting and self.stamina <= 0 then
+        return
+    end
+
+    self.isSprinting = sprinting
+
+    if sprinting then
+        self.currentState = MovementState.SPRINTING
+        self.humanoid.WalkSpeed = MOVEMENT_CONFIG.SPRINT_SPEED
+        print("[AdvancedMovement] Started sprinting")
+    else
+        self.currentState = MovementState.WALKING
+        self.humanoid.WalkSpeed = MOVEMENT_CONFIG.WALK_SPEED
+        print("[AdvancedMovement] Stopped sprinting")
     end
 end
 
--- Check if can slide
-function AdvancedMovementSystem:canSlide()
-    if not self.isGrounded then return false end
-    if self.currentState ~= MovementStates.STANDING and self.currentState ~= MovementStates.SPRINTING then
-        return false
-    end
-    if tick() - self.lastSlideTime < MOVEMENT_SETTINGS.SLIDE_COOLDOWN then
-        return false
+-- Toggle crouch state
+function AdvancedMovementSystem:toggleCrouch()
+    if not self.humanoid then return end
+
+    if self.isProne then
+        -- Exit prone first
+        self:toggleProne()
+        return
     end
 
-    -- Check movement speed
-    local velocity = self.rootPart.AssemblyLinearVelocity
-    local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+    if self.isSliding or self.isDiving then
+        return -- Can't crouch while sliding or diving
+    end
 
-    return horizontalSpeed >= MOVEMENT_SETTINGS.SLIDE_MIN_SPEED
+    self.isCrouching = not self.isCrouching
+
+    if self.isCrouching then
+        -- Enter crouch
+        self.currentState = MovementState.CROUCHING
+        self:setSprinting(false) -- Stop sprinting
+        self:transitionToStance(MOVEMENT_CONFIG.CROUCH_HEIGHT, MOVEMENT_CONFIG.CROUCH_SPEED)
+        print("[AdvancedMovement] Entered crouch")
+    else
+        -- Exit crouch
+        self.currentState = MovementState.WALKING
+        self:transitionToStance(self.originalHipHeight, MOVEMENT_CONFIG.WALK_SPEED)
+        print("[AdvancedMovement] Exited crouch")
+    end
 end
 
--- Start sliding
-function AdvancedMovementSystem:startSlide()
-    print("[Movement] Starting slide")
+-- Toggle prone state
+function AdvancedMovementSystem:toggleProne()
+    if not self.humanoid then return end
 
-    self.previousState = self.currentState
-    self.currentState = MovementStates.SLIDING
-    self.slideStartTime = tick()
-    self.lastSlideTime = tick()
-
-    -- Get slide direction from current velocity
-    local velocity = self.rootPart.AssemblyLinearVelocity
-    self.slideDirection = Vector3.new(velocity.X, 0, velocity.Z).Unit
-    self.slideSpeed = MOVEMENT_SETTINGS.SLIDE_SPEED
-
-    -- Create slide BodyVelocity
-    if self.slideBodyVelocity then
-        self.slideBodyVelocity:Destroy()
+    if self.isSliding or self.isDiving then
+        return -- Can't go prone while sliding or diving
     end
 
-    self.slideBodyVelocity = Instance.new("BodyVelocity")
-    self.slideBodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
-    self.slideBodyVelocity.Velocity = self.slideDirection * self.slideSpeed
-    self.slideBodyVelocity.Parent = self.rootPart
+    self.isProne = not self.isProne
 
-    -- Reduce character height
-    self.humanoid.HipHeight = self.originalHipHeight * 0.4
-    self.humanoid.WalkSpeed = 0
-    self.humanoid.JumpPower = 0
+    if self.isProne then
+        -- Enter prone
+        self.currentState = MovementState.PRONE
+        self.isCrouching = false -- Exit crouch if crouching
+        self:setSprinting(false) -- Stop sprinting
+        self:transitionToStance(MOVEMENT_CONFIG.PRONE_HEIGHT, MOVEMENT_CONFIG.PRONE_SPEED)
+        print("[AdvancedMovement] Entered prone")
+    else
+        -- Exit prone
+        self.currentState = MovementState.WALKING
+        self:transitionToStance(self.originalHipHeight, MOVEMENT_CONFIG.WALK_SPEED)
+        print("[AdvancedMovement] Exited prone")
+    end
 end
 
--- End sliding
-function AdvancedMovementSystem:endSlide()
-    print("[Movement] Ending slide")
+-- Transition to different stance with smooth animation
+function AdvancedMovementSystem:transitionToStance(targetHipHeight, targetWalkSpeed)
+    if not self.humanoid then return end
 
-    -- Clean up BodyVelocity
-    if self.slideBodyVelocity then
-        self.slideBodyVelocity:Destroy()
-        self.slideBodyVelocity = nil
-    end
+    -- Immediately set walk speed
+    self.humanoid.WalkSpeed = targetWalkSpeed
 
-    -- Restore character
-    self:setState(MovementStates.STANDING)
+    -- Smoothly transition hip height
+    local currentHipHeight = self.humanoid.HipHeight
+    local tween = TweenService:Create(
+        self.humanoid,
+        TweenInfo.new(MOVEMENT_CONFIG.STANCE_TRANSITION_TIME, Enum.EasingStyle.Quad),
+        {HipHeight = targetHipHeight}
+    )
+    tween:Play()
 end
 
--- Check if can dive
-function AdvancedMovementSystem:canDive()
-    if not self.isGrounded then return false end
-    if self.currentState == MovementStates.PRONE or 
-        self.currentState == MovementStates.SLIDING or 
-        self.currentState == MovementStates.DIVING then
-        return false
-    end
-    if tick() - self.lastDiveTime < MOVEMENT_SETTINGS.DIVE_COOLDOWN then
-        return false
+-- REQUESTED: Dive ability while airborne after jumping while running
+function AdvancedMovementSystem:dive()
+    if not self.rootPart or not self.humanoid then return end
+
+    -- Check cooldown
+    if tick() - self.lastDiveTime < MOVEMENT_CONFIG.DIVE_COOLDOWN then
+        print("[AdvancedMovement] Dive on cooldown")
+        return
     end
 
-    return true
-end
+    -- Check stamina
+    if self.stamina < MOVEMENT_CONFIG.DIVE_STAMINA_COST then
+        print("[AdvancedMovement] Not enough stamina to dive")
+        return
+    end
 
--- Start dive (FIXED)
-function AdvancedMovementSystem:startDive()
-    print("[Movement] Starting dive")
+    -- Check if already diving or sliding
+    if self.isDiving or self.isSliding then
+        return
+    end
 
-    self.previousState = self.currentState
-    self.currentState = MovementStates.DIVING
+    -- Check if airborne (jumping, falling, or freefall)
+    local humanoidState = self.humanoid:GetState()
+    local isAirborne = humanoidState == Enum.HumanoidStateType.Freefall or 
+        humanoidState == Enum.HumanoidStateType.Flying or
+        humanoidState == Enum.HumanoidStateType.Jumping
+
+    if not isAirborne then
+        print("[AdvancedMovement] Must be airborne to dive")
+        return
+    end
+
+    -- Check horizontal speed
+    local velocity = self.rootPart.Velocity
+    local horizontalSpeed = math.sqrt(velocity.X^2 + velocity.Z^2)
+
+    if horizontalSpeed < MOVEMENT_CONFIG.MIN_DIVE_SPEED then
+        print("[AdvancedMovement] Not moving fast enough to dive")
+        return
+    end
+
+    -- Consume stamina
+    self.stamina = math.max(0, self.stamina - MOVEMENT_CONFIG.DIVE_STAMINA_COST)
+
+    -- Start dive
     self.isDiving = true
-    self.diveStartTime = tick()
+    self.currentState = MovementState.DIVING
     self.lastDiveTime = tick()
 
-    -- Calculate dive direction (forward from camera)
-    local lookDirection = self.camera.CFrame.LookVector
-    local diveDirection = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
+    -- Calculate dive direction (forward and slightly down)
+    local camera = self.camera
+    local diveDirection = camera.CFrame.LookVector
+    diveDirection = Vector3.new(diveDirection.X, -0.3, diveDirection.Z).Unit -- Add downward component
 
-    -- Clean up any existing dive velocity
-    if self.diveBodyVelocity then
-        self.diveBodyVelocity:Destroy()
-    end
+    -- Apply dive force
+    self:applyDiveForce(diveDirection)
 
-    -- Create controlled dive force
+    -- Transition to prone-like stance during dive
+    self:transitionToStance(MOVEMENT_CONFIG.PRONE_HEIGHT, 0) -- No walking during dive
+
+    -- Set dive duration
+    task.delay(MOVEMENT_CONFIG.DIVE_DURATION, function()
+        self:stopDiving()
+    end)
+
+    print("[AdvancedMovement] Dive initiated while airborne!")
+end
+
+-- Apply dive force to character
+function AdvancedMovementSystem:applyDiveForce(direction)
+    if not self.rootPart then return end
+
+    -- Create BodyVelocity for dive
     self.diveBodyVelocity = Instance.new("BodyVelocity")
-    self.diveBodyVelocity.MaxForce = Vector3.new(3000, 2000, 3000) -- Reduced force
-    self.diveBodyVelocity.Velocity = 
-        diveDirection * MOVEMENT_SETTINGS.DIVE_FORWARD_FORCE + 
-        Vector3.new(0, MOVEMENT_SETTINGS.DIVE_UP_FORCE, 0)
+    self.diveBodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+
+    -- Calculate dive velocity
+    local diveVelocity = direction * MOVEMENT_CONFIG.DIVE_FORCE
+    diveVelocity = diveVelocity + Vector3.new(0, MOVEMENT_CONFIG.DIVE_UPWARD_FORCE, 0) -- Add slight upward force
+
+    self.diveBodyVelocity.Velocity = diveVelocity
     self.diveBodyVelocity.Parent = self.rootPart
 
-    -- Disable normal movement
-    self.humanoid.WalkSpeed = 0
-    self.humanoid.JumpPower = 0
-
-    -- Gradually reduce dive force over time
-    spawn(function()
-        local startTime = tick()
-        while self.isDiving and self.diveBodyVelocity do
-            local elapsed = tick() - startTime
-            local progress = elapsed / MOVEMENT_SETTINGS.DIVE_DURATION
-
-            if progress >= 1 then
-                break
-            end
-
-            -- Reduce velocity over time
-            local falloff = 1 - (progress * 0.7) -- Retain 30% velocity at end
-            self.diveBodyVelocity.Velocity = 
-                diveDirection * (MOVEMENT_SETTINGS.DIVE_FORWARD_FORCE * falloff) + 
-                Vector3.new(0, -10 * progress, 0) -- Add downward force
-
-            wait(0.05)
-        end
-
-        -- End dive
-        if self.currentState == MovementStates.DIVING then
-            self:endDive()
+    -- Gradually reduce dive force
+    self.diveConnection = RunService.Heartbeat:Connect(function()
+        if self.diveBodyVelocity then
+            local currentVelocity = self.diveBodyVelocity.Velocity
+            local reducedVelocity = currentVelocity * 0.95 -- Gradually slow down
+            self.diveBodyVelocity.Velocity = reducedVelocity
         end
     end)
 end
 
--- End dive
-function AdvancedMovementSystem:endDive()
-    print("[Movement] Ending dive")
+-- Stop diving
+function AdvancedMovementSystem:stopDiving()
+    if not self.isDiving then return end
 
     self.isDiving = false
 
-    -- Clean up BodyVelocity
+    -- Clean up dive BodyVelocity
     if self.diveBodyVelocity then
         self.diveBodyVelocity:Destroy()
         self.diveBodyVelocity = nil
     end
 
-    -- Go prone after dive if grounded
-    if self.isGrounded then
-        self:setState(MovementStates.PRONE)
-    else
-        self:setState(MovementStates.STANDING)
+    -- Disconnect dive connection
+    if self.diveConnection then
+        self.diveConnection:Disconnect()
+        self.diveConnection = nil
     end
+
+    -- Return to walking stance after dive
+    if not self.isCrouching and not self.isProne then
+        self.currentState = MovementState.WALKING
+        self:transitionToStance(self.originalHipHeight, MOVEMENT_CONFIG.WALK_SPEED)
+    end
+
+    print("[AdvancedMovement] Dive ended")
 end
 
--- Set movement state
-function AdvancedMovementSystem:setState(newState)
-    if self.currentState == newState then return end
+-- Start sliding (when crouching while sprinting)
+function AdvancedMovementSystem:startSlide()
+    if not self.rootPart or not self.humanoid then return end
 
-    print("[Movement] State:", self.currentState, "->", newState)
+    if self.isDiving or self.isSliding then return end
 
-    self.previousState = self.currentState
-    self.currentState = newState
+    -- Check if moving fast enough to slide
+    local velocity = self.rootPart.Velocity
+    local horizontalSpeed = math.sqrt(velocity.X^2 + velocity.Z^2)
 
-    -- Clean up any active physics objects
-    if self.slideBodyVelocity and newState ~= MovementStates.SLIDING then
+    if horizontalSpeed < MOVEMENT_CONFIG.MIN_SLIDE_SPEED then
+        return -- Not moving fast enough to slide
+    end
+
+    self.isSliding = true
+    self.currentState = MovementState.SLIDING
+    self.isCrouching = true -- Slide in crouch position
+
+    -- Apply slide force
+    local slideDirection = self.rootPart.CFrame.LookVector
+    self:applySlideForce(slideDirection, horizontalSpeed)
+
+    -- Transition to crouch stance
+    self:transitionToStance(MOVEMENT_CONFIG.CROUCH_HEIGHT, 0) -- No walking during slide
+
+    -- End slide after duration
+    task.delay(MOVEMENT_CONFIG.SLIDE_DURATION, function()
+        self:stopSliding()
+    end)
+
+    print("[AdvancedMovement] Started sliding")
+end
+
+-- Apply slide force
+function AdvancedMovementSystem:applySlideForce(direction, initialSpeed)
+    if not self.rootPart then return end
+
+    -- Create BodyVelocity for slide
+    self.slideBodyVelocity = Instance.new("BodyVelocity")
+    self.slideBodyVelocity.MaxForce = Vector3.new(4000, 0, 4000) -- No Y force
+
+    local slideVelocity = direction * math.min(initialSpeed, MOVEMENT_CONFIG.SLIDE_FORCE)
+    self.slideBodyVelocity.Velocity = slideVelocity
+    self.slideBodyVelocity.Parent = self.rootPart
+
+    -- Gradually decelerate slide
+    self.slideConnection = RunService.Heartbeat:Connect(function()
+        if self.slideBodyVelocity then
+            local currentVelocity = self.slideBodyVelocity.Velocity
+            local deceleratedVelocity = currentVelocity * MOVEMENT_CONFIG.SLIDE_DECELERATION
+            self.slideBodyVelocity.Velocity = deceleratedVelocity
+
+            -- Stop sliding if too slow
+            local speed = deceleratedVelocity.Magnitude
+            if speed < 5 then
+                self:stopSliding()
+            end
+        end
+    end)
+end
+
+-- Stop sliding
+function AdvancedMovementSystem:stopSliding()
+    if not self.isSliding then return end
+
+    self.isSliding = false
+
+    -- Clean up slide BodyVelocity
+    if self.slideBodyVelocity then
         self.slideBodyVelocity:Destroy()
         self.slideBodyVelocity = nil
     end
 
-    if self.diveBodyVelocity and newState ~= MovementStates.DIVING then
-        self.diveBodyVelocity:Destroy()
-        self.diveBodyVelocity = nil
+    -- Disconnect slide connection
+    if self.slideConnection then
+        self.slideConnection:Disconnect()
+        self.slideConnection = nil
     end
 
-    -- Apply state properties with smooth transitions
-    local targetSpeed, targetJump, targetHeight
+    -- Return to crouching state
+    self.currentState = MovementState.CROUCHING
+    self.humanoid.WalkSpeed = MOVEMENT_CONFIG.CROUCH_SPEED
 
-    if newState == MovementStates.STANDING then
-        targetSpeed = MOVEMENT_SETTINGS.WALK_SPEED
-        targetJump = self.originalJumpPower
-        targetHeight = self.originalHipHeight
-
-    elseif newState == MovementStates.CROUCHING then
-        targetSpeed = MOVEMENT_SETTINGS.CROUCH_SPEED
-        targetJump = MOVEMENT_SETTINGS.CROUCH_JUMP_POWER
-        targetHeight = self.originalHipHeight * MOVEMENT_SETTINGS.CROUCH_HEIGHT_SCALE
-
-    elseif newState == MovementStates.PRONE then
-        targetSpeed = MOVEMENT_SETTINGS.PRONE_SPEED
-        targetJump = MOVEMENT_SETTINGS.PRONE_JUMP_POWER
-        targetHeight = self.originalHipHeight * MOVEMENT_SETTINGS.PRONE_HEIGHT_SCALE
-
-    elseif newState == MovementStates.SPRINTING then
-        targetSpeed = MOVEMENT_SETTINGS.SPRINT_SPEED
-        targetJump = self.originalJumpPower
-        targetHeight = self.originalHipHeight
-
-    elseif newState == MovementStates.SLIDING then
-        -- Handled in startSlide
-        return
-
-    elseif newState == MovementStates.DIVING then
-        -- Handled in startDive
-        return
-    end
-
-    -- Apply changes smoothly
-    self.humanoid.WalkSpeed = targetSpeed
-    self.humanoid.JumpPower = targetJump
-
-    -- Smooth height transition to prevent jiggling
-    TweenService:Create(
-        self.humanoid,
-        TweenInfo.new(0.15, Enum.EasingStyle.Linear),
-        {HipHeight = targetHeight}
-    ):Play()
+    print("[AdvancedMovement] Slide ended")
 end
 
--- Main update
-function AdvancedMovementSystem:update(dt)
-    if not self.character or not self.humanoid or not self.rootPart then return end
-
-    -- Update ground detection
-    self:updateGroundDetection()
-
-    -- Update sliding
-    if self.currentState == MovementStates.SLIDING then
-        self:updateSliding(dt)
+-- Lean left
+function AdvancedMovementSystem:leanLeft(leaning)
+    if leaning then
+        self.leanDirection = -1
+        self:applyLean()
+    else
+        self:stopLeaning()
     end
-
-    -- Update fall damage
-    self:updateFallDamage()
 end
 
--- Update ground detection
-function AdvancedMovementSystem:updateGroundDetection()
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {self.character}
+-- Lean right
+function AdvancedMovementSystem:leanRight(leaning)
+    if leaning then
+        self.leanDirection = 1
+        self:applyLean()
+    else
+        self:stopLeaning()
+    end
+end
 
-    local rayResult = workspace:Raycast(
-        self.rootPart.Position,
-        Vector3.new(0, -MOVEMENT_SETTINGS.GROUND_CHECK_DISTANCE, 0),
-        raycastParams
+-- Apply leaning effect
+function AdvancedMovementSystem:applyLean()
+    if not self.rootPart then return end
+
+    local targetAngle = self.leanDirection * MOVEMENT_CONFIG.LEAN_ANGLE
+
+    -- Smooth lean transition
+    local tween = TweenService:Create(
+        self.rootPart,
+        TweenInfo.new(MOVEMENT_CONFIG.LEAN_SPEED),
+        {CFrame = self.rootPart.CFrame * CFrame.Angles(0, 0, math.rad(targetAngle - self.currentLeanAngle))}
     )
+    tween:Play()
 
-    local wasGrounded = self.isGrounded
-    self.isGrounded = rayResult ~= nil
-
-    if rayResult then
-        self.groundNormal = rayResult.Normal
-        self.lastGroundHeight = rayResult.Position.Y
-    end
-
-    -- Track fall start
-    if wasGrounded and not self.isGrounded then
-        self.fallStartHeight = self.rootPart.Position.Y
-    end
-
-    -- Landing from dive
-    if not wasGrounded and self.isGrounded and self.isDiving then
-        self:endDive()
-    end
+    self.currentLeanAngle = targetAngle
 end
 
--- Update sliding
-function AdvancedMovementSystem:updateSliding(dt)
-    local slideTime = tick() - self.slideStartTime
+-- Stop leaning
+function AdvancedMovementSystem:stopLeaning()
+    if not self.rootPart or self.currentLeanAngle == 0 then return end
 
-    -- End slide conditions
-    if slideTime >= MOVEMENT_SETTINGS.SLIDE_DURATION or not self.isGrounded then
-        self:endSlide()
-        return
-    end
+    -- Return to upright position
+    local tween = TweenService:Create(
+        self.rootPart,
+        TweenInfo.new(MOVEMENT_CONFIG.LEAN_SPEED),
+        {CFrame = self.rootPart.CFrame * CFrame.Angles(0, 0, math.rad(-self.currentLeanAngle))}
+    )
+    tween:Play()
 
-    -- Apply friction
-    self.slideSpeed = self.slideSpeed * MOVEMENT_SETTINGS.SLIDE_FRICTION
-
-    -- End if too slow
-    if self.slideSpeed < 8 then
-        self:endSlide()
-        return
-    end
-
-    -- Update velocity
-    if self.slideBodyVelocity then
-        self.slideBodyVelocity.Velocity = self.slideDirection * self.slideSpeed
-    end
+    self.currentLeanAngle = 0
+    self.leanDirection = 0
 end
 
--- Update fall damage
-function AdvancedMovementSystem:updateFallDamage()
-    if not MOVEMENT_SETTINGS.FALL_DAMAGE_ENABLED then return end
-    if not self.isGrounded or self.fallStartHeight == 0 then return end
-
-    local fallDistance = self.fallStartHeight - self.rootPart.Position.Y
-
-    if fallDistance > MOVEMENT_SETTINGS.SAFE_FALL_HEIGHT then
-        local damagePercent = math.min(
-            (fallDistance - MOVEMENT_SETTINGS.SAFE_FALL_HEIGHT) / 
-                (MOVEMENT_SETTINGS.MAX_FALL_HEIGHT - MOVEMENT_SETTINGS.SAFE_FALL_HEIGHT),
-            1
-        )
-
-        local damage = damagePercent * MOVEMENT_SETTINGS.MAX_FALL_DAMAGE
-
-        if damage > 5 then
-            self.humanoid:TakeDamage(damage)
-            print("[Movement] Fall damage:", math.floor(damage))
-        end
-    end
-
-    self.fallStartHeight = 0
-end
-
--- Get current state
-function AdvancedMovementSystem:getCurrentState()
+-- Get current movement state
+function AdvancedMovementSystem:getMovementState()
     return self.currentState
 end
 
--- Get speed modifier for other systems
-function AdvancedMovementSystem:getSpeedModifier()
-    local modifiers = {
-        [MovementStates.STANDING] = 1.0,
-        [MovementStates.CROUCHING] = 0.5,
-        [MovementStates.PRONE] = 0.2,
-        [MovementStates.SLIDING] = 0,
-        [MovementStates.DIVING] = 0,
-        [MovementStates.SPRINTING] = 1.5
-    }
+-- Get stamina percentage
+function AdvancedMovementSystem:getStaminaPercent()
+    return self.stamina / MOVEMENT_CONFIG.MAX_STAMINA
+end
 
-    return modifiers[self.currentState] or 1.0
+-- Check if can perform action based on stamina
+function AdvancedMovementSystem:canPerformAction(staminaCost)
+    return self.stamina >= staminaCost
 end
 
 -- Cleanup
-function AdvancedMovementSystem:destroy()
-    if self.updateConnection then
-        self.updateConnection:Disconnect()
+function AdvancedMovementSystem:cleanup()
+    print("[AdvancedMovement] Cleaning up Advanced Movement System...")
+
+    -- Stop all movement actions
+    self:stopDiving()
+    self:stopSliding()
+    self:stopLeaning()
+
+    -- Disconnect stamina connection
+    if self.staminaConnection then
+        self.staminaConnection:Disconnect()
+        self.staminaConnection = nil
     end
 
-    if self.slideBodyVelocity then
-        self.slideBodyVelocity:Destroy()
+    -- Disconnect stance connections
+    for _, connection in pairs(self.stanceConnections) do
+        connection:Disconnect()
     end
 
-    if self.diveBodyVelocity then
-        self.diveBodyVelocity:Destroy()
-    end
+    -- Clear references
+    self.stanceConnections = {}
+    self.character = nil
+    self.humanoid = nil
+    self.rootPart = nil
 
-    print("[Movement] System destroyed")
+    print("[AdvancedMovement] Advanced Movement System cleanup complete")
 end
 
 return AdvancedMovementSystem

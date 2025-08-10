@@ -1,388 +1,485 @@
--- EnhancedMeleeSystem.lua
--- Advanced melee combat system with Include/Exclude raycasting
--- Place in ReplicatedStorage.FPSSystem.Modules
+-- MeleeSystem.lua
+-- Fixed melee system with PocketKnife support and proper naming
+-- Renamed from AdvancedMeleeSystem
+-- Place in ReplicatedStorage/FPSSystem/Modules
 
 local MeleeSystem = {}
 MeleeSystem.__index = MeleeSystem
 
 -- Services
-local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
-local Debris = game:GetService("Debris")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
--- Enhanced melee constants
+-- Melee system settings
 local MELEE_SETTINGS = {
-    -- Combat mechanics
-    RANGE = {
-        KNIFE = 4,
-        SWORD = 6,
-        HEAVY = 5,
-        TOOL = 3.5
-    },
+    -- Attack mechanics
+    ATTACK_RATE_LIMIT = 0.5,             -- Minimum time between attacks (anti-spam)
+    COMBO_WINDOW = 1.0,                  -- Time window for combo attacks
+    BACKSTAB_ANGLE = 45,                 -- Angle for backstab detection (degrees)
 
-    -- Attack timing
-    ATTACK_DURATION = 0.4,          -- Duration of attack animation
-    RECOVERY_TIME = 0.6,            -- Time before next attack
-    COMBO_WINDOW = 1.2,             -- Time window for combo attacks
-    HEAVY_CHARGE_TIME = 1.5,        -- Time to fully charge heavy attack
+    -- Range settings
+    DEFAULT_RANGE = 3.5,                 -- Default melee range
+    EXTENDED_RANGE = 5.0,                -- Range for longer weapons
 
-    -- Damage scaling
-    LIGHT_DAMAGE_MODIFIER = 1.0,    -- Normal attack damage
-    HEAVY_DAMAGE_MODIFIER = 2.5,    -- Heavy attack damage multiplier
-    COMBO_DAMAGE_MODIFIER = 1.3,    -- Combo attack bonus
-    BACKSTAB_MODIFIER = 3.0,        -- Backstab damage multiplier
+    -- Damage multipliers
+    HEADSHOT_MULTIPLIER = 1.5,           -- Headshot damage multiplier
+    BACKSTAB_MULTIPLIER = 2.0,           -- Backstab damage multiplier
 
-    -- Movement and mechanics
-    LUNGE_DISTANCE = 8,             -- Distance for lunge attacks
-    LUNGE_SPEED = 50,               -- Speed of lunge
-    BLOCK_REDUCTION = 0.75,         -- Damage reduction when blocking
-    PARRY_WINDOW = 0.3,             -- Time window for successful parry
-    STAMINA_COST = 15,              -- Stamina cost per attack
-
-    -- Visual effects
-    SLASH_EFFECT_LIFETIME = 0.8,    -- How long slash effects last
-    BLOOD_EFFECT_COUNT = 5,         -- Number of blood particles
-    SPARK_EFFECT_COUNT = 3,         -- Sparks when hitting metal
-
-    -- Audio
-    SOUND_RANGE = 25,               -- Range for melee sound effects
-    VOLUME_MODIFIER = 0.8,          -- Global volume modifier
+    -- Animation settings
+    ATTACK_ANIMATION_TIME = 0.3,         -- Duration of attack animation
+    COMBO_ANIMATION_TIME = 0.25,         -- Duration of combo attacks
 }
 
--- Melee weapon configurations
+-- Melee weapon configurations (FIXED: Added PocketKnife)
 local MELEE_WEAPONS = {
-    ["KNIFE"] = {
-        name = "Combat Knife",
+    -- FIXED: PocketKnife configuration (was missing, causing KNIFE errors)
+    ["PocketKnife"] = {
+        name = "PocketKnife",
+        displayName = "Pocket Knife",
         type = "KNIFE",
-        damage = 65,
-        range = 4,
-        speed = 1.2,                -- Attack speed multiplier
-        critChance = 0.15,          -- 15% crit chance
+        damage = 45,
+        backstabDamage = 90,
+        headshotDamage = 65,
+        range = 2.5,
+        speed = 2.0,              -- Attacks per second
+        critChance = 0.15,
         canBlock = false,
-        canParry = true,
-        weight = 0.3,               -- Affects swing speed
+        canParry = false,
+        canCombo = true,
+        weight = 0.3,             -- Light weight
         sounds = {
-            swing = "rbxassetid://131961136",
-            hit = "rbxassetid://131961136",
-            crit = "rbxassetid://131961136"
+            swing = "rbxassetid://5810753638",
+            hit = "rbxassetid://3744370687",
+            hitCritical = "rbxassetid://3744371342",
+            equip = "rbxassetid://6842081192",
+            deploy = "rbxassetid://131961136"
+        },
+        effects = {
+            slashColor = Color3.fromRGB(255, 220, 180),
+            sparkColor = Color3.fromRGB(255, 255, 200),
+            bloodColor = Color3.fromRGB(200, 0, 0)
+        }
+    },
+
+    -- Legacy support for old "KNIFE" references
+    ["KNIFE"] = {
+        name = "KNIFE",
+        displayName = "Combat Knife", 
+        type = "KNIFE",
+        damage = 55,
+        backstabDamage = 110,
+        headshotDamage = 75,
+        range = 3.0,
+        speed = 1.8,
+        critChance = 0.20,
+        canBlock = false,
+        canParry = false,
+        canCombo = true,
+        weight = 0.4,
+        sounds = {
+            swing = "rbxassetid://5810753638",
+            hit = "rbxassetid://3744370687", 
+            hitCritical = "rbxassetid://3744371342",
+            equip = "rbxassetid://6842081192"
         },
         effects = {
             slashColor = Color3.fromRGB(255, 200, 200),
-            sparkColor = Color3.fromRGB(255, 255, 100)
+            sparkColor = Color3.fromRGB(255, 255, 100),
+            bloodColor = Color3.fromRGB(200, 0, 0)
         }
     },
 
-    ["KATANA"] = {
-        name = "Katana",
-        type = "SWORD",
-        damage = 85,
-        range = 6,
-        speed = 1.0,
+    ["Karambit"] = {
+        name = "Karambit",
+        displayName = "Karambit Knife",
+        type = "KNIFE",
+        damage = 50,
+        backstabDamage = 100,
+        headshotDamage = 70,
+        range = 2.8,
+        speed = 2.2,              -- Very fast
         critChance = 0.25,
-        canBlock = true,
-        canParry = true,
-        weight = 0.8,
-        sounds = {
-            swing = "rbxassetid://131961136",
-            hit = "rbxassetid://131961136",
-            block = "rbxassetid://131961136"
-        },
-        effects = {
-            slashColor = Color3.fromRGB(200, 255, 255),
-            sparkColor = Color3.fromRGB(255, 255, 200)
-        }
-    },
-
-    ["TOMAHAWK"] = {
-        name = "Tomahawk",
-        type = "HEAVY",
-        damage = 120,
-        range = 5,
-        speed = 0.7,
-        critChance = 0.10,
         canBlock = false,
         canParry = false,
-        weight = 1.2,
-        canThrow = true,            -- Can be thrown
-        throwDamage = 150,
+        canCombo = true,
+        weight = 0.25,            -- Very light
         sounds = {
-            swing = "rbxassetid://131961136",
-            hit = "rbxassetid://131961136",
-            throw = "rbxassetid://131961136"
+            swing = "rbxassetid://5810753638",
+            hit = "rbxassetid://3744370687",
+            hitCritical = "rbxassetid://3744371342",
+            equip = "rbxassetid://6842081192"
         },
         effects = {
-            slashColor = Color3.fromRGB(200, 150, 100),
-            sparkColor = Color3.fromRGB(255, 200, 100)
+            slashColor = Color3.fromRGB(255, 180, 180),
+            sparkColor = Color3.fromRGB(255, 255, 150)
         }
     },
 
-    ["CROWBAR"] = {
-        name = "Crowbar",
-        type = "TOOL",
+    ["Machete"] = {
+        name = "Machete",
+        displayName = "Military Machete",
+        type = "BLADE",
         damage = 75,
-        range = 3.5,
-        speed = 0.9,
-        critChance = 0.05,
+        backstabDamage = 130,
+        headshotDamage = 95,
+        range = 4.0,
+        speed = 1.4,
+        critChance = 0.15,
+        canBlock = true,
+        canParry = true,
+        canCombo = true,
+        weight = 0.8,
+        sounds = {
+            swing = "rbxassetid://5810753638",
+            hit = "rbxassetid://3744370687",
+            hitCritical = "rbxassetid://3744371342",
+            block = "rbxassetid://131961136"
+        }
+    },
+
+    ["Sledgehammer"] = {
+        name = "Sledgehammer",
+        displayName = "Heavy Sledgehammer",
+        type = "HEAVY",
+        damage = 120,
+        backstabDamage = 180,
+        headshotDamage = 150,
+        range = 4.5,
+        speed = 0.8,              -- Slow but powerful
+        critChance = 0.10,
         canBlock = true,
         canParry = false,
-        weight = 1.0,
-        canBreakObjects = true,     -- Can break certain objects
+        canCombo = false,
+        weight = 1.5,             -- Heavy
         sounds = {
-            swing = "rbxassetid://131961136",
+            swing = "rbxassetid://5810753638",
             hit = "rbxassetid://131961136",
-            Break = "rbxassetid://131961136"
+            hitCritical = "rbxassetid://131961136"
         }
     }
 }
 
--- Attack types
-local ATTACK_TYPES = {
-    LIGHT = "LIGHT",
-    HEAVY = "HEAVY",
-    COMBO = "COMBO",
-    LUNGE = "LUNGE",
-    THROW = "THROW"
-}
-
--- Constructor
-function MeleeSystem.new(viewmodelSystem)
+function MeleeSystem.new()
     local self = setmetatable({}, MeleeSystem)
 
     -- Core references
     self.player = Players.LocalPlayer
-    self.character = self.player.Character or self.player.CharacterAdded:Wait()
-    self.humanoid = self.character:WaitForChild("Humanoid")
-    self.rootPart = self.character:WaitForChild("HumanoidRootPart")
+    self.character = nil
+    self.humanoid = nil
+    self.rootPart = nil
     self.camera = workspace.CurrentCamera
-    self.viewmodel = viewmodelSystem
 
-    -- Combat state
-    self.currentWeapon = nil
-    self.weaponType = "KNIFE"
+    -- Melee state
+    self.weaponName = "PocketKnife" -- Default to PocketKnife
+    self.weaponConfig = MELEE_WEAPONS["PocketKnife"]
+    self.isEquipped = false
+    self.isDeployed = false
+
+    -- Attack state
     self.isAttacking = false
-    self.isBlocking = false
-    self.isCharging = false
-    self.canAttack = true
-    self.comboCount = 0
     self.lastAttackTime = 0
-    self.chargeStartTime = 0
+    self.comboCount = 0
+    self.comboTimer = 0
 
-    -- Target tracking
-    self.lastTarget = nil
-    self.targetLockTime = 0
+    -- Blocking state
+    self.isBlocking = false
+    self.canBlock = false
 
-    -- Effects
-    self.effectsFolder = workspace:FindFirstChild("MeleeEffects") or self:createEffectsFolder()
-    self.activeEffects = {}
+    -- Return slot for quick melee
+    self.returnSlot = nil
 
-    -- Input handling
-    self.inputConnections = {}
+    -- Connections
+    self.connections = {}
+
+    -- UI elements
+    self.meleeUI = nil
 
     -- Initialize
-    self:connectInputs()
+    self:initialize()
 
-    print("Enhanced Melee System initialized")
     return self
 end
 
--- Create effects folder
-function MeleeSystem:createEffectsFolder()
-    local folder = Instance.new("Folder")
-    folder.Name = "MeleeEffects"
-    folder.Parent = workspace
-    return folder
+-- Initialize the melee system
+function MeleeSystem:initialize()
+    print("[MeleeSystem] Initializing melee system...")
+
+    -- Wait for character
+    self:waitForCharacter()
+
+    -- Setup input handling
+    self:setupInputHandling()
+
+    print("[MeleeSystem] Melee system initialized")
 end
 
--- Connect input handling
-function MeleeSystem:connectInputs()
-    -- Left click for attacks
-    self.inputConnections.attack = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            self:startAttack()
-        end
-    end)
+-- Wait for character spawn
+function MeleeSystem:waitForCharacter()
+    if self.player.Character then
+        self:onCharacterSpawned(self.player.Character)
+    end
 
-    self.inputConnections.attackEnd = UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            self:endAttack()
-        end
-    end)
-
-    -- Right click for blocking/special attacks
-    self.inputConnections.block = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            self:startBlock()
-        end
-    end)
-
-    self.inputConnections.blockEnd = UserInputService.InputEnded:Connect(function(input, gameProcessed)
-        if input.UserInputType == Enum.UserInputType.MouseButton2 then
-            self:endBlock()
-        end
-    end)
-
-    -- F key for throwing (if weapon supports it)
-    self.inputConnections.throw = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.F then
-            self:throwWeapon()
-        end
+    self.connections.characterAdded = self.player.CharacterAdded:Connect(function(character)
+        self:onCharacterSpawned(character)
     end)
 end
 
--- Start attack sequence
-function MeleeSystem:startAttack()
-    if not self.canAttack or self.isAttacking or self.isBlocking then return end
-    if not self.currentWeapon then return end
+-- Handle character spawning
+function MeleeSystem:onCharacterSpawned(character)
+    self.character = character
+    self.humanoid = character:WaitForChild("Humanoid")
+    self.rootPart = character:WaitForChild("HumanoidRootPart")
 
-    local weaponConfig = MELEE_WEAPONS[self.weaponType]
-    if not weaponConfig then return end
+    -- Reset melee state on spawn
+    self:reset()
 
-    -- Check for combo
-    local timeSinceLastAttack = tick() - self.lastAttackTime
-    local isCombo = timeSinceLastAttack < MELEE_SETTINGS.COMBO_WINDOW and self.comboCount > 0
+    print("[MeleeSystem] Character spawned, melee system ready")
+end
+
+-- Set weapon type and configuration
+function MeleeSystem:setWeapon(weaponName, config)
+    -- Handle legacy KNIFE mapping to PocketKnife
+    if weaponName == "KNIFE" then
+        print("[MeleeSystem] Mapping legacy KNIFE to PocketKnife")
+        weaponName = "PocketKnife"
+    end
+
+    self.weaponName = weaponName
+
+    -- Use provided config or default from MELEE_WEAPONS
+    if config then
+        self.weaponConfig = config
+    else
+        self.weaponConfig = MELEE_WEAPONS[weaponName] or MELEE_WEAPONS["PocketKnife"]
+    end
+
+    -- Update blocking capability
+    self.canBlock = self.weaponConfig.canBlock or false
+
+    print("[MeleeSystem] Set melee weapon:", weaponName)
+end
+
+-- Equip melee weapon
+function MeleeSystem:equip()
+    if not self.isDeployed then
+        warn("[MeleeSystem] Cannot equip melee weapon - not deployed")
+        return false
+    end
+
+    if self.isEquipped then
+        print("[MeleeSystem] Melee weapon already equipped")
+        return true
+    end
+
+    self.isEquipped = true
+
+    -- Create melee UI
+    self:createMeleeUI()
+
+    -- Play equip sound
+    self:playSound(self.weaponConfig.sounds.equip, 0.5)
+
+    print("[MeleeSystem] Melee weapon equipped:", self.weaponName)
+    return true
+end
+
+-- Unequip melee weapon
+function MeleeSystem:unequip()
+    if not self.isEquipped then return end
+
+    -- Stop any active actions
+    self:stopAttacking()
+    self:stopBlocking()
+
+    self.isEquipped = false
+
+    -- Destroy melee UI
+    self:destroyMeleeUI()
+
+    print("[MeleeSystem] Melee weapon unequipped")
+end
+
+-- Setup input handling for melee
+function MeleeSystem:setupInputHandling()
+    -- Left click for attack
+    self.connections.attack = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed or not self:canAttack() then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            self:attack()
+        end
+    end)
+
+    -- Right click for block (if weapon supports it)
+    self.connections.blockStart = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed or not self.isEquipped or not self.canBlock then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            self:startBlocking()
+        end
+    end)
+
+    self.connections.blockEnd = UserInputService.InputEnded:Connect(function(input, processed)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            self:stopBlocking()
+        end
+    end)
+
+    -- V key for quick melee
+    self.connections.quickMelee = UserInputService.InputBegan:Connect(function(input, processed)
+        if processed or not self:canAttack() then return end
+
+        if input.KeyCode == Enum.KeyCode.V and self.isEquipped then
+            self:quickAttack()
+        end
+    end)
+end
+
+-- Check if can attack
+function MeleeSystem:canAttack()
+    if not self.isEquipped or not self.isDeployed then
+        return false
+    end
+
+    if self.isAttacking then
+        return false
+    end
+
+    -- Check attack rate limit
+    if tick() - self.lastAttackTime < (1 / self.weaponConfig.speed) then
+        return false
+    end
+
+    -- Check if in menu
+    if _G.MainMenuSystem and _G.MainMenuSystem.isInMenu then
+        return false
+    end
+
+    return true
+end
+
+-- Perform melee attack
+function MeleeSystem:attack()
+    if not self:canAttack() then return false end
+
+    print("[MeleeSystem] Performing melee attack with:", self.weaponName)
+
+    self.isAttacking = true
+    self.lastAttackTime = tick()
 
     -- Determine attack type
-    local attackType = ATTACK_TYPES.LIGHT
-    if isCombo and self.comboCount < 3 then
-        attackType = ATTACK_TYPES.COMBO
+    local attackType = "normal"
+    if self.weaponConfig.canCombo and self.comboCount > 0 and tick() - self.comboTimer < MELEE_SETTINGS.COMBO_WINDOW then
+        attackType = "combo"
         self.comboCount = self.comboCount + 1
     else
         self.comboCount = 1
     end
 
-    -- Start charging for potential heavy attack
-    self.isCharging = true
-    self.chargeStartTime = tick()
+    self.comboTimer = tick()
 
-    -- Check for immediate light attack or start charge
-    task.delay(0.2, function()  -- Short delay to differentiate between light and heavy
-        if self.isCharging then
-            self:performAttack(attackType)
-        end
-    end)
-end
-
--- End attack (release button)
-function MeleeSystem:endAttack()
-    if not self.isCharging then return end
-
-    local chargeTime = tick() - self.chargeStartTime
-    local weaponConfig = MELEE_WEAPONS[self.weaponType]
-
-    self.isCharging = false
-
-    -- Determine if it should be a heavy attack
-    if chargeTime >= MELEE_SETTINGS.HEAVY_CHARGE_TIME then
-        self:performAttack(ATTACK_TYPES.HEAVY)
-    elseif not self.isAttacking then
-        self:performAttack(ATTACK_TYPES.LIGHT)
-    end
-end
-
--- Perform the actual attack
-function MeleeSystem:performAttack(attackType)
-    if self.isAttacking then return end
-
-    local weaponConfig = MELEE_WEAPONS[self.weaponType]
-    if not weaponConfig then return end
-
-    self.isAttacking = true
-    self.canAttack = false
-    self.lastAttackTime = tick()
-
-    -- Calculate damage based on attack type
-    local baseDamage = weaponConfig.damage
-    local damageMultiplier = MELEE_SETTINGS.LIGHT_DAMAGE_MODIFIER
-
-    if attackType == ATTACK_TYPES.HEAVY then
-        damageMultiplier = MELEE_SETTINGS.HEAVY_DAMAGE_MODIFIER
-    elseif attackType == ATTACK_TYPES.COMBO then
-        damageMultiplier = MELEE_SETTINGS.COMBO_DAMAGE_MODIFIER
-    end
-
-    local finalDamage = baseDamage * damageMultiplier
-
-    -- Perform attack raycast
-    local targets = self:performAttackRaycast(weaponConfig, attackType)
+    -- Perform raycast to find targets
+    local targets = self:performMeleeRaycast()
 
     -- Process hits
     for _, target in ipairs(targets) do
-        self:processHit(target, finalDamage, attackType, weaponConfig)
+        self:processHit(target, attackType)
     end
 
-    -- Play attack effects
-    self:playAttackEffects(weaponConfig, attackType, #targets > 0)
+    -- Play attack sound
+    local soundId = self.weaponConfig.sounds.swing
+    if #targets > 0 then
+        soundId = self.weaponConfig.sounds.hit
+    end
+    self:playSound(soundId, 0.8)
 
-    -- Handle attack recovery
-    local recoveryTime = MELEE_SETTINGS.RECOVERY_TIME / weaponConfig.speed
+    -- Create attack effects
+    self:createAttackEffects(attackType)
 
-    task.delay(MELEE_SETTINGS.ATTACK_DURATION, function()
+    -- Attack animation timing
+    local animationTime = attackType == "combo" and MELEE_SETTINGS.COMBO_ANIMATION_TIME or MELEE_SETTINGS.ATTACK_ANIMATION_TIME
+
+    task.delay(animationTime, function()
         self.isAttacking = false
     end)
 
-    task.delay(recoveryTime, function()
-        self.canAttack = true
-    end)
+    -- Auto-switch back if using quick melee
+    if self.returnSlot then
+        task.delay(animationTime + 0.2, function()
+            if _G.EnhancedWeaponSystem then
+                _G.EnhancedWeaponSystem:equipWeapon(self.returnSlot)
+            end
+            self.returnSlot = nil
+        end)
+    end
 
-    print("Performed", attackType, "attack with", self.weaponType, "for", finalDamage, "damage")
+    return true
 end
 
--- Perform attack raycast with Include/Exclude filtering
-function MeleeSystem:performAttackRaycast(weaponConfig, attackType)
-    local targets = {}
-    local range = weaponConfig.range
+-- Quick attack (V key)
+function MeleeSystem:quickAttack()
+    return self:attack()
+end
 
-    -- Extend range for heavy attacks and lunges
-    if attackType == ATTACK_TYPES.HEAVY then
-        range = range * 1.3
-    elseif attackType == ATTACK_TYPES.LUNGE then
-        range = MELEE_SETTINGS.LUNGE_DISTANCE
+-- Perform melee raycast to find targets
+function MeleeSystem:performMeleeRaycast()
+    local targets = {}
+
+    if not self.character or not self.rootPart then
+        return targets
     end
 
-    -- Create multiple rays for wider attack area
+    -- Create raycast parameters
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-    raycastParams.FilterDescendantsInstances = {self.character, self.effectsFolder}
+    raycastParams.FilterDescendantsInstances = {self.character}
 
-    local centerDirection = self.camera.CFrame.LookVector
-    local startPosition = self.rootPart.Position + Vector3.new(0, 1, 0)
+    -- Calculate raycast origin and direction
+    local origin = self.camera.CFrame.Position
+    local direction = self.camera.CFrame.LookVector * self.weaponConfig.range
 
-    -- Center ray
-    local centerRay = workspace:Raycast(startPosition, centerDirection * range, raycastParams)
-    if centerRay then
-        local target = self:validateTarget(centerRay)
-        if target then
-            table.insert(targets, {
-                character = target,
-                position = centerRay.Position,
-                distance = centerRay.Distance,
-                isCenter = true
-            })
-        end
-    end
+    -- Perform multiple raycasts in a cone for better hit detection
+    local raycastDirections = {
+        direction,
+        (self.camera.CFrame * CFrame.Angles(0, math.rad(-15), 0)).LookVector * self.weaponConfig.range,
+        (self.camera.CFrame * CFrame.Angles(0, math.rad(15), 0)).LookVector * self.weaponConfig.range,
+        (self.camera.CFrame * CFrame.Angles(math.rad(-10), 0, 0)).LookVector * self.weaponConfig.range,
+        (self.camera.CFrame * CFrame.Angles(math.rad(10), 0, 0)).LookVector * self.weaponConfig.range
+    }
 
-    -- Side rays for wider attack
-    local sideAngles = {-15, 15, -30, 30}  -- Degrees
-    for _, angle in ipairs(sideAngles) do
-        local sideDirection = CFrame.Angles(0, math.rad(angle), 0) * centerDirection
-        local sideRay = workspace:Raycast(startPosition, sideDirection * (range * 0.8), raycastParams)
+    for _, rayDirection in ipairs(raycastDirections) do
+        local raycastResult = workspace:Raycast(origin, rayDirection, raycastParams)
 
-        if sideRay then
-            local target = self:validateTarget(sideRay)
-            if target and not self:isTargetAlreadyHit(targets, target) then
-                table.insert(targets, {
-                    character = target,
-                    position = sideRay.Position,
-                    distance = sideRay.Distance,
-                    isCenter = false
-                })
+        if raycastResult then
+            local hitPart = raycastResult.Instance
+            local hitCharacter = hitPart.Parent
+
+            -- Check if hit a player character
+            if hitCharacter:FindFirstChild("Humanoid") and hitCharacter ~= self.character then
+                local hitPlayer = Players:GetPlayerFromCharacter(hitCharacter)
+                if hitPlayer then
+                    -- Avoid duplicate targets
+                    local alreadyHit = false
+                    for _, existingTarget in ipairs(targets) do
+                        if existingTarget.player == hitPlayer then
+                            alreadyHit = true
+                            break
+                        end
+                    end
+
+                    if not alreadyHit then
+                        table.insert(targets, {
+                            player = hitPlayer,
+                            character = hitCharacter,
+                            hitPart = hitPart,
+                            hitPosition = raycastResult.Position,
+                            distance = raycastResult.Distance
+                        })
+                    end
+                end
             end
         end
     end
@@ -390,446 +487,337 @@ function MeleeSystem:performAttackRaycast(weaponConfig, attackType)
     return targets
 end
 
--- Validate if raycast hit is a valid target
-function MeleeSystem:validateTarget(rayResult)
-    local hit = rayResult.Instance
-    local character = hit.Parent
-
-    -- Check if it's a player character
-    if character:FindFirstChild("Humanoid") and character ~= self.character then
-        local player = Players:GetPlayerFromCharacter(character)
-        if player then
-            return character
-        end
-    end
-
-    -- Check for NPCs or other valid targets
-    if character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart") then
-        return character
-    end
-
-    return nil
-end
-
--- Check if target is already in the hit list
-function MeleeSystem:isTargetAlreadyHit(targets, character)
-    for _, target in ipairs(targets) do
-        if target.character == character then
-            return true
-        end
-    end
-    return false
-end
-
 -- Process hit on target
-function MeleeSystem:processHit(target, baseDamage, attackType, weaponConfig)
-    local character = target.character
-    local humanoid = character:FindFirstChild("Humanoid")
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
+function MeleeSystem:processHit(target, attackType)
+    local damage = self.weaponConfig.damage
+    local isHeadshot = false
+    local isBackstab = false
+    local isCritical = false
 
-    if not humanoid or not rootPart then return end
-
-    -- Calculate final damage
-    local finalDamage = baseDamage
-
-    -- Check for critical hit
-    local isCritical = math.random() < weaponConfig.critChance
-    if isCritical then
-        finalDamage = finalDamage * 1.5
+    -- Check for headshot
+    if target.hitPart.Name == "Head" then
+        isHeadshot = true
+        damage = damage * MELEE_SETTINGS.HEADSHOT_MULTIPLIER
     end
 
     -- Check for backstab
-    local isBackstab = self:checkBackstab(rootPart)
-    if isBackstab then
-        finalDamage = finalDamage * MELEE_SETTINGS.BACKSTAB_MODIFIER
+    if self:isBackstab(target) then
+        isBackstab = true
+        damage = self.weaponConfig.backstabDamage or (damage * MELEE_SETTINGS.BACKSTAB_MULTIPLIER)
     end
 
-    -- Distance damage falloff for non-center hits
-    if not target.isCenter then
-        finalDamage = finalDamage * 0.8
+    -- Check for critical hit
+    if math.random() < self.weaponConfig.critChance then
+        isCritical = true
+        damage = damage * 1.5
     end
 
-    -- Apply damage (implement your damage system here)
-    print("Melee hit on", character.Name, "for", finalDamage, "damage", 
-        isCritical and "(CRITICAL)" or "", 
-        isBackstab and "(BACKSTAB)" or "")
+    -- Apply combo multiplier
+    if attackType == "combo" and self.comboCount > 1 then
+        damage = damage * (1 + (self.comboCount - 1) * 0.1) -- 10% bonus per combo hit
+    end
+
+    -- Round damage
+    damage = math.floor(damage)
+
+    print("[MeleeSystem] Hit", target.player.Name, "for", damage, "damage", 
+        isHeadshot and "(headshot)" or "",
+        isBackstab and "(backstab)" or "",
+        isCritical and "(critical)" or "")
+
+    -- Send damage to server
+    local remoteEvent = ReplicatedStorage:FindFirstChild("MeleeAttack")
+    if remoteEvent then
+        remoteEvent:FireServer({
+            targetCharacter = target.character,
+            hitPart = target.hitPart,
+            damage = damage,
+            weaponName = self.weaponName,
+            isBackstab = isBackstab,
+            isHeadshot = isHeadshot,
+            isCritical = isCritical,
+            attackType = attackType
+        })
+    end
+
+    -- Play hit sound
+    local soundId = isCritical and self.weaponConfig.sounds.hitCritical or self.weaponConfig.sounds.hit
+    self:playSound(soundId, 1.0)
 
     -- Create hit effects
-    self:createHitEffects(target.position, character, isCritical, isBackstab, weaponConfig)
-
-    -- Apply knockback
-    self:applyKnockback(character, attackType, weaponConfig)
-
-    -- Play hit sounds
-    self:playHitSound(target.position, isCritical, weaponConfig)
+    self:createHitEffects(target, isHeadshot, isBackstab, isCritical)
 end
 
 -- Check if attack is a backstab
-function MeleeSystem:checkBackstab(targetRootPart)
-    local targetForward = targetRootPart.CFrame.LookVector
-    local attackDirection = (targetRootPart.Position - self.rootPart.Position).Unit
-
-    -- If attack comes from behind (dot product > 0.5)
-    local dot = targetForward:Dot(attackDirection)
-    return dot > 0.5
-end
-
--- Apply knockback to target
-function MeleeSystem:applyKnockback(character, attackType, weaponConfig)
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-
-    local direction = (rootPart.Position - self.rootPart.Position).Unit
-    local force = 25
-
-    -- Increase force for heavy attacks
-    if attackType == ATTACK_TYPES.HEAVY then
-        force = force * 2
+function MeleeSystem:isBackstab(target)
+    if not target.character or not target.character.PrimaryPart then
+        return false
     end
 
-    -- Apply force based on weapon weight
-    force = force * weaponConfig.weight
+    local targetForward = target.character.PrimaryPart.CFrame.LookVector
+    local attackDirection = (target.hitPosition - self.rootPart.Position).Unit
 
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(force * 100, 0, force * 100)
-    bodyVelocity.Velocity = direction * force
-    bodyVelocity.Parent = rootPart
+    -- Calculate angle between target's forward direction and attack direction
+    local dotProduct = targetForward:Dot(-attackDirection)
+    local angle = math.deg(math.acos(math.clamp(dotProduct, -1, 1)))
 
-    Debris:AddItem(bodyVelocity, 0.3)
-end
-
--- Create hit effects
-function MeleeSystem:createHitEffects(position, character, isCritical, isBackstab, weaponConfig)
-    -- Blood effect
-    self:createBloodEffect(position, isCritical)
-
-    -- Slash effect
-    self:createSlashEffect(position, weaponConfig.effects.slashColor, isCritical)
-
-    -- Screen effect for critical/backstab
-    if isCritical or isBackstab then
-        self:createScreenEffect(isCritical, isBackstab)
-    end
-end
-
--- Create blood particle effect
-function MeleeSystem:createBloodEffect(position, isCritical)
-    local particleCount = isCritical and (MELEE_SETTINGS.BLOOD_EFFECT_COUNT * 2) or MELEE_SETTINGS.BLOOD_EFFECT_COUNT
-
-    for i = 1, particleCount do
-        local blood = Instance.new("Part")
-        blood.Name = "BloodParticle"
-        blood.Size = Vector3.new(0.1, 0.1, 0.1)
-        blood.Material = Enum.Material.Neon
-        blood.Color = Color3.fromRGB(200, 0, 0)
-        blood.Anchored = false
-        blood.CanCollide = false
-        blood.Position = position + Vector3.new(
-            (math.random() - 0.5) * 2,
-            (math.random() - 0.5) * 2,
-            (math.random() - 0.5) * 2
-        )
-
-        -- Add random velocity
-        local bodyVelocity = Instance.new("BodyVelocity")
-        bodyVelocity.MaxForce = Vector3.new(1000, 1000, 1000)
-        bodyVelocity.Velocity = Vector3.new(
-            (math.random() - 0.5) * 20,
-            math.random() * 10,
-            (math.random() - 0.5) * 20
-        )
-        bodyVelocity.Parent = blood
-
-        blood.Parent = self.effectsFolder
-
-        -- Fade out
-        task.delay(0.1, function()
-            if bodyVelocity then bodyVelocity:Destroy() end
-        end)
-
-        local fadeTween = TweenService:Create(blood, 
-            TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Transparency = 1, Size = Vector3.new(0.05, 0.05, 0.05)}
-        )
-        fadeTween:Play()
-
-        Debris:AddItem(blood, 1.2)
-    end
-end
-
--- Create slash effect
-function MeleeSystem:createSlashEffect(position, color, isCritical)
-    local slash = Instance.new("Part")
-    slash.Name = "SlashEffect"
-    slash.Size = isCritical and Vector3.new(3, 0.1, 0.5) or Vector3.new(2, 0.1, 0.3)
-    slash.Material = Enum.Material.Neon
-    slash.Color = color
-    slash.Anchored = true
-    slash.CanCollide = false
-    slash.CFrame = CFrame.lookAt(position, position + self.camera.CFrame.LookVector)
-    slash.Parent = self.effectsFolder
-
-    -- Animate slash
-    local expandTween = TweenService:Create(slash,
-        TweenInfo.new(MELEE_SETTINGS.SLASH_EFFECT_LIFETIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {Transparency = 1, Size = slash.Size * 1.5}
-    )
-    expandTween:Play()
-
-    Debris:AddItem(slash, MELEE_SETTINGS.SLASH_EFFECT_LIFETIME + 0.1)
-end
-
--- Create screen effect for critical hits
-function MeleeSystem:createScreenEffect(isCritical, isBackstab)
-    -- Screen flash effect (implement based on your UI system)
-    if isCritical then
-        print("CRITICAL HIT screen effect")
-    end
-
-    if isBackstab then
-        print("BACKSTAB screen effect")
-    end
+    return angle <= MELEE_SETTINGS.BACKSTAB_ANGLE
 end
 
 -- Start blocking
-function MeleeSystem:startBlock()
-    local weaponConfig = MELEE_WEAPONS[self.weaponType]
-    if not weaponConfig or not weaponConfig.canBlock then return end
-    if self.isAttacking then return end
+function MeleeSystem:startBlocking()
+    if not self.canBlock or self.isBlocking then return end
 
     self.isBlocking = true
-    print("Started blocking with", self.weaponType)
 
-    -- TODO: Add blocking animation and effects
+    -- Play block sound
+    if self.weaponConfig.sounds.block then
+        self:playSound(self.weaponConfig.sounds.block, 0.6)
+    end
+
+    -- Update UI
+    self:updateMeleeUI()
+
+    print("[MeleeSystem] Started blocking")
 end
 
--- End blocking
-function MeleeSystem:endBlock()
+-- Stop blocking
+function MeleeSystem:stopBlocking()
     if not self.isBlocking then return end
 
     self.isBlocking = false
-    print("Stopped blocking")
+
+    -- Update UI
+    self:updateMeleeUI()
+
+    print("[MeleeSystem] Stopped blocking")
 end
 
--- Throw weapon (if supported)
-function MeleeSystem:throwWeapon()
-    local weaponConfig = MELEE_WEAPONS[self.weaponType]
-    if not weaponConfig or not weaponConfig.canThrow then return end
-    if self.isAttacking or self.isBlocking then return end
-
-    print("Throwing", self.weaponType)
-
-    -- Create thrown weapon projectile
-    local projectile = self:createThrownWeapon(weaponConfig)
-    if projectile then
-        self:launchProjectile(projectile, weaponConfig)
-    end
+-- Stop attacking
+function MeleeSystem:stopAttacking()
+    self.isAttacking = false
+    self.comboCount = 0
 end
 
--- Create thrown weapon projectile
-function MeleeSystem:createThrownWeapon(weaponConfig)
-    local projectile = Instance.new("Part")
-    projectile.Name = "Thrown_" .. self.weaponType
-    projectile.Size = Vector3.new(0.2, 0.8, 2.5)
-    projectile.Material = Enum.Material.Metal
-    projectile.Color = Color3.fromRGB(100, 100, 100)
-    projectile.CanCollide = false
+-- Create attack visual effects
+function MeleeSystem:createAttackEffects(attackType)
+    if not self.rootPart then return end
 
-    -- Add BodyVelocity for physics
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
-    bodyVelocity.Parent = projectile
+    -- Create slash effect
+    local effect = Instance.new("Part")
+    effect.Name = "MeleeEffect"
+    effect.Size = Vector3.new(0.1, 0.1, 0.1)
+    effect.Position = self.rootPart.Position + self.camera.CFrame.LookVector * 2
+    effect.Anchored = true
+    effect.CanCollide = false
+    effect.Transparency = 0.5
+    effect.BrickColor = BrickColor.new(self.weaponConfig.effects.slashColor)
+    effect.Parent = workspace
 
-    -- Add spinning effect
-    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
-    bodyAngularVelocity.MaxTorque = Vector3.new(0, 0, 4000)
-    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 20)
-    bodyAngularVelocity.Parent = projectile
+    -- Animate effect
+    local tween = TweenService:Create(effect, TweenInfo.new(0.3), {
+        Transparency = 1,
+        Size = Vector3.new(3, 3, 0.1)
+    })
+    tween:Play()
 
-    projectile.Parent = self.effectsFolder
-    return projectile
-end
-
--- Launch thrown weapon projectile
-function MeleeSystem:launchProjectile(projectile, weaponConfig)
-    local direction = self.camera.CFrame.LookVector
-    local force = 60
-
-    -- Set initial position and velocity
-    local startPos = self.rootPart.Position + direction * 2 + Vector3.new(0, 1, 0)
-    projectile.Position = startPos
-
-    local bodyVelocity = projectile:FindFirstChild("BodyVelocity")
-    if bodyVelocity then
-        bodyVelocity.Velocity = direction * force
-    end
-
-    -- Set up collision detection
-    local connection
-    connection = projectile.Touched:Connect(function(hit)
-        local character = hit.Parent
-        if character == self.character then return end
-
-        -- Check if hit a valid target
-        if character:FindFirstChild("Humanoid") then
-            local player = Players:GetPlayerFromCharacter(character)
-            if player then
-                -- Deal throw damage
-                print("Thrown weapon hit", player.Name, "for", weaponConfig.throwDamage, "damage")
-
-                -- Create hit effects
-                self:createHitEffects(projectile.Position, character, false, false, weaponConfig)
-
-                connection:Disconnect()
-                projectile:Destroy()
-                return
-            end
+    -- Cleanup
+    task.delay(0.5, function()
+        if effect then
+            effect:Destroy()
         end
-
-        -- Hit environment
-        connection:Disconnect()
-
-        -- Stick in surface briefly
-        projectile.Anchored = true
-        local bodyVelocity = projectile:FindFirstChild("BodyVelocity")
-        local bodyAV = projectile:FindFirstChild("BodyAngularVelocity")
-        if bodyVelocity then bodyVelocity:Destroy() end
-        if bodyAV then bodyAV:Destroy() end
-
-        Debris:AddItem(projectile, 3)
     end)
-
-    -- Auto-cleanup if doesn't hit anything
-    Debris:AddItem(projectile, 5)
 end
 
--- Play attack effects (sounds, etc.)
-function MeleeSystem:playAttackEffects(weaponConfig, attackType, hasHit)
-    -- Play swing sound
-    if weaponConfig.sounds.swing then
-        self:playSound(weaponConfig.sounds.swing, 0.7)
+-- Create hit visual effects
+function MeleeSystem:createHitEffects(target, isHeadshot, isBackstab, isCritical)
+    if not target.hitPosition then return end
+
+    -- Create spark effect
+    local spark = Instance.new("Part")
+    spark.Name = "HitSpark"
+    spark.Size = Vector3.new(0.2, 0.2, 0.2)
+    spark.Position = target.hitPosition
+    spark.Anchored = true
+    spark.CanCollide = false
+    spark.Transparency = 0.3
+    spark.BrickColor = BrickColor.new(self.weaponConfig.effects.sparkColor)
+    spark.Parent = workspace
+
+    -- Special effects for critical hits
+    if isCritical or isBackstab then
+        spark.BrickColor = BrickColor.new("Bright red")
+        spark.Size = Vector3.new(0.4, 0.4, 0.4)
     end
 
-    -- Additional effects based on attack type
-    if attackType == ATTACK_TYPES.HEAVY then
-        -- Heavy attack whoosh sound
-        print("Heavy attack whoosh effect")
+    -- Animate spark
+    local sparkTween = TweenService:Create(spark, TweenInfo.new(0.2), {
+        Transparency = 1,
+        Size = Vector3.new(0.1, 0.1, 0.1)
+    })
+    sparkTween:Play()
+
+    -- Cleanup
+    task.delay(0.3, function()
+        if spark then
+            spark:Destroy()
+        end
+    end)
+end
+
+-- Create melee UI
+function MeleeSystem:createMeleeUI()
+    if self.meleeUI then
+        self.meleeUI:Destroy()
+    end
+
+    local playerGui = self.player:WaitForChild("PlayerGui")
+
+    -- Create main UI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MeleeUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+    self.meleeUI = screenGui
+
+    -- Melee indicator frame
+    local frame = Instance.new("Frame")
+    frame.Name = "MeleeFrame"
+    frame.Size = UDim2.new(0.12, 0, 0.06, 0)
+    frame.Position = UDim2.new(0.44, 0, 0.88, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    -- Add rounded corners
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = frame
+
+    -- Weapon name label
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "NameLabel"
+    nameLabel.Size = UDim2.new(1, 0, 0.6, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = self.weaponConfig.displayName or self.weaponName
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.Parent = frame
+
+    -- Status label (blocking, combo, etc.)
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Name = "StatusLabel"
+    statusLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    statusLabel.Position = UDim2.new(0, 0, 0.6, 0)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "Ready"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    statusLabel.TextScaled = true
+    statusLabel.Font = Enum.Font.SourceSans
+    statusLabel.Parent = frame
+end
+
+-- Update melee UI
+function MeleeSystem:updateMeleeUI()
+    if not self.meleeUI then return end
+
+    local frame = self.meleeUI:FindFirstChild("MeleeFrame")
+    if not frame then return end
+
+    local statusLabel = frame:FindFirstChild("StatusLabel")
+    if not statusLabel then return end
+
+    -- Update status
+    if self.isBlocking then
+        statusLabel.Text = "BLOCKING"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 162, 255)
+    elseif self.isAttacking then
+        statusLabel.Text = "ATTACKING"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 0)
+    elseif self.comboCount > 1 then
+        statusLabel.Text = "COMBO x" .. self.comboCount
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    else
+        statusLabel.Text = "Ready"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
     end
 end
 
--- Play hit sound
-function MeleeSystem:playHitSound(position, isCritical, weaponConfig)
-    local soundId = weaponConfig.sounds.hit or weaponConfig.sounds.swing
-    local volume = isCritical and 1.0 or 0.8
-
-    self:playSound(soundId, volume, position)
+-- Destroy melee UI
+function MeleeSystem:destroyMeleeUI()
+    if self.meleeUI then
+        self.meleeUI:Destroy()
+        self.meleeUI = nil
+    end
 end
 
 -- Play sound effect
-function MeleeSystem:playSound(soundId, volume, position)
+function MeleeSystem:playSound(soundId, volume)
+    if not soundId or not self.rootPart then return end
+
     local sound = Instance.new("Sound")
     sound.SoundId = soundId
-    sound.Volume = (volume or 1) * MELEE_SETTINGS.VOLUME_MODIFIER
-    sound.RollOffMode = Enum.RollOffMode.InverseTapered
-    sound.RollOffMinDistance = 5
-    sound.RollOffMaxDistance = MELEE_SETTINGS.SOUND_RANGE
+    sound.Volume = volume or 0.5
+    sound.Parent = self.rootPart
 
-    if position then
-        -- 3D positioned sound
-        local soundPart = Instance.new("Part")
-        soundPart.Transparency = 1
-        soundPart.Anchored = true
-        soundPart.CanCollide = false
-        soundPart.Position = position
-        soundPart.Parent = self.effectsFolder
+    sound:Play()
 
-        sound.Parent = soundPart
-        sound:Play()
-
-        Debris:AddItem(soundPart, sound.TimeLength + 0.5)
-    else
-        -- 2D sound
-        sound.Parent = self.camera
-        sound:Play()
-
-        Debris:AddItem(sound, sound.TimeLength + 0.1)
-    end
+    -- Cleanup sound after playing
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
 end
 
--- Set melee weapon type
-function MeleeSystem:setWeaponType(weaponType)
-    if MELEE_WEAPONS[weaponType] then
-        self.weaponType = weaponType
-        print("Melee weapon changed to:", weaponType)
-
-        -- Reset combat state when switching weapons
-        self.isAttacking = false
-        self.isBlocking = false
-        self.isCharging = false
-        self.comboCount = 0
-    else
-        warn("Unknown melee weapon type:", weaponType)
-    end
+-- Set return slot for quick melee
+function MeleeSystem:setReturnSlot(slot)
+    self.returnSlot = slot
 end
 
--- Get available melee weapons
-function MeleeSystem:getAvailableWeapons()
-    local weapons = {}
-    for name, config in pairs(MELEE_WEAPONS) do
-        table.insert(weapons, {
-            name = name,
-            displayName = config.name,
-            type = config.type,
-            damage = config.damage,
-            range = config.range
-        })
-    end
-    return weapons
+-- Reset melee system state
+function MeleeSystem:reset()
+    print("[MeleeSystem] Resetting melee system...")
+
+    -- Stop all actions
+    self:stopAttacking()
+    self:stopBlocking()
+    self:unequip()
+
+    -- Reset state
+    self.isDeployed = false
+    self.isEquipped = false
+    self.comboCount = 0
+    self.returnSlot = nil
+
+    print("[MeleeSystem] Reset complete")
 end
 
--- Check if player can perform action
-function MeleeSystem:canPerformAction()
-    return self.canAttack and not self.isAttacking and not self.isBlocking
+-- Set deployed state
+function MeleeSystem:setDeployed(deployed)
+    self.isDeployed = deployed
+    print("[MeleeSystem] Deployment state:", deployed)
 end
 
--- Get current weapon info
-function MeleeSystem:getCurrentWeaponInfo()
-    local config = MELEE_WEAPONS[self.weaponType]
-    if not config then return nil end
-
-    return {
-        name = config.name,
-        type = config.type,
-        damage = config.damage,
-        range = config.range,
-        speed = config.speed,
-        canBlock = config.canBlock,
-        canThrow = config.canThrow
-    }
-end
-
--- Cleanup system
+-- Cleanup
 function MeleeSystem:cleanup()
-    print("Cleaning up Enhanced Melee System")
+    print("[MeleeSystem] Cleaning up melee system...")
 
-    -- Disconnect input connections
-    for name, connection in pairs(self.inputConnections) do
+    -- Reset state
+    self:reset()
+
+    -- Disconnect all connections
+    for name, connection in pairs(self.connections) do
         connection:Disconnect()
     end
 
-    -- Clean up active effects
-    for _, effect in ipairs(self.activeEffects) do
-        if effect and effect.Parent then
-            effect:Destroy()
-        end
-    end
+    -- Destroy UI
+    self:destroyMeleeUI()
 
-    -- Reset state
-    self.isAttacking = false
-    self.isBlocking = false
-    self.isCharging = false
+    -- Clear references
+    self.connections = {}
+    self.weaponConfig = nil
 
-    print("Enhanced Melee System cleanup complete")
+    print("[MeleeSystem] Melee system cleanup complete")
 end
 
 return MeleeSystem
