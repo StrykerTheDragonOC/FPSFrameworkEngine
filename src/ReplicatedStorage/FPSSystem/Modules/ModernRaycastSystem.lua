@@ -1,11 +1,35 @@
--- Modern Raycast System with Include/Exclude Terminology
+-- ModernRaycastSystem.lua
+-- Updated raycast system using Include/Exclude instead of deprecated Whitelist/Blacklist
 -- Place in ReplicatedStorage.FPSSystem.Modules.ModernRaycastSystem
+
 local ModernRaycastSystem = {}
 ModernRaycastSystem.__index = ModernRaycastSystem
 
 -- Services
 local workspace = workspace
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Performance tracking
+local raycastCount = 0
+local lastFrameTime = 0
+local MAX_RAYCASTS_PER_FRAME = 50
+
+-- Material penetration values
+local MATERIAL_PENETRATION = {
+    [Enum.Material.Wood] = 0.8,
+    [Enum.Material.Metal] = 0.3,
+    [Enum.Material.Concrete] = 0.2,
+    [Enum.Material.Brick] = 0.4,
+    [Enum.Material.Glass] = 0.9,
+    [Enum.Material.Plastic] = 0.7,
+    [Enum.Material.Fabric] = 0.95,
+    [Enum.Material.CorrodedMetal] = 0.5,
+    [Enum.Material.Grass] = 1.0,
+    [Enum.Material.Sand] = 0.6,
+    [Enum.Material.Snow] = 0.9,
+    [Enum.Material.Water] = 0.1
+}
 
 -- Modern RaycastConfig class using Include/Exclude terminology
 local RaycastConfig = {}
@@ -29,6 +53,7 @@ end
 function RaycastConfig:setIncludeFilter(instanceList)
     self.filterType = "Include"
     self.includeList = instanceList or {}
+    self.excludeList = {} -- Clear exclude list when using include
     return self
 end
 
@@ -36,6 +61,7 @@ end
 function RaycastConfig:setExcludeFilter(instanceList)
     self.filterType = "Exclude"
     self.excludeList = instanceList or {}
+    self.includeList = {} -- Clear include list when using exclude
     return self
 end
 
@@ -43,9 +69,11 @@ end
 function RaycastConfig:addToIncludeList(instances)
     if type(instances) == "table" then
         for _, instance in ipairs(instances) do
-            table.insert(self.includeList, instance)
+            if instance and instance.Parent then
+                table.insert(self.includeList, instance)
+            end
         end
-    else
+    elseif instances and instances.Parent then
         table.insert(self.includeList, instances)
     end
     return self
@@ -55,9 +83,11 @@ end
 function RaycastConfig:addToExcludeList(instances)
     if type(instances) == "table" then
         for _, instance in ipairs(instances) do
-            table.insert(self.excludeList, instance)
+            if instance and instance.Parent then
+                table.insert(self.excludeList, instance)
+            end
         end
-    else
+    elseif instances and instances.Parent then
         table.insert(self.excludeList, instances)
     end
     return self
@@ -65,15 +95,18 @@ end
 
 -- Remove objects from include list
 function RaycastConfig:removeFromIncludeList(instances)
-    if type(instances) ~= "table" then
-        instances = {instances}
-    end
-
-    for _, instanceToRemove in ipairs(instances) do
-        for i, instance in ipairs(self.includeList) do
-            if instance == instanceToRemove then
+    if type(instances) == "table" then
+        for _, instance in ipairs(instances) do
+            for i = #self.includeList, 1, -1 do
+                if self.includeList[i] == instance then
+                    table.remove(self.includeList, i)
+                end
+            end
+        end
+    else
+        for i = #self.includeList, 1, -1 do
+            if self.includeList[i] == instances then
                 table.remove(self.includeList, i)
-                break
             end
         end
     end
@@ -82,29 +115,32 @@ end
 
 -- Remove objects from exclude list
 function RaycastConfig:removeFromExcludeList(instances)
-    if type(instances) ~= "table" then
-        instances = {instances}
-    end
-
-    for _, instanceToRemove in ipairs(instances) do
-        for i, instance in ipairs(self.excludeList) do
-            if instance == instanceToRemove then
+    if type(instances) == "table" then
+        for _, instance in ipairs(instances) do
+            for i = #self.excludeList, 1, -1 do
+                if self.excludeList[i] == instance then
+                    table.remove(self.excludeList, i)
+                end
+            end
+        end
+    else
+        for i = #self.excludeList, 1, -1 do
+            if self.excludeList[i] == instances then
                 table.remove(self.excludeList, i)
-                break
             end
         end
     end
     return self
 end
 
--- Convert to Roblox RaycastParams
+-- Convert to RaycastParams
 function RaycastConfig:toRaycastParams()
     local params = RaycastParams.new()
 
-    if self.filterType == "Include" then
+    if self.filterType == "Include" and #self.includeList > 0 then
         params.FilterType = Enum.RaycastFilterType.Include
         params.FilterDescendantsInstances = self.includeList
-    else -- Exclude
+    else
         params.FilterType = Enum.RaycastFilterType.Exclude
         params.FilterDescendantsInstances = self.excludeList
     end
@@ -126,25 +162,44 @@ function ModernRaycastSystem.new()
     -- Player reference
     self.player = Players.LocalPlayer
 
+    -- Performance tracking
+    self.lastFrameTime = tick()
+    self.frameRaycastCount = 0
+
     -- Add common excludes
-    self:addDefaultExcludes()
+    self:updateDefaultExcludes()
 
     return self
 end
 
--- Add common objects to exclude by default
-function ModernRaycastSystem:addDefaultExcludes()
+-- Update default excludes (call when character spawns)
+function ModernRaycastSystem:updateDefaultExcludes()
+    self.defaultExcludes = {}
+
     if self.player and self.player.Character then
         table.insert(self.defaultExcludes, self.player.Character)
     end
 
     -- Add camera and other common excludes
-    table.insert(self.defaultExcludes, workspace.CurrentCamera)
+    if workspace.CurrentCamera then
+        table.insert(self.defaultExcludes, workspace.CurrentCamera)
+    end
 
     -- Add effects folders
-    local effectsFolder = workspace:FindFirstChild("WeaponEffects")
-    if effectsFolder then
-        table.insert(self.defaultExcludes, effectsFolder)
+    local effectsFolders = {
+        "WeaponEffects",
+        "GrenadeEffects", 
+        "MeleeEffects",
+        "MovementEffects",
+        "Effects",
+        "Particles"
+    }
+
+    for _, folderName in ipairs(effectsFolders) do
+        local folder = workspace:FindFirstChild(folderName)
+        if folder then
+            table.insert(self.defaultExcludes, folder)
+        end
     end
 end
 
@@ -157,275 +212,151 @@ end
 
 -- Perform a single raycast with modern config
 function ModernRaycastSystem:cast(origin, direction, config)
+    -- Performance throttling
+    local currentTime = tick()
+    if currentTime ~= self.lastFrameTime then
+        self.lastFrameTime = currentTime
+        self.frameRaycastCount = 0
+    end
+
+    self.frameRaycastCount = self.frameRaycastCount + 1
+    if self.frameRaycastCount > MAX_RAYCASTS_PER_FRAME then
+        warn("ModernRaycastSystem: Max raycasts per frame exceeded, skipping raycast")
+        return nil
+    end
+
     local raycastParams = config:toRaycastParams()
     return workspace:Raycast(origin, direction, raycastParams)
 end
 
 -- Perform multiple raycasts (for penetration, spread, etc.)
-function ModernRaycastSystem:multiCast(origin, directions, config)
+function ModernRaycastSystem:multiCast(origins, directions, config)
     local results = {}
-    local raycastParams = config:toRaycastParams()
 
-    for i, direction in ipairs(directions) do
-        local result = workspace:Raycast(origin, direction, raycastParams)
+    for i = 1, math.min(#origins, #directions) do
+        local result = self:cast(origins[i], directions[i], config)
         if result then
-            table.insert(results, {
-                index = i,
-                result = result,
-                direction = direction
-            })
+            table.insert(results, result)
         end
     end
 
     return results
 end
 
--- Perform penetration raycast (multiple hits through objects)
-function ModernRaycastSystem:penetrationCast(origin, direction, maxPenetrations, config)
-    local hits = {}
+-- Advanced weapon raycast with penetration
+function ModernRaycastSystem:weaponRaycast(origin, direction, maxDistance, penetrationPower, damage)
+    local results = {}
     local currentOrigin = origin
-    local currentDirection = direction
+    local currentDirection = direction.Unit
+    local remainingDistance = maxDistance or 1000
+    local remainingPenetration = penetrationPower or 1.0
+    local remainingDamage = damage or 100
+
+    -- Create config for weapon raycast
+    local config = self:createConfig()
+
     local penetrationCount = 0
+    local maxPenetrations = 3
 
-    -- Clone config to avoid modifying original
-    local workingConfig = RaycastConfig.new()
-    workingConfig.filterType = config.filterType
-    workingConfig.includeList = {table.unpack(config.includeList)}
-    workingConfig.excludeList = {table.unpack(config.excludeList)}
-    workingConfig.respectCanCollide = config.respectCanCollide
-    workingConfig.ignoreWater = config.ignoreWater
-    workingConfig.collisionGroup = config.collisionGroup
+    while remainingDistance > 0 and remainingPenetration > 0 and penetrationCount < maxPenetrations do
+        local rayDirection = currentDirection * remainingDistance
+        local result = self:cast(currentOrigin, rayDirection, config)
 
-    while penetrationCount < maxPenetrations do
-        local raycastParams = workingConfig:toRaycastParams()
-        local result = workspace:Raycast(currentOrigin, currentDirection, raycastParams)
+        if not result then
+            break
+        end
 
-        if result then
-            table.insert(hits, {
-                hitPart = result.Instance,
-                hitPosition = result.Position,
-                hitNormal = result.Normal,
-                material = result.Material,
-                distance = result.Distance,
-                penetrationIndex = penetrationCount
-            })
+        -- Calculate damage based on distance
+        local hitDistance = (result.Position - currentOrigin).Magnitude
+        local distanceFalloff = math.max(0.1, 1 - (hitDistance / maxDistance))
+        local hitDamage = remainingDamage * distanceFalloff
 
-            -- Add hit part to exclude list for next raycast
-            workingConfig:addToExcludeList(result.Instance)
+        -- Store hit result
+        table.insert(results, {
+            result = result,
+            damage = hitDamage,
+            penetrationCount = penetrationCount,
+            distance = hitDistance
+        })
 
-            -- Calculate exit point (simplified)
-            local thickness = self:estimateThickness(result.Instance)
-            currentOrigin = result.Position + currentDirection * (thickness + 0.1)
+        -- Check for penetration
+        if result.Instance and result.Instance.Material then
+            local materialPenetration = MATERIAL_PENETRATION[result.Instance.Material] or 0.5
+            local penetrationReduction = materialPenetration * remainingPenetration
 
-            penetrationCount = penetrationCount + 1
+            if penetrationReduction > 0.1 then
+                -- Calculate penetration
+                remainingPenetration = remainingPenetration - (1 - materialPenetration)
+                remainingDamage = remainingDamage * materialPenetration
+
+                -- Continue ray from exit point
+                currentOrigin = result.Position + (currentDirection * 0.1)
+                remainingDistance = remainingDistance - hitDistance
+                penetrationCount = penetrationCount + 1
+
+                -- Add hit instance to exclude list for next raycast
+                config:addToExcludeList(result.Instance)
+            else
+                -- Not enough penetration power
+                break
+            end
         else
+            -- Hit something that can't be penetrated
             break
         end
     end
 
-    return hits
+    return results
 end
 
--- Perform area raycast (multiple rays in a pattern)
-function ModernRaycastSystem:areaCast(origin, centerDirection, radius, rayCount, config)
-    local hits = {}
-    local raycastParams = config:toRaycastParams()
-
-    -- Generate ray directions in a circle pattern
-    for i = 1, rayCount do
-        local angle = (i / rayCount) * 2 * math.pi
-        local offset = Vector3.new(
-            math.cos(angle) * radius,
-            math.sin(angle) * radius,
-            0
-        )
-
-        local rayDirection = (centerDirection + offset).Unit * centerDirection.Magnitude
-        local result = workspace:Raycast(origin, rayDirection, raycastParams)
-
-        if result then
-            table.insert(hits, {
-                rayIndex = i,
-                angle = angle,
-                hitPart = result.Instance,
-                hitPosition = result.Position,
-                hitNormal = result.Normal,
-                material = result.Material,
-                distance = result.Distance
-            })
-        end
-    end
-
-    return hits
-end
-
--- Perform shotgun-style raycast (random spread pattern)
-function ModernRaycastSystem:shotgunCast(origin, centerDirection, spreadAngle, pelletCount, config)
-    local hits = {}
-    local raycastParams = config:toRaycastParams()
-
-    for i = 1, pelletCount do
-        -- Generate random spread
-        local spreadX = (math.random() - 0.5) * spreadAngle
-        local spreadY = (math.random() - 0.5) * spreadAngle
-
-        local spreadDirection = centerDirection + Vector3.new(spreadX, spreadY, 0)
-        spreadDirection = spreadDirection.Unit * centerDirection.Magnitude
-
-        local result = workspace:Raycast(origin, spreadDirection, raycastParams)
-
-        if result then
-            table.insert(hits, {
-                pelletIndex = i,
-                spreadX = spreadX,
-                spreadY = spreadY,
-                hitPart = result.Instance,
-                hitPosition = result.Position,
-                hitNormal = result.Normal,
-                material = result.Material,
-                distance = result.Distance
-            })
-        end
-    end
-
-    return hits
-end
-
--- Check line of sight between two points
-function ModernRaycastSystem:hasLineOfSight(startPos, endPos, config)
-    local direction = endPos - startPos
-    local raycastParams = config:toRaycastParams()
-    local result = workspace:Raycast(startPos, direction, raycastParams)
-
-    -- If no hit, or hit is very close to end position, line of sight exists
-    if not result then
-        return true
-    end
-
-    local distanceToHit = (result.Position - startPos).Magnitude
-    local totalDistance = direction.Magnitude
-
-    -- Allow small tolerance for floating point errors
-    return (totalDistance - distanceToHit) < 0.1
-end
-
--- Get all objects within radius using raycast
-function ModernRaycastSystem:getObjectsInRadius(center, radius, rayCount, config)
-    local objects = {}
-    local objectSet = {} -- To avoid duplicates
-
-    -- Cast rays in all directions
-    for i = 1, rayCount do
-        local theta = (i / rayCount) * 2 * math.pi
-        local phi = math.acos(2 * math.random() - 1) -- Random elevation
-
-        local direction = Vector3.new(
-            radius * math.sin(phi) * math.cos(theta),
-            radius * math.sin(phi) * math.sin(theta),
-            radius * math.cos(phi)
-        )
-
-        local raycastParams = config:toRaycastParams()
-        local result = workspace:Raycast(center, direction, raycastParams)
-
-        if result and not objectSet[result.Instance] then
-            objectSet[result.Instance] = true
-            table.insert(objects, {
-                object = result.Instance,
-                distance = result.Distance,
-                position = result.Position,
-                normal = result.Normal
-            })
-        end
-    end
-
-    return objects
-end
-
--- Estimate object thickness (helper function)
-function ModernRaycastSystem:estimateThickness(part)
-    if not part or not part:IsA("BasePart") then
-        return 0.5
-    end
-
-    local size = part.Size
-    local avgSize = (size.X + size.Y + size.Z) / 3
-    return math.min(avgSize * 0.3, 5) -- Cap at 5 studs
-end
-
--- Create config for weapon firing
-function ModernRaycastSystem:createWeaponConfig(player, weapon, viewmodel)
+-- Quick raycast for simple hit detection
+function ModernRaycastSystem:quickCast(origin, direction, maxDistance)
     local config = self:createConfig()
-
-    -- Exclude player character
-    if player and player.Character then
-        config:addToExcludeList(player.Character)
-    end
-
-    -- Exclude viewmodel
-    if viewmodel and viewmodel.container then
-        config:addToExcludeList(viewmodel.container)
-    end
-
-    -- Exclude weapon if it's separate
-    if weapon then
-        config:addToExcludeList(weapon)
-    end
-
-    return config
+    local rayDirection = direction.Unit * (maxDistance or 1000)
+    return self:cast(origin, rayDirection, config)
 end
 
--- Create config for player detection (for AI or hit detection)
-function ModernRaycastSystem:createPlayerDetectionConfig(excludePlayers)
+-- Raycast with custom filter
+function ModernRaycastSystem:customCast(origin, direction, maxDistance, includeList, excludeList)
     local config = RaycastConfig.new()
 
-    -- Include only players
-    local playerCharacters = {}
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character and not table.find(excludePlayers or {}, player) then
-            table.insert(playerCharacters, player.Character)
-        end
+    if includeList and #includeList > 0 then
+        config:setIncludeFilter(includeList)
+    elseif excludeList and #excludeList > 0 then
+        config:setExcludeFilter(excludeList)
+    else
+        config:setExcludeFilter(self.defaultExcludes)
     end
 
-    config:setIncludeFilter(playerCharacters)
-    return config
+    local rayDirection = direction.Unit * (maxDistance or 1000)
+    return self:cast(origin, rayDirection, config)
 end
 
--- Create config for environment only (exclude all players and their objects)
-function ModernRaycastSystem:createEnvironmentConfig()
-    local config = self:createConfig()
-
-    -- Exclude all player characters
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character then
-            config:addToExcludeList(player.Character)
-        end
-    end
-
-    return config
-end
-
--- Update default excludes (call when player spawns)
-function ModernRaycastSystem:updateDefaultExcludes()
+-- Cleanup
+function ModernRaycastSystem:cleanup()
     self.defaultExcludes = {}
-    self:addDefaultExcludes()
+    self.player = nil
 end
 
--- Utility: Create exclude config from list
-function ModernRaycastSystem.createExcludeConfig(excludeList)
+-- Create global raycast function for backward compatibility
+_G.ModernRaycast = function(origin, direction, maxDistance, includeList, excludeList, respectCanCollide)
+    local system = ModernRaycastSystem.new()
     local config = RaycastConfig.new()
-    config:setExcludeFilter(excludeList)
-    return config
-end
 
--- Utility: Create include config from list
-function ModernRaycastSystem.createIncludeConfig(includeList)
-    local config = RaycastConfig.new()
-    config:setIncludeFilter(includeList)
-    return config
-end
+    if includeList and #includeList > 0 then
+        config:setIncludeFilter(includeList)
+    elseif excludeList and #excludeList > 0 then
+        config:setExcludeFilter(excludeList)
+    else
+        config:setExcludeFilter(system.defaultExcludes)
+    end
 
--- Export classes
-ModernRaycastSystem.RaycastConfig = RaycastConfig
+    if respectCanCollide ~= nil then
+        config.respectCanCollide = respectCanCollide
+    end
+
+    local rayDirection = direction.Unit * (maxDistance or 1000)
+    return system:cast(origin, rayDirection, config)
+end
 
 return ModernRaycastSystem
