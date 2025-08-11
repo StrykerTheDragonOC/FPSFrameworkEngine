@@ -781,7 +781,7 @@ function GrenadeSystem:createGrenadeUI()
     instructions.Size = UDim2.new(1, 0, 0.2, 0)
     instructions.Position = UDim2.new(0, 0, 0.8, 0)
     instructions.BackgroundTransparency = 1
-    instructions.Text = "Hold to cook • G for quick throw"
+    instructions.Text = "Hold to cook ï¿½ G for quick throw"
     instructions.TextColor3 = Color3.fromRGB(180, 180, 180)
     instructions.TextScaled = true
     instructions.Font = Enum.Font.SourceSans
