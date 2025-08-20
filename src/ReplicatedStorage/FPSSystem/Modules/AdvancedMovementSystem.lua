@@ -41,10 +41,17 @@ local MOVEMENT_CONFIG = {
     LEAN_ANGLE = 15, -- degrees
     LEAN_SPEED = 0.2,
 
+    -- Ledge grabbing settings
+    LEDGE_GRAB_DISTANCE = 6,
+    LEDGE_GRAB_HEIGHT = 15,
+    LEDGE_HOLD_TIME = 5, -- seconds before auto-drop
+    LEDGE_CLIMB_FORCE = 80,
+
     -- Stamina settings
     MAX_STAMINA = 100,
     SPRINT_STAMINA_DRAIN = 20, -- per second
     DIVE_STAMINA_COST = 30,
+    LEDGE_CLIMB_STAMINA_COST = 20,
     STAMINA_REGEN_RATE = 25 -- per second when not sprinting
 }
 
@@ -55,7 +62,8 @@ local MovementState = {
     CROUCHING = "CROUCHING",
     PRONE = "PRONE",
     SLIDING = "SLIDING",
-    DIVING = "DIVING"
+    DIVING = "DIVING",
+    LEDGE_GRABBING = "LEDGE_GRABBING"
 }
 
 function AdvancedMovementSystem.new()
@@ -85,6 +93,14 @@ function AdvancedMovementSystem.new()
     self.slideBodyVelocity = nil
     self.slideConnection = nil
 
+    -- Ledge grabbing state
+    self.isLedgeGrabbing = false
+    self.ledgePosition = nil
+    self.ledgeNormal = nil
+    self.ledgeGrabTime = 0
+    self.ledgeBodyPosition = nil
+    self.ledgeConnection = nil
+
     -- Leaning state
     self.leanDirection = 0 -- -1 for left, 1 for right, 0 for center
     self.currentLeanAngle = 0
@@ -112,6 +128,9 @@ function AdvancedMovementSystem:initialize()
 
     -- Setup stamina system
     self:setupStaminaSystem()
+
+    -- Setup ledge detection system
+    self:setupLedgeDetection()
 
     print("[AdvancedMovement] Advanced Movement System initialized")
 end
@@ -562,6 +581,139 @@ function AdvancedMovementSystem:canPerformAction(staminaCost)
     return self.stamina >= staminaCost
 end
 
+-- Setup ledge detection system
+function AdvancedMovementSystem:setupLedgeDetection()
+    self.ledgeConnection = RunService.Heartbeat:Connect(function()
+        self:checkForLedgeGrab()
+        self:updateLedgeGrab()
+    end)
+end
+
+-- Check for ledge grabbing opportunity
+function AdvancedMovementSystem:checkForLedgeGrab()
+    if not self.rootPart or not self.humanoid then return end
+    
+    -- Only check when falling and not already ledge grabbing
+    if self.isLedgeGrabbing or self.isDiving or self.isSliding then return end
+    
+    local humanoidState = self.humanoid:GetState()
+    if humanoidState ~= Enum.HumanoidStateType.Freefall then return end
+    
+    -- Cast rays to detect ledges
+    local origin = self.rootPart.Position
+    local direction = self.rootPart.CFrame.LookVector * MOVEMENT_CONFIG.LEDGE_GRAB_DISTANCE
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {self.character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+    -- Cast forward ray to detect wall
+    local forwardRay = workspace:Raycast(origin, direction, raycastParams)
+    if not forwardRay then return end
+    
+    -- Cast downward ray from above the wall to find ledge
+    local wallTop = forwardRay.Position + Vector3.new(0, MOVEMENT_CONFIG.LEDGE_GRAB_HEIGHT, 0)
+    local downRay = workspace:Raycast(wallTop, Vector3.new(0, -MOVEMENT_CONFIG.LEDGE_GRAB_HEIGHT * 1.5, 0), raycastParams)
+    
+    -- If no downward hit or hit is far enough, we found a ledge
+    if not downRay or (wallTop.Y - downRay.Position.Y) > MOVEMENT_CONFIG.LEDGE_GRAB_HEIGHT * 0.8 then
+        self:startLedgeGrab(forwardRay.Position, forwardRay.Normal)
+    end
+end
+
+-- Start ledge grabbing
+function AdvancedMovementSystem:startLedgeGrab(ledgePosition, ledgeNormal)
+    if self.isLedgeGrabbing then return end
+    
+    print("[AdvancedMovement] Ledge grab started")
+    
+    self.isLedgeGrabbing = true
+    self.currentState = MovementState.LEDGE_GRABBING
+    self.ledgePosition = ledgePosition
+    self.ledgeNormal = ledgeNormal
+    self.ledgeGrabTime = tick()
+    
+    -- Stop falling and position at ledge
+    self.ledgeBodyPosition = Instance.new("BodyPosition")
+    self.ledgeBodyPosition.MaxForce = Vector3.new(4000, 4000, 4000)
+    self.ledgeBodyPosition.Position = ledgePosition - ledgeNormal * 2 + Vector3.new(0, -3, 0)
+    self.ledgeBodyPosition.Parent = self.rootPart
+    
+    -- Stop rotation
+    local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+    bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+    bodyAngularVelocity.MaxTorque = Vector3.new(4000, 4000, 4000)
+    bodyAngularVelocity.Parent = self.rootPart
+    
+    -- Set humanoid state
+    self.humanoid.PlatformStand = true
+end
+
+-- Update ledge grab (handle auto-drop)
+function AdvancedMovementSystem:updateLedgeGrab()
+    if not self.isLedgeGrabbing then return end
+    
+    -- Auto-drop after hold time
+    if tick() - self.ledgeGrabTime >= MOVEMENT_CONFIG.LEDGE_HOLD_TIME then
+        self:endLedgeGrab()
+    end
+end
+
+-- Climb up from ledge (call this when space is pressed during ledge grab)
+function AdvancedMovementSystem:climbUpFromLedge()
+    if not self.isLedgeGrabbing then return end
+    
+    -- Check stamina
+    if self.stamina < MOVEMENT_CONFIG.LEDGE_CLIMB_STAMINA_COST then
+        print("[AdvancedMovement] Not enough stamina to climb")
+        return
+    end
+    
+    print("[AdvancedMovement] Climbing up from ledge")
+    
+    -- Consume stamina
+    self.stamina = math.max(0, self.stamina - MOVEMENT_CONFIG.LEDGE_CLIMB_STAMINA_COST)
+    
+    -- Apply upward and forward force
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+    bodyVelocity.Velocity = self.rootPart.CFrame.LookVector * 20 + Vector3.new(0, MOVEMENT_CONFIG.LEDGE_CLIMB_FORCE, 0)
+    bodyVelocity.Parent = self.rootPart
+    
+    -- Clean up after a short time
+    game:GetService("Debris"):AddItem(bodyVelocity, 0.5)
+    
+    self:endLedgeGrab()
+end
+
+-- End ledge grabbing (drop or climb up)
+function AdvancedMovementSystem:endLedgeGrab()
+    if not self.isLedgeGrabbing then return end
+    
+    print("[AdvancedMovement] Ledge grab ended")
+    
+    self.isLedgeGrabbing = false
+    self.currentState = MovementState.WALKING
+    self.humanoid.PlatformStand = false
+    
+    -- Clean up body movers
+    if self.ledgeBodyPosition then
+        self.ledgeBodyPosition:Destroy()
+        self.ledgeBodyPosition = nil
+    end
+    
+    for _, obj in ipairs(self.rootPart:GetChildren()) do
+        if obj:IsA("BodyAngularVelocity") then
+            obj:Destroy()
+        end
+    end
+    
+    -- Reset ledge data
+    self.ledgePosition = nil
+    self.ledgeNormal = nil
+    self.ledgeGrabTime = 0
+end
+
 -- Cleanup
 function AdvancedMovementSystem:cleanup()
     print("[AdvancedMovement] Cleaning up Advanced Movement System...")
@@ -570,11 +722,18 @@ function AdvancedMovementSystem:cleanup()
     self:stopDiving()
     self:stopSliding()
     self:stopLeaning()
+    self:endLedgeGrab()
 
     -- Disconnect stamina connection
     if self.staminaConnection then
         self.staminaConnection:Disconnect()
         self.staminaConnection = nil
+    end
+
+    -- Disconnect ledge connection
+    if self.ledgeConnection then
+        self.ledgeConnection:Disconnect()
+        self.ledgeConnection = nil
     end
 
     -- Disconnect stance connections

@@ -1,6 +1,6 @@
 return {
 	port = 27843,
-	startAutomatically = false,
+	startAutomatically = true,
 	exclude = {
 		-- game:GetService("Workspace")
 	}

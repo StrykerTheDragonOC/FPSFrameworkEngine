@@ -107,8 +107,9 @@ function AdvancedSoundSystem.setupVolumeControls()
     -- Make MainVolume accessible globally for other scripts
     _G.MainVolume = MainVolume
 
-    -- Set master volume (this was the missing reference causing the bug)
-    SoundService.MasterVolume = MainVolume.master
+    -- Note: SoundService doesn't have a MasterVolume property in Roblox
+    -- We'll handle master volume through our own system instead
+    -- SoundService.MasterVolume = MainVolume.master
 
     -- Update sound group volumes
     for category, group in pairs(soundGroups) do
@@ -253,11 +254,31 @@ function AdvancedSoundSystem.playAmbientSound(soundId, loop, volume, pitch)
     return sound
 end
 
+-- Update all volume groups based on current settings
+function AdvancedSoundSystem.updateAllVolumeGroups()
+    for category, group in pairs(soundGroups) do
+        if category == SOUND_CATEGORIES.WEAPON then
+            group.Volume = MainVolume.weapon * MainVolume.master
+        elseif category == SOUND_CATEGORIES.EFFECT then
+            group.Volume = MainVolume.effect * MainVolume.master
+        elseif category == SOUND_CATEGORIES.AMBIENT then
+            group.Volume = MainVolume.ambient * MainVolume.master
+        elseif category == SOUND_CATEGORIES.UI then
+            group.Volume = MainVolume.ui * MainVolume.master
+        elseif category == SOUND_CATEGORIES.VOICE then
+            group.Volume = MainVolume.voice * MainVolume.master
+        end
+    end
+end
+
 -- Update master volume
 function AdvancedSoundSystem.setMasterVolume(volume)
     MainVolume.master = math.clamp(volume, 0, 1)
-    SoundService.MasterVolume = MainVolume.master
+    -- Note: Handle master volume through sound groups instead of SoundService.MasterVolume
     _G.MainVolume.master = MainVolume.master
+    
+    -- Update all sound groups with new master volume
+    AdvancedSoundSystem.updateAllVolumeGroups()
 end
 
 -- Update category volume
@@ -340,32 +361,32 @@ function AdvancedSoundSystem.getSoundLibrary()
     return {
         -- Weapon sounds
         weapons = {
-            pistol_fire = "rbxassetid://131961136",
-            rifle_fire = "rbxassetid://4759267374",
-            sniper_fire = "rbxassetid://1369158",
-            shotgun_fire = "rbxassetid://132373574",
-            reload_mag = "rbxassetid://799954844",
-            empty_click = "rbxassetid://91170486",
-            bolt_action = "rbxassetid://133084065"
+            pistol_fire = "rbxassetid://0",
+            rifle_fire = "rbxassetid://0",
+            sniper_fire = "rbxassetid://0",
+            shotgun_fire = "rbxassetid://0",
+            reload_mag = "rbxassetid://0",
+            empty_click = "rbxassetid://0",
+            bolt_action = "rbxassetid://0"
         },
 
         -- Effect sounds
         effects = {
-            explosion = "rbxassetid://133084089",
-            metal_impact = "rbxassetid://142082167",
-            bullet_whizz = "rbxassetid://133084093",
-            ricochet = "rbxassetid://133084095",
-            footstep = "rbxassetid://131961136",
-            grenade_bounce = "rbxassetid://142082167"
+            explosion = "rbxassetid://0",
+            metal_impact = "rbxassetid://0",
+            bullet_whizz = "rbxassetid://0",
+            ricochet = "rbxassetid://0",
+            footstep = "rbxassetid://0",
+            grenade_bounce = "rbxassetid://0"
         },
 
         -- UI sounds
         ui = {
-            button_click = "rbxassetid://131961136",
-            menu_open = "rbxassetid://133084065",
-            menu_close = "rbxassetid://133084069",
-            notification = "rbxassetid://133084089",
-            error = "rbxassetid://142082167"
+            button_click = "rbxassetid://0",
+            menu_open = "rbxassetid://0",
+            menu_close = "rbxassetid://0",
+            notification = "rbxassetid://0",
+            error = "rbxassetid://0"
         }
     }
 end
