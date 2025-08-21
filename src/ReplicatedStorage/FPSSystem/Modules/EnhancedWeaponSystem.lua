@@ -13,8 +13,8 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Module dependencies (using standard naming, not "Advanced")
 local WeaponConfig = require(script.Parent.WeaponConfig)
-local MeleeSystem = require(script.Parent.MeleeSystem) -- Renamed from AdvancedMeleeSystem
-local GrenadeSystem = require(script.Parent.GrenadeSystem) -- Renamed from AdvancedGrenadeSystem
+local MeleeSystem = require(script.Parent.ComprehensiveMeleeSystem) -- Updated to comprehensive version
+local GrenadeSystem = require(script.Parent.ComprehensiveGrenadeSystem) -- Updated to comprehensive version
 
 -- Constants
 local WEAPON_SLOTS = {"PRIMARY", "SECONDARY", "MELEE", "GRENADE"}
@@ -100,28 +100,34 @@ end
 function EnhancedWeaponSystem:initializeSubSystems()
     print("[WeaponSystem] Initializing sub-systems...")
 
-    -- Initialize MeleeSystem (renamed from AdvancedMeleeSystem)
+    -- Initialize ComprehensiveMeleeSystem
     local meleeSuccess, meleeResult = pcall(function()
-        self.meleeSystem = MeleeSystem.new()
+        self.meleeSystem = MeleeSystem
+        if MeleeSystem.init then
+            MeleeSystem:init()
+        end
         return true
     end)
 
     if meleeSuccess then
-        print("[WeaponSystem] MeleeSystem initialized successfully")
+        print("[WeaponSystem] ComprehensiveMeleeSystem initialized successfully")
     else
-        warn("[WeaponSystem] Failed to initialize MeleeSystem:", meleeResult)
+        warn("[WeaponSystem] Failed to initialize ComprehensiveMeleeSystem:", meleeResult)
     end
 
-    -- Initialize GrenadeSystem (renamed from AdvancedGrenadeSystem)
+    -- Initialize ComprehensiveGrenadeSystem  
     local grenadeSuccess, grenadeResult = pcall(function()
-        self.grenadeSystem = GrenadeSystem.new()
+        self.grenadeSystem = GrenadeSystem
+        if GrenadeSystem.init then
+            GrenadeSystem:init()
+        end
         return true
     end)
 
     if grenadeSuccess then
-        print("[WeaponSystem] GrenadeSystem initialized successfully")
+        print("[WeaponSystem] ComprehensiveGrenadeSystem initialized successfully")
     else
-        warn("[WeaponSystem] Failed to initialize GrenadeSystem:", grenadeResult)
+        warn("[WeaponSystem] Failed to initialize ComprehensiveGrenadeSystem:", grenadeResult)
     end
 end
 

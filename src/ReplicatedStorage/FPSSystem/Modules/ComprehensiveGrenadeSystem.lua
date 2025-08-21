@@ -177,30 +177,30 @@ local GRENADE_TYPES = {
 local activeGrenades = {}
 local playerGrenadeData = {}
 
-function ComprehensiveGrenadeSystem:init()
+function ComprehensiveGrenadeSystem.init()
     print("[ComprehensiveGrenadeSystem] Initializing comprehensive grenade system...")
     
     -- Initialize player data
     Players.PlayerAdded:Connect(function(player)
-        self:initializePlayerData(player)
+        ComprehensiveGrenadeSystem.initializePlayerData(player)
     end)
     
     -- Handle existing players
     for _, player in pairs(Players:GetPlayers()) do
-        self:initializePlayerData(player)
+        ComprehensiveGrenadeSystem.initializePlayerData(player)
     end
     
     -- Setup remote events
-    self:setupRemoteEvents()
+    ComprehensiveGrenadeSystem.setupRemoteEvents()
     
     -- Start update loop for cooking grenades
-    self:startUpdateLoop()
+    ComprehensiveGrenadeSystem.startUpdateLoop()
     
     print("[ComprehensiveGrenadeSystem] System initialized")
     return true
 end
 
-function ComprehensiveGrenadeSystem:initializePlayerData(player)
+function ComprehensiveGrenadeSystem.initializePlayerData(player)
     playerGrenadeData[player.UserId] = {
         inventory = {
             FragGrenade = 3,
@@ -236,7 +236,7 @@ function ComprehensiveGrenadeSystem:throwGrenade(player, grenadeType, throwDirec
     playerData.inventory[grenadeType] = playerData.inventory[grenadeType] - 1
     
     -- Create grenade object
-    local grenade = self:createGrenadeObject(grenadeType, config)
+    local grenade = ComprehensiveGrenadeSystem.createGrenadeObject(grenadeType, config)
     if not grenade then return false end
     
     -- Position grenade
@@ -246,7 +246,7 @@ function ComprehensiveGrenadeSystem:throwGrenade(player, grenadeType, throwDirec
     end
     
     -- Apply physics
-    self:applyGrenadePhysics(grenade, config, throwDirection)
+    ComprehensiveGrenadeSystem.applyGrenadePhysics(grenade, config, throwDirection)
     
     -- Start fuse timer (reduced by cook time)
     local fuseTime = math.max(0.1, config.FuseTime - (cookTime or 0))
@@ -266,7 +266,7 @@ function ComprehensiveGrenadeSystem:throwGrenade(player, grenadeType, throwDirec
     task.spawn(function()
         task.wait(fuseTime)
         if activeGrenades[grenade] then
-            self:detonateGrenade(grenadeData)
+            ComprehensiveGrenadeSystem.detonateGrenade(grenadeData)
         end
     end)
     
@@ -311,7 +311,7 @@ function ComprehensiveGrenadeSystem:createGrenadeObject(grenadeType, config)
         end
         
         -- Play bounce sound
-        self:playSound("Bounce", grenade.Position)
+        ComprehensiveGrenadeSystem.playSound("Bounce", grenade.Position)
     end
     
     grenade.Touched:Connect(onTouched)
@@ -345,13 +345,13 @@ function ComprehensiveGrenadeSystem:detonateGrenade(grenadeData)
     activeGrenades[grenade] = nil
     
     -- Create explosion effects
-    self:createExplosionEffects(position, config)
+    ComprehensiveGrenadeSystem.createExplosionEffects(position, config)
     
     -- Apply damage and special effects
-    self:applyGrenadeEffects(position, config, grenadeData.thrower)
+    ComprehensiveGrenadeSystem.applyGrenadeEffects(position, config, grenadeData.thrower)
     
     -- Play explosion sound
-    self:playSound("Explosion", position, config.Sounds.Explosion)
+    ComprehensiveGrenadeSystem.playSound("Explosion", position, config.Sounds.Explosion)
     
     -- Remove grenade object
     grenade:Destroy()
@@ -369,15 +369,15 @@ function ComprehensiveGrenadeSystem:createExplosionEffects(position, config)
     
     -- Create specific effects based on grenade type
     if config.Effects.SmokeColor then
-        self:createSmokeEffect(position, config)
+        ComprehensiveGrenadeSystem.createSmokeEffect(position, config)
     end
     
     if config.Effects.FireColor then
-        self:createFireEffect(position, config)
+        ComprehensiveGrenadeSystem.createFireEffect(position, config)
     end
     
     if config.Effects.FlashIntensity then
-        self:createFlashEffect(position, config)
+        ComprehensiveGrenadeSystem.createFlashEffect(position, config)
     end
 end
 
@@ -442,7 +442,7 @@ function ComprehensiveGrenadeSystem:createFireEffect(position, config)
     task.spawn(function()
         for i = 1, config.Effects.FireDuration or 10 do
             task.wait(1)
-            self:applyFireDamage(position, config)
+            ComprehensiveGrenadeSystem.applyFireDamage(position, config)
         end
     end)
     
@@ -474,24 +474,24 @@ function ComprehensiveGrenadeSystem:createFlashEffect(position, config)
 end
 
 function ComprehensiveGrenadeSystem:applyGrenadeEffects(position, config, thrower)
-    local playersInRange = self:getPlayersInRange(position, config.Damage.MaxRadius)
+    local playersInRange = ComprehensiveGrenadeSystem.getPlayersInRange(position, config.Damage.MaxRadius)
     
     for _, player in pairs(playersInRange) do
-        local distance = self:getDistanceToPlayer(position, player)
+        local distance = ComprehensiveGrenadeSystem.getDistanceToPlayer(position, player)
         
         if distance <= config.Damage.DamageRadius then
             -- Apply main damage
-            local damage = self:calculateDamage(distance, config.Damage)
-            self:applyDamage(player, damage, thrower)
+            local damage = ComprehensiveGrenadeSystem.calculateDamage(distance, config.Damage)
+            ComprehensiveGrenadeSystem.applyDamage(player, damage, thrower)
         end
         
         -- Apply special effects based on grenade type
         if config.Effects.FlashDuration and distance <= (config.Effects.BlindRadius or 25) then
-            self:applyFlashEffect(player, config.Effects)
+            ComprehensiveGrenadeSystem.applyFlashEffect(player, config.Effects)
         end
         
         if config.Effects.StunDuration and distance <= (config.Effects.ShockwaveRadius or 30) then
-            self:applyStunEffect(player, config.Effects)
+            ComprehensiveGrenadeSystem.applyStunEffect(player, config.Effects)
         end
     end
 end
@@ -516,7 +516,7 @@ function ComprehensiveGrenadeSystem:startCooking(player, grenadeType)
     }
     
     -- Play pin pull sound
-    self:playSound("Pin", player.Character and player.Character.HumanoidRootPart.Position, config.Sounds.Pin)
+    ComprehensiveGrenadeSystem.playSound("Pin", player.Character and player.Character.HumanoidRootPart.Position, config.Sounds.Pin)
     
     print("[ComprehensiveGrenadeSystem]", player.Name, "started cooking", grenadeType)
     return true
@@ -550,7 +550,7 @@ function ComprehensiveGrenadeSystem:calculateDamage(distance, damageConfig)
     return 0
 end
 
-function ComprehensiveGrenadeSystem:setupRemoteEvents()
+function ComprehensiveGrenadeSystem.setupRemoteEvents()
     local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
     if not fpsSystem then return end
     
@@ -558,27 +558,25 @@ function ComprehensiveGrenadeSystem:setupRemoteEvents()
     if not remoteEvents then return end
     
     -- Create grenade remote events
-    local throwGrenadeEvent = Instance.new("RemoteEvent")
-    throwGrenadeEvent.Name = "ThrowGrenade"
-    throwGrenadeEvent.Parent = remoteEvents
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
     
-    local cookGrenadeEvent = Instance.new("RemoteEvent")
-    cookGrenadeEvent.Name = "CookGrenade"
-    cookGrenadeEvent.Parent = remoteEvents
+    local throwGrenadeEvent = RemoteEventsManager.getOrCreateRemoteEvent("ThrowGrenade", "Grenade throwing")
+    local cookGrenadeEvent = RemoteEventsManager.getOrCreateRemoteEvent("CookGrenade", "Grenade cooking")
     
     -- Handle remote events on server
     if RunService:IsServer() then
         throwGrenadeEvent.OnServerEvent:Connect(function(player, grenadeType, throwDirection, cookTime)
-            self:throwGrenade(player, grenadeType, throwDirection, cookTime)
+            ComprehensiveGrenadeSystem.throwGrenade(player, grenadeType, throwDirection, cookTime)
         end)
         
         cookGrenadeEvent.OnServerEvent:Connect(function(player, grenadeType)
-            self:startCooking(player, grenadeType)
+            ComprehensiveGrenadeSystem.startCooking(player, grenadeType)
         end)
     end
 end
 
-function ComprehensiveGrenadeSystem:startUpdateLoop()
+function ComprehensiveGrenadeSystem.startUpdateLoop()
     RunService.Heartbeat:Connect(function()
         -- Update cooking grenades
         for userId, playerData in pairs(playerGrenadeData) do
@@ -592,7 +590,7 @@ function ComprehensiveGrenadeSystem:startUpdateLoop()
                     if player and player.Character then
                         print("[ComprehensiveGrenadeSystem] Grenade exploded in", player.Name, "'s hand!")
                         -- Apply damage to player who cooked too long
-                        self:applyDamage(player, 100, player)
+                        ComprehensiveGrenadeSystem.applyDamage(player, 100, player)
                         playerData.cooking = nil
                     end
                 end

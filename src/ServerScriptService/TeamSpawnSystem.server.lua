@@ -29,27 +29,27 @@ TeamSpawnSystem.teams = {}
 TeamSpawnSystem.spawnLocations = {FBI = {}, KFC = {}}
 TeamSpawnSystem.teamBalance = {FBI = 0, KFC = 0}
 
-function TeamSpawnSystem:initialize()
+function TeamSpawnSystem.initialize()
     print("[TeamSpawnSystem] Initializing team spawn system...")
     
     -- Create teams
-    self:createTeams()
+    TeamSpawnSystem.createTeams()
     
     -- Load spawn locations
-    self:loadSpawnLocations()
+    TeamSpawnSystem.loadSpawnLocations()
     
     -- Create remote events for client communication
-    self:createRemoteEvents()
+    TeamSpawnSystem.createRemoteEvents()
     
     -- Setup player connections
-    self:setupPlayerConnections()
+    TeamSpawnSystem.setupPlayerConnections()
     
     print("[TeamSpawnSystem] Team spawn system initialized")
     print(string.format("[TeamSpawnSystem] Loaded %d FBI spawns, %d KFC spawns", 
-        #self.spawnLocations.FBI, #self.spawnLocations.KFC))
+        #TeamSpawnSystem.spawnLocations.FBI, #TeamSpawnSystem.spawnLocations.KFC))
 end
 
-function TeamSpawnSystem:createTeams()
+function TeamSpawnSystem.createTeams()
     -- Remove existing teams with same names
     for _, team in pairs(Teams:GetChildren()) do
         if team.Name == "FBI" or team.Name == "KFC" then
@@ -74,13 +74,13 @@ function TeamSpawnSystem:createTeams()
     -- Wait for teams to be properly parented before storing references
     wait()
     
-    self.teams.FBI = fbiTeam
-    self.teams.KFC = kfcTeam
+    TeamSpawnSystem.teams.FBI = fbiTeam
+    TeamSpawnSystem.teams.KFC = kfcTeam
     
     print("[TeamSpawnSystem] Teams created: FBI and KFC")
 end
 
-function TeamSpawnSystem:createRemoteEvents()
+function TeamSpawnSystem.createRemoteEvents()
     -- Ensure FPSSystem folder exists
     local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
     if not fpsSystem then
@@ -97,57 +97,50 @@ function TeamSpawnSystem:createRemoteEvents()
         remoteEventsFolder.Parent = fpsSystem
     end
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     -- Create PreventAutoSpawn remote event
-    local preventAutoSpawnEvent = remoteEventsFolder:FindFirstChild("PreventAutoSpawn")
-    if not preventAutoSpawnEvent then
-        preventAutoSpawnEvent = Instance.new("RemoteEvent")
-        preventAutoSpawnEvent.Name = "PreventAutoSpawn"
-        preventAutoSpawnEvent.Parent = remoteEventsFolder
-        
-        -- Handle the remote event
-        preventAutoSpawnEvent.OnServerEvent:Connect(function(player)
-            self:preventPlayerAutoSpawn(player)
-        end)
-    end
+    local preventAutoSpawnEvent = RemoteEventsManager.getOrCreateRemoteEvent("PreventAutoSpawn", "Prevent automatic player spawning")
+    
+    -- Handle the remote event
+    preventAutoSpawnEvent.OnServerEvent:Connect(function(player)
+        TeamSpawnSystem.preventPlayerAutoSpawn(player)
+    end)
     
     -- Create ManualSpawn remote event
-    local manualSpawnEvent = remoteEventsFolder:FindFirstChild("ManualSpawn")
-    if not manualSpawnEvent then
-        manualSpawnEvent = Instance.new("RemoteEvent")
-        manualSpawnEvent.Name = "ManualSpawn"
-        manualSpawnEvent.Parent = remoteEventsFolder
+    local manualSpawnEvent = RemoteEventsManager.getOrCreateRemoteEvent("ManualSpawn", "Manual player spawning")
         
         -- Handle manual spawn requests
         manualSpawnEvent.OnServerEvent:Connect(function(player)
-            self:manualSpawnPlayer(player)
+            TeamSpawnSystem.manualSpawnPlayer(player)
         end)
-    end
     
     print("[TeamSpawnSystem] Remote events created")
 end
 
-function TeamSpawnSystem:preventPlayerAutoSpawn(player)
+function TeamSpawnSystem.preventPlayerAutoSpawn(player)
     -- Alternative approach: destroy character and track manual spawn requests
     if player.Character then
         player.Character:Destroy()
     end
     
     -- Store player as requiring manual spawn
-    if not self.manualSpawnPlayers then
-        self.manualSpawnPlayers = {}
+    if not TeamSpawnSystem.manualSpawnPlayers then
+        TeamSpawnSystem.manualSpawnPlayers = {}
     end
-    self.manualSpawnPlayers[player.UserId] = true
+    TeamSpawnSystem.manualSpawnPlayers[player.UserId] = true
     
     print("[TeamSpawnSystem] Manual spawn mode enabled for player:", player.Name)
 end
 
-function TeamSpawnSystem:manualSpawnPlayer(player)
+function TeamSpawnSystem.manualSpawnPlayer(player)
     -- Always allow manual spawn (remove the check that was causing issues)
     print("[TeamSpawnSystem] Manual spawn requested for player:", player.Name)
     
     -- Remove from manual spawn mode if they were in it
-    if self.manualSpawnPlayers then
-        self.manualSpawnPlayers[player.UserId] = nil
+    if TeamSpawnSystem.manualSpawnPlayers then
+        TeamSpawnSystem.manualSpawnPlayers[player.UserId] = nil
     end
     
     -- Spawn the player
@@ -156,7 +149,7 @@ function TeamSpawnSystem:manualSpawnPlayer(player)
     print("[TeamSpawnSystem] Manual spawn completed for player:", player.Name)
 end
 
-function TeamSpawnSystem:loadSpawnLocations()
+function TeamSpawnSystem.loadSpawnLocations()
     -- Find spawn locations in workspace
     local spawnsFolder = Workspace:FindFirstChild("Map")
     if spawnsFolder then
@@ -173,7 +166,7 @@ function TeamSpawnSystem:loadSpawnLocations()
     if fbiFolder then
         for _, spawn in pairs(fbiFolder:GetChildren()) do
             if spawn:IsA("SpawnLocation") or spawn:IsA("Part") then
-                table.insert(self.spawnLocations.FBI, spawn)
+                table.insert(TeamSpawnSystem.spawnLocations.FBI, spawn)
             end
         end
     else
@@ -185,7 +178,7 @@ function TeamSpawnSystem:loadSpawnLocations()
     if kfcFolder then
         for _, spawn in pairs(kfcFolder:GetChildren()) do
             if spawn:IsA("SpawnLocation") or spawn:IsA("Part") then
-                table.insert(self.spawnLocations.KFC, spawn)
+                table.insert(TeamSpawnSystem.spawnLocations.KFC, spawn)
             end
         end
     else
@@ -193,18 +186,18 @@ function TeamSpawnSystem:loadSpawnLocations()
     end
     
     -- Ensure we have spawn locations
-    if #self.spawnLocations.FBI == 0 then
+    if #TeamSpawnSystem.spawnLocations.FBI == 0 then
         warn("[TeamSpawnSystem] No FBI spawn locations found!")
-        self:createDefaultSpawns("FBI", Vector3.new(0, 10, 0))
+        TeamSpawnSystem.createDefaultSpawns("FBI", Vector3.new(0, 10, 0))
     end
     
-    if #self.spawnLocations.KFC == 0 then
+    if #TeamSpawnSystem.spawnLocations.KFC == 0 then
         warn("[TeamSpawnSystem] No KFC spawn locations found!")
-        self:createDefaultSpawns("KFC", Vector3.new(50, 10, 0))
+        TeamSpawnSystem.createDefaultSpawns("KFC", Vector3.new(50, 10, 0))
     end
 end
 
-function TeamSpawnSystem:createDefaultSpawns(teamName, basePosition)
+function TeamSpawnSystem.createDefaultSpawns(teamName, basePosition)
     print(string.format("[TeamSpawnSystem] Creating default spawns for %s at %s", teamName, tostring(basePosition)))
     
     for i = 1, 8 do
@@ -216,45 +209,45 @@ function TeamSpawnSystem:createDefaultSpawns(teamName, basePosition)
         spawn.Material = Enum.Material.Neon
         spawn.Anchored = true
         spawn.CanCollide = false
-        spawn.TeamColor = self.teams[teamName].TeamColor
+        spawn.TeamColor = TeamSpawnSystem.teams[teamName].TeamColor
         spawn.Parent = Workspace
         
-        table.insert(self.spawnLocations[teamName], spawn)
+        table.insert(TeamSpawnSystem.spawnLocations[teamName], spawn)
     end
 end
 
-function TeamSpawnSystem:setupPlayerConnections()
+function TeamSpawnSystem.setupPlayerConnections()
     -- Handle player joining
     Players.PlayerAdded:Connect(function(player)
-        self:onPlayerAdded(player)
+        TeamSpawnSystem.onPlayerAdded(player)
     end)
     
     -- Handle existing players
     for _, player in pairs(Players:GetPlayers()) do
-        self:onPlayerAdded(player)
+        TeamSpawnSystem.onPlayerAdded(player)
     end
     
     -- Handle player leaving
     Players.PlayerRemoving:Connect(function(player)
-        self:onPlayerLeaving(player)
+        TeamSpawnSystem.onPlayerLeaving(player)
     end)
 end
 
-function TeamSpawnSystem:onPlayerAdded(player)
+function TeamSpawnSystem.onPlayerAdded(player)
     print("[TeamSpawnSystem] Player joined:", player.Name)
     
     -- Assign team on spawn
     player.CharacterAdded:Connect(function(character)
         -- Check if player is in manual spawn mode
-        if self.manualSpawnPlayers and self.manualSpawnPlayers[player.UserId] then
+        if TeamSpawnSystem.manualSpawnPlayers and TeamSpawnSystem.manualSpawnPlayers[player.UserId] then
             print("[TeamSpawnSystem] Player in manual spawn mode, skipping auto-spawn:", player.Name)
             return
         end
         
         -- Small delay to ensure character is fully loaded
         task.wait(0.1)
-        self:assignPlayerTeam(player)
-        self:spawnPlayerOnTeam(player, character)
+        TeamSpawnSystem.assignPlayerTeam(player)
+        TeamSpawnSystem.spawnPlayerOnTeam(player, character)
     end)
     
     -- Handle respawning
@@ -263,24 +256,24 @@ function TeamSpawnSystem:onPlayerAdded(player)
     end)
 end
 
-function TeamSpawnSystem:onPlayerLeaving(player)
+function TeamSpawnSystem.onPlayerLeaving(player)
     -- Update team balance
     if player.Team then
         local teamName = player.Team.Name
-        if self.teamBalance[teamName] then
-            self.teamBalance[teamName] = math.max(0, self.teamBalance[teamName] - 1)
+        if TeamSpawnSystem.teamBalance[teamName] then
+            TeamSpawnSystem.teamBalance[teamName] = math.max(0, TeamSpawnSystem.teamBalance[teamName] - 1)
         end
     end
     
     print(string.format("[TeamSpawnSystem] Player left: %s | FBI: %d, KFC: %d", 
-        player.Name, self.teamBalance.FBI, self.teamBalance.KFC))
+        player.Name, TeamSpawnSystem.teamBalance.FBI, TeamSpawnSystem.teamBalance.KFC))
 end
 
-function TeamSpawnSystem:assignPlayerTeam(player)
+function TeamSpawnSystem.assignPlayerTeam(player)
     -- Assign to team with fewer players for balance
     local targetTeam
     
-    if self.teamBalance.FBI <= self.teamBalance.KFC then
+    if TeamSpawnSystem.teamBalance.FBI <= TeamSpawnSystem.teamBalance.KFC then
         targetTeam = "FBI"
     else
         targetTeam = "KFC"
@@ -289,37 +282,37 @@ function TeamSpawnSystem:assignPlayerTeam(player)
     -- Update old team balance
     if player.Team then
         local oldTeamName = player.Team.Name
-        if self.teamBalance[oldTeamName] then
-            self.teamBalance[oldTeamName] = math.max(0, self.teamBalance[oldTeamName] - 1)
+        if TeamSpawnSystem.teamBalance[oldTeamName] then
+            TeamSpawnSystem.teamBalance[oldTeamName] = math.max(0, TeamSpawnSystem.teamBalance[oldTeamName] - 1)
         end
     end
     
     -- Assign new team (with safety check)
-    if self.teams[targetTeam] and self.teams[targetTeam].Parent == Teams then
-        player.Team = self.teams[targetTeam]
-        self.teamBalance[targetTeam] = self.teamBalance[targetTeam] + 1
+    if TeamSpawnSystem.teams[targetTeam] and TeamSpawnSystem.teams[targetTeam].Parent == Teams then
+        player.Team = TeamSpawnSystem.teams[targetTeam]
+        TeamSpawnSystem.teamBalance[targetTeam] = TeamSpawnSystem.teamBalance[targetTeam] + 1
     else
         warn("[TeamSpawnSystem] Team not found or not properly parented:", targetTeam)
         -- Try to recreate teams if they're missing
-        self:createTeams()
-        if self.teams[targetTeam] then
-            player.Team = self.teams[targetTeam]
-            self.teamBalance[targetTeam] = self.teamBalance[targetTeam] + 1
+        TeamSpawnSystem.createTeams()
+        if TeamSpawnSystem.teams[targetTeam] then
+            player.Team = TeamSpawnSystem.teams[targetTeam]
+            TeamSpawnSystem.teamBalance[targetTeam] = TeamSpawnSystem.teamBalance[targetTeam] + 1
         end
     end
     
     print(string.format("[TeamSpawnSystem] %s assigned to %s | FBI: %d, KFC: %d", 
-        player.Name, targetTeam, self.teamBalance.FBI, self.teamBalance.KFC))
+        player.Name, targetTeam, TeamSpawnSystem.teamBalance.FBI, TeamSpawnSystem.teamBalance.KFC))
 end
 
-function TeamSpawnSystem:spawnPlayerOnTeam(player, character)
+function TeamSpawnSystem.spawnPlayerOnTeam(player, character)
     if not player.Team then
         warn("[TeamSpawnSystem] Player has no team assigned:", player.Name)
         return
     end
     
     local teamName = player.Team.Name
-    local spawnLocations = self.spawnLocations[teamName]
+    local spawnLocations = TeamSpawnSystem.spawnLocations[teamName]
     
     if not spawnLocations or #spawnLocations == 0 then
         warn("[TeamSpawnSystem] No spawn locations for team:", teamName)
@@ -340,7 +333,7 @@ function TeamSpawnSystem:spawnPlayerOnTeam(player, character)
     end
 end
 
-function TeamSpawnSystem:forceRespawn(player)
+function TeamSpawnSystem.forceRespawn(player)
     if player.Character then
         local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoid then
@@ -349,8 +342,8 @@ function TeamSpawnSystem:forceRespawn(player)
     end
 end
 
-function TeamSpawnSystem:switchPlayerTeam(player, newTeamName)
-    if not self.teams[newTeamName] then
+function TeamSpawnSystem.switchPlayerTeam(player, newTeamName)
+    if not TeamSpawnSystem.teams[newTeamName] then
         warn("[TeamSpawnSystem] Invalid team name:", newTeamName)
         return false
     end
@@ -358,38 +351,38 @@ function TeamSpawnSystem:switchPlayerTeam(player, newTeamName)
     -- Update team balance
     if player.Team then
         local oldTeamName = player.Team.Name
-        if self.teamBalance[oldTeamName] then
-            self.teamBalance[oldTeamName] = math.max(0, self.teamBalance[oldTeamName] - 1)
+        if TeamSpawnSystem.teamBalance[oldTeamName] then
+            TeamSpawnSystem.teamBalance[oldTeamName] = math.max(0, TeamSpawnSystem.teamBalance[oldTeamName] - 1)
         end
     end
     
     -- Switch team
-    player.Team = self.teams[newTeamName]
-    self.teamBalance[newTeamName] = self.teamBalance[newTeamName] + 1
+    player.Team = TeamSpawnSystem.teams[newTeamName]
+    TeamSpawnSystem.teamBalance[newTeamName] = TeamSpawnSystem.teamBalance[newTeamName] + 1
     
     -- Force respawn
-    self:forceRespawn(player)
+    TeamSpawnSystem.forceRespawn(player)
     
     print(string.format("[TeamSpawnSystem] %s switched to %s | FBI: %d, KFC: %d", 
-        player.Name, newTeamName, self.teamBalance.FBI, self.teamBalance.KFC))
+        player.Name, newTeamName, TeamSpawnSystem.teamBalance.FBI, TeamSpawnSystem.teamBalance.KFC))
     
     return true
 end
 
-function TeamSpawnSystem:getTeamBalance()
+function TeamSpawnSystem.getTeamBalance()
     return {
-        FBI = self.teamBalance.FBI,
-        KFC = self.teamBalance.KFC
+        FBI = TeamSpawnSystem.teamBalance.FBI,
+        KFC = TeamSpawnSystem.teamBalance.KFC
     }
 end
 
-function TeamSpawnSystem:balanceTeams()
+function TeamSpawnSystem.balanceTeams()
     local players = Players:GetPlayers()
     local halfSize = math.ceil(#players / 2)
     
     -- Reset team balance
-    self.teamBalance.FBI = 0
-    self.teamBalance.KFC = 0
+    TeamSpawnSystem.teamBalance.FBI = 0
+    TeamSpawnSystem.teamBalance.KFC = 0
     
     -- Shuffle players
     for i = #players, 2, -1 do
@@ -400,25 +393,25 @@ function TeamSpawnSystem:balanceTeams()
     -- Assign teams
     for i, player in pairs(players) do
         local targetTeam = (i <= halfSize) and "FBI" or "KFC"
-        player.Team = self.teams[targetTeam]
-        self.teamBalance[targetTeam] = self.teamBalance[targetTeam] + 1
+        player.Team = TeamSpawnSystem.teams[targetTeam]
+        TeamSpawnSystem.teamBalance[targetTeam] = TeamSpawnSystem.teamBalance[targetTeam] + 1
         
         -- Force respawn
-        self:forceRespawn(player)
+        TeamSpawnSystem.forceRespawn(player)
     end
     
     print(string.format("[TeamSpawnSystem] Teams balanced | FBI: %d, KFC: %d", 
-        self.teamBalance.FBI, self.teamBalance.KFC))
+        TeamSpawnSystem.teamBalance.FBI, TeamSpawnSystem.teamBalance.KFC))
 end
 
 -- Admin commands
-function TeamSpawnSystem:handleAdminCommand(player, command, args)
+function TeamSpawnSystem.handleAdminCommand(player, command, args)
     if not (player:GetRankInGroup(0) >= 100) then -- Adjust group/rank as needed
         return false, "Insufficient permissions"
     end
     
     if command == "balance" then
-        self:balanceTeams()
+        TeamSpawnSystem.balanceTeams()
         return true, "Teams balanced"
         
     elseif command == "switch" and args[1] and args[2] then
@@ -433,11 +426,11 @@ function TeamSpawnSystem:handleAdminCommand(player, command, args)
             return false, "Invalid team: " .. targetTeam
         end
         
-        self:switchPlayerTeam(targetPlayer, targetTeam)
+        TeamSpawnSystem.switchPlayerTeam(targetPlayer, targetTeam)
         return true, string.format("Switched %s to %s", targetPlayer.Name, targetTeam)
         
     elseif command == "status" then
-        local balance = self:getTeamBalance()
+        local balance = TeamSpawnSystem.getTeamBalance()
         return true, string.format("FBI: %d players, KFC: %d players", balance.FBI, balance.KFC)
     end
     
@@ -445,7 +438,7 @@ function TeamSpawnSystem:handleAdminCommand(player, command, args)
 end
 
 -- Initialize the system
-TeamSpawnSystem:initialize()
+TeamSpawnSystem.initialize()
 
 -- Global access for other scripts
 _G.TeamSpawnSystem = TeamSpawnSystem

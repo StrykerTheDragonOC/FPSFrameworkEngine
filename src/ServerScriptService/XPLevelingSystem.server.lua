@@ -107,22 +107,19 @@ function XPLevelingSystem:createRemoteEvents()
         remoteEventsFolder.Parent = fpsSystem
     end
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     -- XP Update event
-    local xpUpdateEvent = Instance.new("RemoteEvent")
-    xpUpdateEvent.Name = "XPUpdate"
-    xpUpdateEvent.Parent = remoteEventsFolder
+    local xpUpdateEvent = RemoteEventsManager.getOrCreateRemoteEvent("XPUpdate", "XP progression updates")
     remoteEvents.XPUpdate = xpUpdateEvent
     
     -- Rank Up event
-    local rankUpEvent = Instance.new("RemoteEvent")
-    rankUpEvent.Name = "RankUp"
-    rankUpEvent.Parent = remoteEventsFolder
+    local rankUpEvent = RemoteEventsManager.getOrCreateRemoteEvent("RankUp", "Rank progression notifications")
     remoteEvents.RankUp = rankUpEvent
     
     -- Stats Request event
-    local statsRequestEvent = Instance.new("RemoteEvent")
-    statsRequestEvent.Name = "StatsRequest"
-    statsRequestEvent.Parent = remoteEventsFolder
+    local statsRequestEvent = RemoteEventsManager.getOrCreateRemoteEvent("StatsRequest", "Player stats requests")
     remoteEvents.StatsRequest = statsRequestEvent
     
     -- Handle client requests

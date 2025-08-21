@@ -68,15 +68,10 @@ function FPSServerHandler:createRemoteEvents()
     print("Remote events created/verified")
 end
 
--- Get or create a remote event
+-- Get or create a remote event using centralized manager
 function FPSServerHandler:getOrCreateRemote(parent, name)
-    local remote = parent:FindFirstChild(name)
-    if not remote then
-        remote = Instance.new("RemoteEvent")
-        remote.Name = name
-        remote.Parent = parent
-    end
-    return remote
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    return RemoteEventsManager.getOrCreateRemoteEvent(name, "FPS system remote: " .. name)
 end
 
 -- Connect remote event handlers

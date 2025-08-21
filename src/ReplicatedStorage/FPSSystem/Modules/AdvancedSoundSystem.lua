@@ -361,32 +361,32 @@ function AdvancedSoundSystem.getSoundLibrary()
     return {
         -- Weapon sounds
         weapons = {
-            pistol_fire = "rbxassetid://0",
-            rifle_fire = "rbxassetid://0",
-            sniper_fire = "rbxassetid://0",
-            shotgun_fire = "rbxassetid://0",
-            reload_mag = "rbxassetid://0",
-            empty_click = "rbxassetid://0",
-            bolt_action = "rbxassetid://0"
+            pistol_fire = "rbxassetid://2047319236",
+            rifle_fire = "rbxassetid://2047319236",
+            sniper_fire = "rbxassetid://4649186576",
+            shotgun_fire = "rbxassetid://3482278989",
+            reload_mag = "rbxassetid://75087076575460",
+            empty_click = "rbxassetid://830440268",
+            bolt_action = "rbxassetid://6129190959"
         },
 
         -- Effect sounds
         effects = {
-            explosion = "rbxassetid://0",
-            metal_impact = "rbxassetid://0",
-            bullet_whizz = "rbxassetid://0",
+            explosion = "rbxassetid://5801257793",
+            metal_impact = "rbxassetid://4228160116",
+            bullet_whizz = "rbxassetid://108893721768018",
             ricochet = "rbxassetid://0",
-            footstep = "rbxassetid://0",
-            grenade_bounce = "rbxassetid://0"
+            footstep = "rbxassetid://6563562192",
+            grenade_bounce = "rbxassetid://5564314786"
         },
 
         -- UI sounds
         ui = {
-            button_click = "rbxassetid://0",
-            menu_open = "rbxassetid://0",
-            menu_close = "rbxassetid://0",
-            notification = "rbxassetid://0",
-            error = "rbxassetid://0"
+            button_click = "rbxassetid://6042053626",
+            menu_open = "rbxassetid://6698736600",
+            menu_close = "rbxassetid://6698737249",
+            notification = "rbxassetid://5621616510",
+            error = "rbxassetid://3779045779"
         }
     }
 end

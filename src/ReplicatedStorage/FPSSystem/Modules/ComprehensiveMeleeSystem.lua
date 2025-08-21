@@ -648,18 +648,13 @@ function ComprehensiveMeleeSystem:setupRemoteEvents()
     local remoteEvents = fpsSystem:FindFirstChild("RemoteEvents")
     if not remoteEvents then return end
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     -- Create melee remote events
-    local meleeAttackEvent = Instance.new("RemoteEvent")
-    meleeAttackEvent.Name = "MeleeAttack"
-    meleeAttackEvent.Parent = remoteEvents
-    
-    local meleeBlockEvent = Instance.new("RemoteEvent")
-    meleeBlockEvent.Name = "MeleeBlock"
-    meleeBlockEvent.Parent = remoteEvents
-    
-    local equipMeleeEvent = Instance.new("RemoteEvent")
-    equipMeleeEvent.Name = "EquipMelee"
-    equipMeleeEvent.Parent = remoteEvents
+    local meleeAttackEvent = RemoteEventsManager.getOrCreateRemoteEvent("MeleeAttack", "Melee weapon attacks")
+    local meleeBlockEvent = RemoteEventsManager.getOrCreateRemoteEvent("MeleeBlock", "Melee weapon blocking")
+    local equipMeleeEvent = RemoteEventsManager.getOrCreateRemoteEvent("EquipMelee", "Melee weapon equipping")
     
     -- Handle remote events on server
     if RunService:IsServer() then

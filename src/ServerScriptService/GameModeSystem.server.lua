@@ -207,48 +207,24 @@ function GameModeSystem:initialize()
 end
 
 function GameModeSystem:createRemoteEvents()
-    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
-    if not fpsSystem then
-        fpsSystem = Instance.new("Folder")
-        fpsSystem.Name = "FPSSystem"
-        fpsSystem.Parent = ReplicatedStorage
-    end
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
     
-    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
-    if not remoteEventsFolder then
-        remoteEventsFolder = Instance.new("Folder")
-        remoteEventsFolder.Name = "RemoteEvents"
-        remoteEventsFolder.Parent = fpsSystem
-    end
-    
-    -- Game mode events
-    local gameModeUpdate = Instance.new("RemoteEvent")
-    gameModeUpdate.Name = "GameModeUpdate"
-    gameModeUpdate.Parent = remoteEventsFolder
-    
-    local objectiveUpdate = Instance.new("RemoteEvent")
-    objectiveUpdate.Name = "ObjectiveUpdate"
-    objectiveUpdate.Parent = remoteEventsFolder
-    
-    local scoreUpdate = Instance.new("RemoteEvent")
-    scoreUpdate.Name = "ScoreUpdate" 
-    scoreUpdate.Parent = remoteEventsFolder
+    -- Create game mode events using centralized manager
+    local gameModeUpdate = RemoteEventsManager.getOrCreateRemoteEvent("GameModeUpdate", "Game mode state updates")
+    local objectiveUpdate = RemoteEventsManager.getOrCreateRemoteEvent("ObjectiveUpdate", "Objective progress updates")
+    local scoreUpdate = RemoteEventsManager.getOrCreateRemoteEvent("ScoreUpdate", "Score updates")
     
     -- Voting system events
-    local gameModeVote = Instance.new("RemoteEvent")
-    gameModeVote.Name = "GameModeVote"
-    gameModeVote.Parent = remoteEventsFolder
-    
-    local countdownUpdate = Instance.new("RemoteEvent")
-    countdownUpdate.Name = "CountdownUpdate" 
-    countdownUpdate.Parent = remoteEventsFolder
+    local gameModeVote = RemoteEventsManager.getOrCreateRemoteEvent("GameModeVote", "Game mode voting")
+    local countdownUpdate = RemoteEventsManager.getOrCreateRemoteEvent("CountdownUpdate", "Countdown timer updates")
     
     -- Connect voting event
     gameModeVote.OnServerEvent:Connect(function(player, votedMode)
         self:handlePlayerVote(player, votedMode)
     end)
     
-    print("[GameModeSystem] Remote events created")
+    print("[GameModeSystem] Remote events created and connected")
 end
 
 function GameModeSystem:setupTeams()
@@ -540,18 +516,32 @@ function GameModeSystem:startNextMode()
 end
 
 function GameModeSystem:notifyGameModeStart(mode)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("GameModeUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("GameModeUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             action = "start",
             mode = mode,
             scores = self.currentModeData.teamScores
         })
+    else
+        warn("[GameModeSystem] GameModeUpdate RemoteEvent not found")
     end
 end
 
 function GameModeSystem:notifyGameModeEnd(reason, winner)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("GameModeUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("GameModeUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             action = "end",
@@ -559,23 +549,16 @@ function GameModeSystem:notifyGameModeEnd(reason, winner)
             winner = winner,
             final_scores = self.currentModeData.teamScores
         })
+    else
+        warn("[GameModeSystem] GameModeUpdate RemoteEvent not found")
     end
 end
 
 function GameModeSystem:updateGameModeUI(mode, timeRemaining)
-    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
-    if not fpsSystem then
-        warn("[GameModeSystem] FPSSystem not found in ReplicatedStorage")
-        return
-    end
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    local remoteEvent = RemoteEventsManager.getOrCreateRemoteEvent("GameModeUpdate", "Game mode state updates")
     
-    local remoteEvents = fpsSystem:FindFirstChild("RemoteEvents")
-    if not remoteEvents then
-        warn("[GameModeSystem] RemoteEvents not found in FPSSystem")
-        return
-    end
-    
-    local remoteEvent = remoteEvents:FindFirstChild("GameModeUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             action = "update",
@@ -585,7 +568,7 @@ function GameModeSystem:updateGameModeUI(mode, timeRemaining)
             objectives = self:getObjectiveStatus()
         })
     else
-        warn("[GameModeSystem] GameModeUpdate RemoteEvent not found")
+        warn("[GameModeSystem] Failed to get GameModeUpdate RemoteEvent")
     end
 end
 
@@ -737,18 +720,32 @@ function GameModeSystem:startCountdownPhase(nextMode)
 end
 
 function GameModeSystem:notifyVotingStart(votingOptions)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("GameModeUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("GameModeUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             action = "voting_start",
             options = votingOptions,
             duration = 30
         })
+    else
+        warn("[GameModeSystem] GameModeUpdate RemoteEvent not found")
     end
 end
 
 function GameModeSystem:updateVotingCountdown(remaining, votingOptions)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("CountdownUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("CountdownUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             type = "voting",
@@ -756,22 +753,38 @@ function GameModeSystem:updateVotingCountdown(remaining, votingOptions)
             options = votingOptions,
             votes = self.modeVotes
         })
+    else
+        warn("[GameModeSystem] CountdownUpdate RemoteEvent not found")
     end
 end
 
 function GameModeSystem:notifyVotingEnd(winningMode, voteResults)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("GameModeUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("GameModeUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             action = "voting_end",
             winner = winningMode,
             results = voteResults
         })
+    else
+        warn("[GameModeSystem] GameModeUpdate RemoteEvent not found")
     end
 end
 
 function GameModeSystem:updateCountdown(remaining, nextMode)
-    local remoteEvent = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents"):FindFirstChild("CountdownUpdate")
+    local fpsSystem = ReplicatedStorage:FindFirstChild("FPSSystem")
+    if not fpsSystem then return end
+    
+    local remoteEventsFolder = fpsSystem:FindFirstChild("RemoteEvents")
+    if not remoteEventsFolder then return end
+    
+    local remoteEvent = remoteEventsFolder:FindFirstChild("CountdownUpdate")
     if remoteEvent then
         remoteEvent:FireAllClients({
             type = "gamestart",
@@ -779,6 +792,8 @@ function GameModeSystem:updateCountdown(remaining, nextMode)
             nextMode = nextMode,
             modeData = GAME_MODES[nextMode]
         })
+    else
+        warn("[GameModeSystem] CountdownUpdate RemoteEvent not found")
     end
 end
 

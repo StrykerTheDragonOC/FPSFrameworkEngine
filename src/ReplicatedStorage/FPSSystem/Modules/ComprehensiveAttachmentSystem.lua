@@ -147,27 +147,27 @@ local ATTACHMENTS = {
 -- Player attachment data
 local playerAttachments = {}
 
-function ComprehensiveAttachmentSystem:init()
+function ComprehensiveAttachmentSystem.init()
     print("[ComprehensiveAttachmentSystem] Initializing comprehensive attachment system...")
     
     -- Initialize player data
     Players.PlayerAdded:Connect(function(player)
-        self:initializePlayerData(player)
+        ComprehensiveAttachmentSystem.initializePlayerData(player)
     end)
     
     -- Handle existing players
     for _, player in pairs(Players:GetPlayers()) do
-        self:initializePlayerData(player)
+        ComprehensiveAttachmentSystem.initializePlayerData(player)
     end
     
     -- Setup remote events
-    self:setupRemoteEvents()
+    ComprehensiveAttachmentSystem.setupRemoteEvents()
     
     print("[ComprehensiveAttachmentSystem] System initialized")
     return true
 end
 
-function ComprehensiveAttachmentSystem:initializePlayerData(player)
+function ComprehensiveAttachmentSystem.initializePlayerData(player)
     playerAttachments[player.UserId] = {
         equipped = {},
         unlocked = {"RedDotSight", "LaserSight"}, -- Default unlocked
@@ -217,7 +217,7 @@ function ComprehensiveAttachmentSystem:unlockAttachment(player, attachmentName)
     if not attachment then return false end
     
     -- Check if already unlocked
-    if self:isAttachmentUnlocked(player, attachmentName) then
+    if ComprehensiveAttachmentSystem.isAttachmentUnlocked(player, attachmentName) then
         return true
     end
     
@@ -234,7 +234,7 @@ function ComprehensiveAttachmentSystem:equipAttachment(player, weaponSlot, attac
     
     -- Validate attachment exists and is unlocked
     if not ATTACHMENTS[attachmentName] then return false end
-    if not self:isAttachmentUnlocked(player, attachmentName) then return false end
+    if not ComprehensiveAttachmentSystem.isAttachmentUnlocked(player, attachmentName) then return false end
     
     -- Initialize weapon slot if needed
     if not playerData.equipped[weaponSlot] then
@@ -292,7 +292,7 @@ function ComprehensiveAttachmentSystem:applyVisualEffects(weapon, equippedAttach
     for attachmentSlot, attachmentName in pairs(equippedAttachments) do
         local attachment = ATTACHMENTS[attachmentName]
         if attachment and attachment.VisualEffects then
-            self:applyAttachmentVisuals(weapon, attachment)
+            ComprehensiveAttachmentSystem.applyAttachmentVisuals(weapon, attachment)
         end
     end
 end
@@ -308,12 +308,12 @@ function ComprehensiveAttachmentSystem:applyAttachmentVisuals(weapon, attachment
     
     -- Apply laser sight
     if attachment.VisualEffects.LaserColor and attachment.VisualEffects.LaserRange then
-        self:createLaserSight(weapon, attachment.VisualEffects.LaserColor, attachment.VisualEffects.LaserRange)
+        ComprehensiveAttachmentSystem.createLaserSight(weapon, attachment.VisualEffects.LaserColor, attachment.VisualEffects.LaserRange)
     end
     
     -- Apply scope reticle
     if attachment.VisualEffects.Reticle then
-        self:applyScopeReticle(weapon, attachment.VisualEffects.Reticle)
+        ComprehensiveAttachmentSystem.applyScopeReticle(weapon, attachment.VisualEffects.Reticle)
     end
 end
 
@@ -342,27 +342,25 @@ function ComprehensiveAttachmentSystem:applyScopeReticle(weapon, reticleImage)
     print("[ComprehensiveAttachmentSystem] Applied scope reticle:", reticleImage)
 end
 
-function ComprehensiveAttachmentSystem:setupRemoteEvents()
+function ComprehensiveAttachmentSystem.setupRemoteEvents()
     local remoteEvents = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents")
     if not remoteEvents then return end
     
-    -- Create attachment remote events
-    local equipAttachmentEvent = remoteEvents:FindFirstChild("EquipAttachment") or Instance.new("RemoteEvent")
-    equipAttachmentEvent.Name = "EquipAttachment"
-    equipAttachmentEvent.Parent = remoteEvents
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
     
-    local unlockAttachmentEvent = remoteEvents:FindFirstChild("UnlockAttachment") or Instance.new("RemoteEvent")
-    unlockAttachmentEvent.Name = "UnlockAttachment"
-    unlockAttachmentEvent.Parent = remoteEvents
+    -- Create attachment remote events
+    local equipAttachmentEvent = RemoteEventsManager.getOrCreateRemoteEvent("EquipAttachment", "Attachment equipping")
+    local unlockAttachmentEvent = RemoteEventsManager.getOrCreateRemoteEvent("UnlockAttachment", "Attachment unlocking")
     
     -- Handle remote events
     if RunService:IsServer() then
         equipAttachmentEvent.OnServerEvent:Connect(function(player, weaponSlot, attachmentSlot, attachmentName)
-            self:equipAttachment(player, weaponSlot, attachmentSlot, attachmentName)
+            ComprehensiveAttachmentSystem.equipAttachment(player, weaponSlot, attachmentSlot, attachmentName)
         end)
         
         unlockAttachmentEvent.OnServerEvent:Connect(function(player, attachmentName)
-            self:unlockAttachment(player, attachmentName)
+            ComprehensiveAttachmentSystem.unlockAttachment(player, attachmentName)
         end)
     end
 end

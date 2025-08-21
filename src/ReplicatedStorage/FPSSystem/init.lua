@@ -17,23 +17,68 @@ function FPSSystem:createFolderStructure()
     print("FPSSystem: Creating folder structure...")
     
     -- Create RemoteEvents folder
-    local remoteEvents = script:FindFirstChild("RemoteEvents") or Instance.new("Folder")
-    remoteEvents.Name = "RemoteEvents"
-    remoteEvents.Parent = script
+    local remoteEvents = script:FindFirstChild("RemoteEvents")-- or Instance.new("Folder")
+  --  remoteEvents.Name = "RemoteEvents"
+  --  remoteEvents.Parent = script
     
     -- Create essential remote events
     local remoteEventsList = {
-        "ScoreUpdate", "PlayerStatsUpdate", "GameModeUpdate", "WeaponFired",
-        "WeaponReload", "PlayerDamaged", "PlayerKilled", "LoadoutChanged"
+        "CountdownUpdate",
+        "GameModeUpdate",
+        "GameModeVote",
+        "ObjectiveUpdate",
+        "RequestVehicleEntry",
+        "RequestVehicleExit",
+        "RequestVehicleSpawn",
+        "ScoreUpdate",
+        "UpdateVehicleStats",
+        "VehicleDestroyed",
+        "VehicleInput",
+        "UnlockAttachment",
+        "GrenadeEvent",
+        "MeleeEvent",
+        "VehicleAmmoSwitch",
+        "VehicleTargetLock",
+        "XPUpdate",
+        "VehicleWeaponReload",
+        "VehicleWeaponRotate",
+        "VehicleWeaponStatus",
+        "WeaponFired",
+        "WeaponHit",
+        "WeaponReload",
+        "CreateServerViewmodel",
+        "EquipAttachment",
+        "FireWeapon",
+        "VehicleWeaponFire",
+        "LevelUp",
+        "LoadMap",
+        "MeleeAttack",
+        "MeleeBlock",
+        "MeleeHit",
+        "PlayerDamaged",
+        "PlayerDeploy",
+        "PurchaseResult",
+        "ReplicateFire",
+        "RequestMapInfo",
+        "UpdateMapObjective",
+        "WeaponFire",
+        "SyncShopData",
+        "TestRigDamaged",
+        "ThrowGrenade",
+        "TriggerEnvironmentalHazard",
+        "PlayerStatsUpdate",
+        "PlayerKilled",
+        "LoadoutChanged"
     }
+
     
-    for _, eventName in pairs(remoteEventsList) do
-        if not remoteEvents:FindFirstChild(eventName) then
-            local remoteEvent = Instance.new("RemoteEvent")
-            remoteEvent.Name = eventName
-            remoteEvent.Parent = remoteEvents
-        end
-    end
+ --   for _, eventName in pairs(remoteEventsList) do
+ --       if not remoteEvents:FindFirstChild(eventName) then
+ --           local remoteEvent = Instance.new("RemoteEvent")
+ --           remoteEvent.Name = eventName
+ --           remoteEvent.Parent = remoteEvents
+ --       end
+ --   end
     
     -- Create Config folder
     local configFolder = script:FindFirstChild("Config") or Instance.new("Folder")

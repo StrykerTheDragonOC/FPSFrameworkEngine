@@ -133,10 +133,11 @@ function DestructionPhysics:setupRemoteEvents()
         "UpdateDestruction"
     }
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     for _, eventName in pairs(destructionEvents) do
-        local remoteEvent = remoteFolder:FindFirstChild(eventName) or Instance.new("RemoteEvent")
-        remoteEvent.Name = eventName
-        remoteEvent.Parent = remoteFolder
+        local remoteEvent = RemoteEventsManager.getOrCreateRemoteEvent(eventName, "Destruction physics: " .. eventName)
         self.remoteEvents[eventName] = remoteEvent
     end
     

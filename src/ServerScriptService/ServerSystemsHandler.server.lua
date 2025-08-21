@@ -15,13 +15,11 @@ local MODULES_PATH = FPS_SYSTEM_PATH:WaitForChild("Modules")
 
 -- Module references (ensure these exist)
 local requiredModules = {
-    "AdvancedAttachmentSystem",  -- CORRECT
-    "WeaponManager",
+    "ComprehensiveAttachmentSystem",  -- Fixed: was AdvancedAttachmentSystem
     "DamageSystem", 
-    "GrenadeSystem",
+    "ComprehensiveGrenadeSystem",
     "AdvancedSoundSystem",
-    "MetaSystem",
-    "WeaponAttachmentIntegration"
+    "MetaSystem"
 }
 
 -- Loaded modules storage
@@ -59,7 +57,7 @@ local function loadModules()
             end
         else
             -- Only warn for critical modules
-            if moduleName == "AdvancedAttachmentSystem" or moduleName == "WeaponManager" then
+            if moduleName == "ComprehensiveAttachmentSystem" or moduleName == "DamageSystem" or moduleName == "ComprehensiveGrenadeSystem" then
                 warn("Critical server module not found:", moduleName)
             else
                 print("Optional server module not found:", moduleName)
@@ -78,19 +76,11 @@ local function initializeSystems()
 
     print("ServerSystemsHandler: Initializing systems...")
 
-    -- Initialize AdvancedAttachmentSystem (replaces old AttachmentSystem)
-    if loadedModules.AdvancedAttachmentSystem then
-        if loadedModules.AdvancedAttachmentSystem.init then
-            loadedModules.AdvancedAttachmentSystem.init()
-            print("AdvancedAttachmentSystem initialized")
-        end
-    end
-
-    -- Initialize WeaponManager
-    if loadedModules.WeaponManager then
-        if loadedModules.WeaponManager.init then
-            loadedModules.WeaponManager.init()
-            print("WeaponManager initialized")
+    -- Initialize ComprehensiveAttachmentSystem
+    if loadedModules.ComprehensiveAttachmentSystem then
+        if loadedModules.ComprehensiveAttachmentSystem.init then
+            loadedModules.ComprehensiveAttachmentSystem.init()
+            print("ComprehensiveAttachmentSystem initialized")
         end
     end
 
@@ -102,11 +92,11 @@ local function initializeSystems()
         end
     end
 
-    -- Initialize GrenadeSystem
-    if loadedModules.GrenadeSystem then
-        if loadedModules.GrenadeSystem.init then
-            loadedModules.GrenadeSystem.init()
-            print("GrenadeSystem initialized")
+    -- Initialize ComprehensiveGrenadeSystem
+    if loadedModules.ComprehensiveGrenadeSystem then
+        if loadedModules.ComprehensiveGrenadeSystem.init then
+            loadedModules.ComprehensiveGrenadeSystem.init()
+            print("ComprehensiveGrenadeSystem initialized")
         end
     end
 

@@ -76,12 +76,9 @@ end
 
 -- Setup team selection remote event
 function TeamManagementSystem.setupTeamSelection()
-    local teamRemote = ReplicatedStorage:FindFirstChild("TeamSelection")
-    if not teamRemote then
-        teamRemote = Instance.new("RemoteEvent")
-        teamRemote.Name = "TeamSelection"
-        teamRemote.Parent = ReplicatedStorage
-    end
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    local teamRemote = RemoteEventsManager.getOrCreateRemoteEvent("TeamSelection", "Player team selection")
     
     teamRemote.OnServerEvent:Connect(function(player, teamName)
         TeamManagementSystem.assignPlayerToTeam(player, teamName)

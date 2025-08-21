@@ -185,10 +185,11 @@ local remoteFolder = ReplicatedStorage.FPSSystem:FindFirstChild("RemoteEvents") 
         "RequestMapInfo"
     }
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     for _, eventName in pairs(mapEvents) do
-        local remoteEvent = remoteFolder:FindFirstChild(eventName) or Instance.new("RemoteEvent")
-        remoteEvent.Name = eventName
-        remoteEvent.Parent = remoteFolder
+        local remoteEvent = RemoteEventsManager.getOrCreateRemoteEvent(eventName, "Map system: " .. eventName)
         self.remoteEvents[eventName] = remoteEvent
     end
 end

@@ -217,10 +217,11 @@ function VehicleWeaponSystem:setupRemoteEvents()
         "VehicleWeaponStatus"
     }
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     for _, eventName in pairs(weaponEvents) do
-        local remoteEvent = remoteFolder:FindFirstChild(eventName) or Instance.new("RemoteEvent")
-        remoteEvent.Name = eventName
-        remoteEvent.Parent = remoteFolder
+        local remoteEvent = RemoteEventsManager.getOrCreateRemoteEvent(eventName, "Vehicle weapon: " .. eventName)
         self.remoteEvents[eventName] = remoteEvent
     end
     

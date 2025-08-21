@@ -565,14 +565,12 @@ function ComprehensiveShopSystem:setupRemoteEvents()
     local remoteEvents = fpsSystem:FindFirstChild("RemoteEvents")
     if not remoteEvents then return end
     
-    -- Create shop remote events
-    local purchaseItemEvent = Instance.new("RemoteEvent")
-    purchaseItemEvent.Name = "PurchaseItem"
-    purchaseItemEvent.Parent = remoteEvents
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
     
-    local addToCartEvent = Instance.new("RemoteEvent")
-    addToCartEvent.Name = "AddToCart"
-    addToCartEvent.Parent = remoteEvents
+    -- Create shop remote events
+    local purchaseItemEvent = RemoteEventsManager.getOrCreateRemoteEvent("PurchaseItem", "Shop item purchasing")
+    local addToCartEvent = RemoteEventsManager.getOrCreateRemoteEvent("AddToCart", "Shop cart management")
     
     local getShopDataFunction = Instance.new("RemoteFunction")
     getShopDataFunction.Name = "GetShopData"
@@ -583,9 +581,7 @@ function ComprehensiveShopSystem:setupRemoteEvents()
         purchaseItemEvent.OnServerEvent:Connect(function(player, itemId, category, paymentMethod)
             local success, message = self:purchaseItem(player, itemId, category, paymentMethod)
             -- Send result back to client
-            local resultEvent = remoteEvents:FindFirstChild("PurchaseResult") or Instance.new("RemoteEvent")
-            resultEvent.Name = "PurchaseResult"
-            resultEvent.Parent = remoteEvents
+            local resultEvent = RemoteEventsManager.getOrCreateRemoteEvent("PurchaseResult", "Purchase result notifications")
             resultEvent:FireClient(player, success, message, itemId)
         end)
         
@@ -595,7 +591,7 @@ function ComprehensiveShopSystem:setupRemoteEvents()
         
         getShopDataFunction.OnServerInvoke = function(player)
             return self:getPlayerData(player), SHOP_CATALOG
-        end)
+        end
     end
 end
 
@@ -628,9 +624,8 @@ end
 
 function ComprehensiveShopSystem:syncPlayerData(player)
     local remoteEvents = ReplicatedStorage:FindFirstChild("FPSSystem"):FindFirstChild("RemoteEvents")
-    local syncEvent = remoteEvents:FindFirstChild("SyncShopData") or Instance.new("RemoteEvent")
-    syncEvent.Name = "SyncShopData"
-    syncEvent.Parent = remoteEvents
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    local syncEvent = RemoteEventsManager.getOrCreateRemoteEvent("SyncShopData", "Shop data synchronization")
     
     syncEvent:FireClient(player, playerShopData[player.UserId])
 end

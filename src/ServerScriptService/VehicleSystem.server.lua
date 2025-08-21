@@ -128,10 +128,11 @@ function VehicleSystem:setupRemoteEvents()
         "UpdateVehicleStats"
     }
     
+    -- Use centralized RemoteEvents manager
+    local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+    
     for _, eventName in pairs(vehicleEvents) do
-        local remoteEvent = remoteFolder:FindFirstChild(eventName) or Instance.new("RemoteEvent")
-        remoteEvent.Name = eventName
-        remoteEvent.Parent = remoteFolder
+        local remoteEvent = RemoteEventsManager.getOrCreateRemoteEvent(eventName, "Vehicle system: " .. eventName)
         self.remoteEvents[eventName] = remoteEvent
     end
     

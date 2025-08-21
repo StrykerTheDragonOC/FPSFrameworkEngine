@@ -64,21 +64,14 @@ local function setupRemoteEvents()
 		remoteEventsFolder.Parent = fpsSystem
 	end
 	
+	-- Use centralized RemoteEvents manager
+	local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.Modules.RemoteEventsManager)
+	
 	-- Create damage event
-	local damageEvent = remoteEventsFolder:FindFirstChild("PlayerDamaged")
-	if not damageEvent then
-		damageEvent = Instance.new("RemoteEvent")
-		damageEvent.Name = "PlayerDamaged"
-		damageEvent.Parent = remoteEventsFolder
-	end
+	local damageEvent = RemoteEventsManager.getOrCreateRemoteEvent("PlayerDamaged", "Player damage notifications")
 	
 	-- Create test rig damage event
-	local testRigDamageEvent = remoteEventsFolder:FindFirstChild("TestRigDamaged")
-	if not testRigDamageEvent then
-		testRigDamageEvent = Instance.new("RemoteEvent")
-		testRigDamageEvent.Name = "TestRigDamaged"
-		testRigDamageEvent.Parent = remoteEventsFolder
-	end
+	local testRigDamageEvent = RemoteEventsManager.getOrCreateRemoteEvent("TestRigDamaged", "Test rig damage notifications")
 	
 	-- Connect damage events
 	damageEvent.OnServerEvent:Connect(function(player, target, damage, bodyPart, damageType)
