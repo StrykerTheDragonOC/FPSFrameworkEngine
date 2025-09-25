@@ -234,6 +234,7 @@ local REMOTE_FUNCTIONS = {
     "GetGameState",
     "GetObjectiveStatus",
     "GetRoundTimeLeft",
+    "GetMatchStatus",
 
     -- Leaderboard & Statistics
     "GetLeaderboard",

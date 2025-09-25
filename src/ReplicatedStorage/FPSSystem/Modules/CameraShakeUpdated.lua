@@ -12,6 +12,11 @@ local TweenService = game:GetService("TweenService")
 local activeShakes = {}
 local camera = workspace.CurrentCamera
 
+-- Function to get current camera safely
+local function getCurrentCamera()
+    return workspace.CurrentCamera
+end
+
 -- Camera shake class
 function CameraShake.new(magnitude, roughness, duration, positionInfluence, rotationInfluence, fadeOutTime)
     local self = setmetatable({}, CameraShake)
@@ -118,6 +123,9 @@ end
 function CameraShakeManager:ApplyCombinedShake()
     if #activeShakes == 0 then return end
 
+    local currentCamera = getCurrentCamera()
+    if not currentCamera then return end
+
     local totalPosition = Vector3.new()
     local totalRotation = Vector3.new()
 
@@ -130,10 +138,8 @@ function CameraShakeManager:ApplyCombinedShake()
     end
 
     -- Apply to camera
-    if camera then
-        camera.CFrame = camera.CFrame + totalPosition
-        camera.CFrame = camera.CFrame * CFrame.Angles(totalRotation.X, totalRotation.Y, totalRotation.Z)
-    end
+    currentCamera.CFrame = currentCamera.CFrame + totalPosition
+    currentCamera.CFrame = currentCamera.CFrame * CFrame.Angles(totalRotation.X, totalRotation.Y, totalRotation.Z)
 end
 
 function CameraShakeManager:StopAll()

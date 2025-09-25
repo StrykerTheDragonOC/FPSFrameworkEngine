@@ -422,21 +422,18 @@ function MeleeSystem:PlayAttackAnimation(config, isSpecialAttack)
 end
 
 function MeleeSystem:CreateCameraShake(intensity)
-	local camera = workspace.CurrentCamera
-	local originalCF = camera.CFrame
+	-- Use the updated camera shake system
+	local CameraShakeAPI = require(script.Parent.CameraShakeUpdated)
 	
-	spawn(function()
-		for i = 1, 10 do
-			local shake = Vector3.new(
-				(math.random() - 0.5) * intensity,
-				(math.random() - 0.5) * intensity,
-				(math.random() - 0.5) * intensity
-			)
-			camera.CFrame = originalCF + shake
-			wait(0.02)
-		end
-		camera.CFrame = originalCF
-	end)
+	-- Create camera shake based on intensity
+	local magnitude = intensity * 0.5
+	local roughness = 8
+	local duration = 0.2
+	local positionInfluence = Vector3.new(0.3, 0.3, 0.1)
+	local rotationInfluence = Vector3.new(0.2, 0.2, 0.1)
+	local fadeOutTime = 0.1
+	
+	CameraShakeAPI.Shake(magnitude, roughness, duration, positionInfluence, rotationInfluence, fadeOutTime)
 end
 
 function MeleeSystem:CreateSpecialAttackEffect()

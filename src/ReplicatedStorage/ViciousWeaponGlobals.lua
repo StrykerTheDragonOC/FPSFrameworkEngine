@@ -29,6 +29,9 @@ else
         -- Update global variables for legacy compatibility
         _G.remoteEvents = ViciousWeaponGlobals.remoteEvents
         _G.weaponHitEvent = ViciousWeaponGlobals.weaponHitEvent
+        _G.overdriveEvent = ViciousWeaponGlobals.overdriveEvent
+        _G.honeyFogEvent = ViciousWeaponGlobals.honeyFogEvent
+        _G.earthquakeEvent = ViciousWeaponGlobals.earthquakeEvent
 
         print("ViciousWeaponGlobals: All RemoteEvents loaded via fallback method")
     else

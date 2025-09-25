@@ -1,185 +1,244 @@
-- RULES:
- Make Sure that everything is properly referenced
- Don't make overly complicated names for scripts.
- I don't want emojis used. Instead create IconPlaceholders without an ID and ill make them myself or procedurally generate the Icons yourself.
+# FPSFrameworkEngine — Full Specification (claude.md)
 
- Don't recreate scripts constantly, instead rewrite the current scripts if they are the same etc.
+## RULES
+- Make sure that everything is properly referenced.
+- Don't make overly complicated names for scripts.
+- Do not use emojis. Instead create `IconPlaceholders` without an ID (you will provide IDs or procedurally generate icons yourself).
+- Don't recreate scripts constantly; rewrite existing scripts if they already exist and serve the same purpose.
+- Check reference images (GIFs & PNGs) for context when implementing UI and systems.
+- GUI scripts should be stored in `StarterGUI`.
+- This project uses Rojo to connect to Studio:
+  - Modules are `.lua`
+  - ServerScripts are `.server.lua`
+  - LocalScripts are `.client.lua`
+- Raycast should use `Include` and `Exclude` (Blacklist/Whitelist are deprecated).
+- Make sure scripts work before claiming they are ready.
+- Map is created manually; do not implement automatic map generation. UI does not require the map to have a name.
+- Vehicles are placed manually in the map, but provide a Studio console command to generate a test vehicle (should be presentable).
+- Players spawn in a lobby spawn point for not-deployed players. Deploying switches a player's team and deploys them to the battlefield.
+- KFC is Maroon; FBI is NavyBlue.
+- Any UI that needs to be created should be generated via a console command (one-time). The generator should either create required LocalScripts or tell where to place them.
+- If you can run Lua tests locally, test scripts before declaring them ready.
+- Reference images (e.g., Phantom Forces UI) are for inspiration — do not copy exactly but produce similar, modern, slightly futuristic UI.
+- UI must be modern, professional, and slightly futuristic. Menus should switch seamlessly between sections: Menu → Loadout / Shop / Settings / Leaderboard.
+- On-screen effects (bleeding, blur/dizziness, flashbang, etc.) should use custom image IDs (not simple built-in effects).
+- Blood: shots cause blood particles visible server-side and create small blood pools on the ground (server authoritative).
+- Sound & Image IDs are set up by the user—do not change them unless requested.
 
- Check Reference images for context. There are GIFS & PNGS Available
- 
- GUI Scripts should stay either in StarterGUI.
+---
 
- This Project is using rojo to connect it to studio so modules are lua files, ServerScripts 
- 
- are .server.lua & local scripts are .local.lua
- 
- Raycast Uses Exclude & Include because Blacklist & Whitelist are deprecated
- 
- Make sure the scripts work before saying they will work.
+## GAMEPLAY SUMMARY
+- Core gameplay = Phantom Forces-style gunplay with Battlefield aspects (vehicles, destructible elements) and additional unique features.
+- Keep gameplay realistic but arcade-like and fast-paced.
+- Movement features:
+  - Crouch, Prone
+  - Sliding
+  - Ledge grabbing
+  - Dolphin dive (press X midair)
+- Two teams exist (KFC and FBI) for aesthetics/lore. Core gameplay is FFA-focused; teams are primarily visual. Admins can run sort-RP events using teams for narrative flavor.
+- Spawns:
+  - FBI spawn points located around the bunker (use `Spawns` folder spawn locations).
+  - KFC spawn points located around the KFC/city area (use `Spawns` folder).
+  - Randomize spawn location from each team's spawn list when deploying.
+- Gamemodes and lifecycle:
+  - Modes include: TDM, KOTH, Kill Confirmed (KC), CTF, Flare Domination, Hardpoint (HD), Gun Game (GG), Duel (secondaries only), Knife Fight (melee only).
+  - Modes are votable or changable via admin commands.
+  - Each gamemode lasts ~20 minutes, then resets/returns players to the menu while the next gamemode sets up.
 
- I'm making the map by hand so there's no need for automatic generation of one & any UI doesent need the map to have a name.
+---
 
- Vehicles will be place manually on the map, however there should be a studio console command that can generate a test vehicle (try & make it look nice at least)
- 
- Players Spawn in the lobby which is a spawnpoint for not deployed players, whenever you 
- deploy it will switch your team and deploy you onto the battlefield.
+## PROGRESSION, XP & CURRENCY
+- XP formula: `XP = 1000 × ((rank² + rank) ÷ 2)`.
+- Rank rewards (credits):
+  - Rank 1–20 → `Credits = ((rank - 1) × 5) + 200`
+  - Rank 21+ → `Credits = (rank × 5) + 200`
+- Rank-Up popup: `Level Up! Rank (X) + (Y) Credits` (credits are a configurable currency; default name: credits).
+- XP sources (examples): kills, assists, objectives/captures, holding objectives (small amount), wallbangs (small), suppression (small), headshots, long-distance, quickscopes, no-scopes, backstabs, multi-kills, spotting assists, weapon mastery progress and attachment unlocks.
+- Unlocks:
+  - Weapons and attachments unlock via XP/weapon kills or can be pre-bought for credits at an inflated price.
+  - Attachments unlocking is tied to kills with that specific gun (see Loadout section).
 
- KFC is Maroon & FBI is NavyBlue.
- 
- any UI that needs to be made should be created via a console command that only needs to be run once then either tell me where in the UI to place a local script or have the generator create one if possible.
+---
 
-I'm not sure if you are able to run LUA code, but if you can please test before saying its ready 
- Reference Images such as the PhantomForces UI don't need to be copied exact, you can generate something similar or close
- UI needs to be Modern, Professional looking, Slightly Futuristic.
- UI Should be connected & can easily switch between different Sections like: Menu -> loadout/Shop/Settings/leaderboard. flawlessly.
- Onscreen effects like bleeding, Blur (dizzyness), flashbang. ETC should be custom image IDS instead of simple effects. I also want there to be blood particles when shot from the players body that can be seen on the server and small bloodpools
- (Currently Sound & Image ID's have been setup properly by me so don't change them for now.)
+## CLASSES
+- Four classes: Assault, Scout, Support, Recon.
+  - Assault: Assault Rifles (exclusive), shares Battle Rifles, PDWs&Shotguns overlaps.
+  - Scout: DMRs; shares some weapons with Recon.
+  - Support: LMGs (exclusive) and shared Shotguns with Assault.
+  - Recon: Sniper Rifles (exclusive), also has Carbines, DMRs, Battle Rifles.
+- Secondary, Melee, Grenades not class-locked.
 
+---
 
+## WEAPONS, VIEWMODELS & TOOLS
+- Weapon architecture:
+  - Weapons are Tools. Each weapon tool contains its config and metadata.
+  - Viewmodels are client-side and stored under `ReplicatedStorage.FPSSystem.Viewmodels.<Category>.<Subcategory>.<WeaponName>`.
+  - Server representation uses R6 rigs that animate and show the weapon to other players.
+  - Tool equipping: locks the local camera to first-person; unequipping restores freedom.
+- Weapon stats basics:
+  - Bullet drop, velocity, penetration, recoil, spread, handling, aim speed, ADS speeds, reload timings, fire modes.
+  - Stats can be modified by attachments and ammo types.
+- Storage conventions:
+  - Example: `ReplicatedStorage.FPSSystem.Viewmodels.Primary.AssaultRifles.G36` stores viewmodel and model folders for G36.
+- Config should be easy to edit; attachments and weapon stats should be data-driven via JSON-like Lua tables stored in the tool.
 
-- Gameplay:
-this game is like  Phantom Forces with random weapons & Battlefield aspects along with other miscellanous systems. some of it is unique.
-The gameplay style should remain realistic while still being arcade-like and fast-paced.
-Movement will include ledge grabbing, sliding, and dolphin diving (performed by pressing X midair) as well as crouching and prone states.
-There are two teams: KFC and FBI. The FBI spawn around This bunker on the map based on the spawn locations in the Spawns Folder & the KFC spawn in & around the city near the KFC. 
-These Buildings have already been created by hand so it only needs to grab the spawn locations for each team and spawn them randomly.
-The game will feature Phantom Forces-style gameplay & Different battlefield Aspects such as: Enviroment Destruction, Vehicles like tanks & helicopters with destruction physics. 
-Each gamemode resets/changes every ~20 minutes before sending players to the menu and waiting for the gamemode to setup. 
-Required Core systems will include a XP and leveling system, a gun customization menu that will let you choose the attachments for the guns & weapons you get by random. So you spawn weith random weapons from each category being: Primary, Secondary, Melee, & Extra/Abilities.
-In-Game stats that save being: total kills & deaths for each players profile, Kill to death RATIO per match & on the menu a total KDR/ Kill to death Ratio, total XP gained, XP til level up, next weapon unlock.
-There will be a credit/currency system that allows you to buy new weapons attachments & skins, Guns that require a specific level can be prebought at a slightly inflated price, attachments can also be prebought for guns owned their price stays the same
-Each Rank-Up you gain [X] Amount of credits that increase each time you level up along with required amount of XP to level up. XP can be gained by: Getting Kills, Assists, Objectives/Captures & Holding Objectives (Small Amount), Wallbangs (Small Amount), Suppressing an enemy (Small Amount), headshots, long distance shots, quickscopes, no scopes, backstabs, Double/Triple/Quad Kills, Spotted Player Kills & Assists, Gaining mastery to each weapon & unlocking attachments.
-When you rank up you should get a popup on your screen that shows: Level Up! Rank (X) +(X)Credits. Not Sure what to call the currency so for now make it credits but make it so that it can be changed whenever.
-XP to level up should work as followed using this formula:  XP = 1000 × ((rank² + rank) ÷ 2). 
-The Formula that calculates rank reward from rank 1 to 20 is: Credit = ((rank-1)* 5)+ 200 while rewards past Level 20 should use: Credit = (Rank * 5)+ 200 \
-There will be Unlockable perks such as double jump & a temporary speed boost to start & some will have a cooldown while perks like double jump are permanent.
-Guns should be tool based & use a viewmodel when equipping the tool. They each have their own dedicated viewmodel folder & weapon model folder (for stuff like gun preview in menu)
-Guns should be realistic with advanced stats like: bullet drop, penetration, recoil etc, while also stats that are modified by attachments like suppresion, recoil, & different stats based on ammo types & conversions.
-Each weapon config will be stored in the tool for that specific weapon. Viewmodels are stored in ReplicatedStorage.FPSSystem.Viewmodels: Then Depending on what Main category & the sub category it will use that for instance
-The G36 is stored in ReplicatedStorage.FPSSystem.Viewmodels.Primary.AssaultRifles.G36 & then the model will be stored in the G36 folder. 
-When a weapon tool from this system is equipped it will lock the player in first person on dequipping it allow the player to zoom out again.
-There will be other tools not using this system that require certain keybinds so there might need to be a way to check if a player has a tool from this system or not.
-So Theoritcally you could make it so that when a player has nothing equipped you can use the movement system freely & when a player has a tool it will possibly check if theres any scripts that use keybinds and either disable certain keys from the movement system or so how have both function properly without one overlapping the other.
-Usual Ability Keybinds in other systems: Q,E,R,T,Y,G,H,Z,X,C,V,(*B).
-Viewmodels in firstperson should be client sides while on the serverside or what other enemy players see would be different instead they would be animated with a R6 rig that has the gun model attached to the right arm. 
-it will play the animations exported from the rig that will sync with the guns state/ client side action like when firing the gun will recoil on the serverside and show bullet tracers.
-In the map there will be different pickups that can be placed anywhere on the map manually and could either have a script placed inside or a type of config.
-There should also be a roblox config in workspace to store different values. The currently planned pickups are: Armor Pickups, Night Vision Goggles, Medical Equipment, Ammo Refill Packs.
-The Night Visions are used along a actively going Day/Night Cycle that should be slow but will change in less than ~10 or more
-The gun customization menu should display advanced stats, allow previewing the gun model stored in ReplicatedStorage.FPSSystem.WeaponModels.(Primary,Secondary,Grenade,Melee).(Then the subcategory)
-There should be a grenade system in place. 
-here are impact grenades that detonate upon contact with any part or surface,
-Sticky grenades that will stick to walls, 
-High Explosive grenades, Frag grenades, 
-Smoke Grenades,
-Flashbangs,
-Flares (blinds players),
-& C4 that can be placed and remotely detonated (despawns after awhile & death of the player that placed it)
-each grenade will have its own explosion radius that decreases the further you are away & some will decrease your walkspeed
-Some grenades can be cooked while others can't, grenades the can be cooked while tick by expanding the crosshair outward to indicate that a tick has passed and after the final tick the grenade will explode killing the player
-Each grenade will have its own viewmodel & custom animations as well.
-Grenades will have custom explosion effects accompanied by the default roblox explosion effect.
-Melees are set into different groups that being one & two handed blunt & blades.
-One handed blades instant kill upon backstabbing a player, while blunt ones do more base damage, have more range & can be used to kill multiple players easier
-One handed weapons are quicker than two handed ones, two handed melees have more range than one handed melees
-You can right click to play a special attack animation.
-Grenades & Melees can be quickly swapped by pressing a hotkey which switches the tool rapidly from your hotbar/inventory, G for grenade & F for melee.
-one handed melees will increase your walkspeed depending on which on you have equipped & two handed blades make you slightly slower
-Upon first joining the game at Rank 0 the randomized weapon pool will grab a random Primary, Secondary, Melee, Grenade & Magic. 
-The default weapons that the player has unlocked by default will have 2 from each category excluding SniperRifles, & Secondaries Subcategory other. 
-Grenades & Melees will only use The Default Rank 0 PocketKnife & M26 Grenade until the player unlocks (& or) Pre-buys a weapon.
-When a Player unlocks a weapon itll be added to their weapon pool allowed for them to get it out of the randomly selected weapons they have unlocked.\
-Weaponskins can be bought in the menu under the shop section, they will be applied on each weapon (as a placeholder for now make it grab a texture ID from a folder or something)
-The Skins change every 24 hours in the shop while some can be made exclusive & limited.
-There should also be a settingS section in the menu 
-that has a  sensitivity slider (seperate from the roblox client/application sensitivity), 
-a ragdoll factor slider that can be increased to send players bodies flying upon killing them with a weapon from this system
-FOV, (Only affects the players FOV when a weapon from this system is equipped.)
-There should be a radar on the lower left of the screen that also has the current score & gamemode name above it.
-The radar will go off if somone shoots a weapon that isnt suppressed or is loud. it will show a sort of wave expand and show the players arrow or icon for a few seconds before disappearing.
-Enemy Player's Footsteps will be louder than teammates. & the audio should work in 3D.
-Bullets that fly past you should make a whizz SFX, along with when they hit through walls.
-Bullets that hit different surfaces/materials will make difference sounds based on them.
-Each material also has its penetration factor for instance: wood being very poor whilst metal being more strong and requires a higher pentrating gun to pass through.
-Players can spot enemies in their viewrange by hitting Q which will put a small red indicator over the enemy players body that can be seen by the spotters whole team.
-Spotting a player will play a sound effect each time you spot a player.
-the player can crouch or hide in a building out of sightline to remove the indicator.
-you can also place markers with Q to ping a specific area on the map.
-Game modes: 
-Team Deathmatch (TDM), 
-King of the Hill (KOTH),
-Kill Confirmed (KC),
-Capture the Flag (CTF),
-Flare Domination,
-Hardpoint (HD),
- Gun Game (GG),
- Duel (secondary weapons only),
- Knife Fight (melee only), 
-with modes being votable or changeable via admin commands.
-Some of the modes will have abbrievations mentioned above while stuff like Flare Domination, Duel & Knife fight won't.
-Objectives should be placed manually and have their spawn/position stored in a part on the map that can be in serverstorage
-Each gun will have attachments & some will be exlusive to that gun
-Supressors are mostly universal for Primary & secondary weapons, while some guns like the NTW-20 for example cannot have it equipped
-All Primary guns should have the same grips minus a few that only show up for certain guns.
-Shotguns can have different ammo types that can increase or decrease the pellet count, for instance birdshot would have around 18, while slugs would only have one.
-some shotguns like the double barrel or the sawed off can switch their firemode with V to burst mode which fires both shells at once.
-Some guns will also different firemodes like: Auto, Semi, Burst & Hyperburst.
-the gun stats in the gun config should be easily changeable.
-there are four classes: Assault, Scout, Support, Recon. each class has their own special guns except some share between two classes
-for instance Recon: Exclusively Has SniperRifles, But also shares Carbines, BattleRifles & DMRS Which Carbine is available in all classes.
-PDW's Exclusive is Well: PDW
-Support's Exclusive is LMG
-Assault is ofc AssaultRifles
-Assault, Support & Recon Share BattleRifles
-Assault PDW & Support Share Shotguns
-Scout & Recon Share DMR
-Secondaries dont apply to classes so any secondary can be equipped
-same goes for Melees & Grenades.
-Attachments will attach to a roblox attachment placed within the weapons model for both the gun preview in the menu & the viewmodels gunmodel.
-Scopes Should work like they do in phantom forces (the updated scopes though), where u can Hit T on scopes to switch modes between a 3D scope & a UI based scope.
-if the player is using the UI scope mode, the gun/View should sway a bit and the player should hold shift to stabilize it for a short time before "running out of breath"
-Laser attachments will start at the guns attachment point. Lasers should be clientsides & or should only be able to be seen by the players own team, but flashlights will show up for everyone.
-Grip attachments can increase & decrease recoil.(grips can have both positive & negative stat changes)
-For Instance one grip can increase the guns aimspeed but decreases accuracy.
-Certain Suppressors will only show on the radar up to a certain stud range.
-Ammo types for each gun can increase & decrease stats
-Such as: Armor Piercing (Better penetration lesser damage to torso & head)
-Some guns have different barrels that can increase range or increase CQC damage in exchange for shorter range.
-for instance the NTW-20 would have a heavy barrel that makes you much slower but has more range
- & the obrez barrel which allows you to scope without crouching or leaning against a building/wall but has poor accuracy & requires you to aim up higher to hit the target.
- or a AssaultRifle can have a carbine barrel (& or) AssaultBarrel while some DMR's & other guns can have a marksman barrel.
- Shotguns can have different choke barrel attachments that can decrease spread along with other effects.
-all attachments require a certain amount of kills to unlock for free starting from 5 (if said gun doesent come with free attachments) to 2-3K and so forth.
-different sights will include iron sights, red dots, & scopes for now.
-Special rounds can be equipped by a perk giving temporary status effects to the enemies who are shot, The Special rounds are time based and will run out within ~30 or less or if the player has to reload (excluding snipers or guns that dont have multiple shots at once) 
-They Will also have a cooldown of ~30 or less
-Current Status Effects:
-Incendiary, (Fire VFX over enemies body & does D.O.T (Damage over time) or fire damage.)
-Frostbite, (Slows the player down & if shot enough times freezes them in a block of ice.)
-Explosive (Explodes where the bullets hit)
-There are also other status effects that the player can have such as:
-Bleeding (D.O.T, Bleed Damage)
-Fracture (Slower Walkspeed,small blood trail)
-Deafened (a grenade was exploded nearby & a ringing sound will play for a few seconds, but is quiet to not annoy players)
-Etc.
-Some status effects can be removed by a medical item like a bandage which stops bleeding & tourniquet which stops fractures
-the status effects will remove after a decent time has passed (meant to be long but not excruciatingly long)
-Currently There are only 4 Weapons setup at the moment so until I have implemented more
-make these the only weapons you can obtain while also being able to easily configure, add, & change which weapons are available
-You can go ahead and premake different guns in the menu but just have them temporaryily disabled for now.
-I'd also like a special ntw variant for admins that has a suppressor on it, that while fling the player back slightly upon firing and upon hitting & killing the enemy will send both you & the enemy into orbit killing you both.
-The game will have custom destruction physics where u can use different perks/abilities like a RPG to explode buildings & watch them crumble (I'm unsure how well this feature can be implemented so if it becomes a major issue u can just leave it be)
-The game will have different vehicles like tanks & helicopters that are advanced
-the vehicle models can be simplified for now so just make it grab specific parts like
-for a tank: treads/wheels, TankBarrel, Seat, etc
-and for a helicopter, Rotor,Seat, etc
-not sure how this will work so this also isnt that neccessary
-Currently The system needs to be overhauled with these changes and some scripts can be deleted or rescripted entirely.
-for the menu I'd like for you to create a script thats completely seperate from this  system that I run one time in the studio console 
-and it will automatically create a custom menu UI in StarterGUI, so that the other scripts can refer to it inside of StarterGUI  instead of it being created each time 
-& this script doesent need to be used after that and can be deleted after.
-Playerlist should be hidden entirely and when hitting tab a custom player list showing each players rank, Current Match: Kills,Deaths, KDR, Streak, Score.
-along with what team they are on
-also check the png files for references AttachmentUIExample images show how phantom forces attachments look. you may use this as a reference whilst sticking to the current UI/theme See the menu png for info
-also look at Stats Loadout 1 & 2 for info on how the stats should display
-there also are 2 gifs that ive converted from mp4's that will showcase what how the UI looks & functions in phantom forces.
+### Non-FPS Custom Weapons
+- There will be separate weapons that do not use the FPS system. These can be custom Roblox gears (e.g., Periastrons) or other tools with unique abilities and custom keybinds. The system should manage compatibility between a player having an FPS-system tool equipped and other custom tools (disable overlapping keybinds or coordinate input handling).
+
+---
+
+## MELEE & GRENADE SYSTEM
+- Grenade types: impact (detonate on contact), sticky, high-explosive, frag, smoke, flashbang, flare (blinds), C4 (placeable & remote detonation; despawns on death/time).
+- Grenade mechanics:
+  - Each grenade has its own explosion radius and effects; damage diminishes with distance.
+  - Some grenades reduce walk speed or apply other status effects.
+  - Cookable grenades: crosshair ticks outward per tick; final tick detonates. Some grenades cannot be cooked.
+  - Each grenade has its own viewmodel & custom animations. Explosions have custom VFX + Roblox explosion.
+- Melee:
+  - Categories: one-handed blade, one-handed blunt, two-handed blade, two-handed blunt.
+  - One-handed blades: instant backstab kill when hitting from behind.
+  - One-handed blunt: more base damage, faster swings, multi-hit potential.
+  - Two-handed: slower, more range and damage.
+  - Right-click triggers special attack animation.
+  - Grenades & melees quick-swap hotkeys: G for grenade, F for melee.
+  - Melee weight/speed affects player movement (1H increases speed, 2H decreases).
+
+---
+
+## ATTACHMENTS & CUSTOMIZATION
+- Attachments attach to actual Roblox Attachment instances within weapon models to ensure correct positioning for both menu preview and viewmodels.
+- Attachment effects include: recoil modification, aim speed changes, accuracy, suppression, sway reduction, and other stat shifts. Grips can trade aim speed vs accuracy.
+- Suppressors: mostly universal, but some guns cannot equip them (e.g., NTW-20 example). Some suppressors only show on radar up to a certain stud range.
+- Scopes:
+  - Scopes function similarly to Phantom Forces' updated scopes.
+  - Press **T** to switch a scope between a 3D in-world scope and a UI-based scope.
+  - UI scope mode introduces sway; hold **Shift** to steady aim for a short duration before stamina runs out.
+- Ammo types change pen/damage profile (e.g., Armor Piercing = better penetration less torso/head damage; slugs in shotguns = single pellet) and may change other traits.
+- Barrel variants, chokes for shotguns, and other attachments modify weapon handling and performance.
+- All attachments have unlock thresholds based on kill counts with that specific gun (example thresholds: 5 kills to 2–3k kills depending on rarity).
+- Attachments may also be pre-bought through the Loadout (purchased per gun).
+
+---
+
+## STATUS EFFECTS & MEDICAL ITEMS
+- Status effects include:
+  - Incendiary: fire VFX on the enemy and DOT.
+  - Frostbite: slows target; repeated hits can freeze them into an ice block.
+  - Explosive: bullets or rounds that explode on impact.
+  - Bleeding: DOT and visible blood trail.
+  - Fracture: slower walk speed and a small blood trail.
+  - Deafened: ringing after nearby explosion (mild, short).
+- Some status effects removable by items:
+  - Bandage (stops bleeding)
+  - Tourniquet (stops fractures)
+- Status effects decay after a set duration (long, but not permanent).
+
+---
+
+## AUDIO & MATERIALS
+- Footsteps are 3D. Enemy footsteps louder than teammates.
+- Bullet whizz SFX for rounds flying past.
+- Material-based hit sounds and penetration multipliers/pen values (wood low, metal high).
+- Each material has a penetration factor affecting if a bullet passes through.
+
+---
+
+## RADAR & HUD
+- Radar: **top-left** of the screen (changed from lower-left). Displays small map/range indicator, player icons/arrows for pings, current score & game mode above the radar.
+- Radar behavior:
+  - When an unsuppressed or loud shot occurs, radar pings show for a short time (wave expand effect and player icon shown for a few seconds).
+  - Radar pings are based on suppression/noise and distance thresholds.
+- HUD should be clean, minimal, with sections for health, armor, ammo count, equipped weapon, and a compact killfeed.
+
+---
+
+## PICKUPS & WORLD INTERACTABLES
+- Manual placement of pickups on the map. Each pickup can hold a script or config object with type & behavior.
+- Planned pickups: Armor, Night Vision Goggles (NVG), Medical Kits, Ammo Packs.
+- NVGs used in conjunction with day/night cycle. Day/Night cycle should be slow (less than ~10 minutes to cycle? configurable).
+
+---
+
+## VEHICLES & DESTRUCTION
+- Vehicles: Tanks, Helicopters, others. Simplified vehicle assembly by selecting key parts (tank: treads/wheels, TankBarrel, Seat; heli: rotor, Seat).
+- Vehicles should be advanced but can be simplified for prototyping; admin/studio spawn command for a test vehicle.
+- Destructible environment is desired (RPGs, explosives crumbling buildings). This can be scaled back if performance or complexity is an issue.
+- Vehicle destruction and physics should be server-authoritative and network-optimized.
+
+---
+
+## MENU & UI GENERATOR
+- Create a one-time Studio console command script that builds a complete custom menu UI in `StarterGUI` (modern, slightly futuristic).
+- The generator should create the structure (Menu container, Loadout, Shop, Settings, Leaderboard, HUD templates), and either add LocalScripts or indicate where to place them.
+- The menu generator can be deleted after running once.
+- Playerlist: hide default Roblox playerlist. Press **Tab** to show custom player list with:
+  - Rank, Current Match: Kills, Deaths, KDR, Streak, Score, Team.
+- Settings menu should include:
+  - Sensitivity slider (separate from Roblox client/application sensitivity)
+  - Ragdoll factor slider
+  - FOV slider (affects FPS viewmodels only)
+- Gun customization menu must display advanced stats and allow previewing weapon models from `ReplicatedStorage.FPSSystem.WeaponModels.<Category>.<Subcategory>.<WeaponName>`.
+- Shop specifics:
+  - **Skin Shop**: only skins. Skins rotate every 24 hours; some are limited/exclusive.
+  - **Loadout Menu**: where you pre-buy guns (if not unlocked) at a higher price and buy attachments individually per gun. Attachments unlocking depends on kill counts for that weapon (tracked per-player).
+- Ensure UI sections switch seamlessly (Menu → Loadout / Shop / Settings / Leaderboard).
+
+---
+
+## STATS & PERSISTENCE
+- Save per-player persistent stats:
+  - Total kills, deaths, overall KDR
+  - XP and rank level
+  - Credits balance
+  - Weapon unlocks and mastery progress (per weapon kill counts)
+  - Owned attachments, skins, and pre-buys
+- In-match stats:
+  - Current match kills, deaths, KDR, streak, score (displayed on Tab playerlist).
+- Implement safe, atomic saving (robust to disconnects) and server-side validation for purchases and unlocks.
+
+---
+
+## ADMIN & CONSOLE COMMANDS
+- Admin commands to:
+  - Force gamemode change or vote outcome
+  - Spawn test vehicles
+  - Grant items or credits
+  - Trigger server events for RP/sort events
+  - Spawn menu UI via generator (one-time)
+- Console commands should be placed in a dev/admin module and accessible to authorized users.
+
+---
+
+## IMPLEMENTATION NOTES & STYLE GUIDE
+- Follow Rojo conventions for file naming and placement.
+- Keep module/script names simple and consistent (`GameServer`, `WeaponTool_G36`, `MenuGenerator`, etc.).
+- Use `Include`/`Exclude` raycast params.
+- Use `ReplicatedStorage` for shared data and models; `ServerStorage` for server-only resources like objective markers/parts.
+- Use Bindable/Remote events conservatively and validate on server for all client requests related to gameplay, purchases, spawns and state transitions.
+- Keep UI creation via a generator; avoid creating UI at runtime each round.
+- Prefer data-driven configs for weapons, attachments, pickup definitions, and gamemode settings.
+
+---
+
+## NOTES ON CURRENT STATUS & TODOs
+- There are currently only 4 weapons implemented. For now, make these four available in the randomized weapon pool and ensure they are easy to configure and extend.
+- Pre-create placeholders for additional weapons in the menu but mark them disabled until implementation.
+- Implement the NTW admin variant (suppressed NTW with recoil fling + kill effect that launches both players into orbit) as a special admin-only weapon.
+- Prioritize systems in this order: core weapon/gunplay mechanics → weapon attachment unlock system → UI generator & menu → gamemode lifecycle & spawn system → vehicles & destructible environment.
+- If destructible buildings or advanced vehicle physics become intractable, document fallback options (simplified destruction, breakable parts, or cosmetic destruction VFX).
+
+---
+
+## REFERENCES
+- Refer to provided PNGs & GIFs (menu references, AttachmentUIExample, StatsLoadout images) for UI and attachment visuals.
+- Phantom Forces UI is a visual reference but do not copy verbatim.
+
+---
+
+## CHANGE LOG (Recent Edits)
+- Radar moved to **top-left** (was previously lower-left).
+- **Skin Shop** clarified to be *only* for skins.
+- **Loadout** clarified: prebuy guns (if not unlocked) and buy attachments per gun. Attachments unlock by kills on that specific gun.
+- Added **Non-FPS custom weapons** (Roblox gears & ability-based tools) that do not use the FPS system but must interoperate with it.
+- Teams are aesthetic/lore-only; core gameplay remains FFA. Admin-run sort-RP events can utilize team system for narrative purposes.

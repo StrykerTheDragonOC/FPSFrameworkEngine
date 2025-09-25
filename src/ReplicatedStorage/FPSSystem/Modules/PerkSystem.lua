@@ -138,7 +138,8 @@ local playerPerks = {
         Utility = nil
     },
     activeCooldowns = {},
-    activeEffects = {}
+    activeEffects = {},
+    originalBrightness = nil
 }
 
 -- Perk effect tracking
