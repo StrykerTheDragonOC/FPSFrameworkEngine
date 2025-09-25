@@ -91,7 +91,9 @@
       "Bash(then luau --compile=null src/ReplicatedStorage/FPSSystem/Modules/WeaponPreviewSystem.lua)",
       "Read(//d/Projects/MiscSystems/src/StarterPack/**)",
       "WebFetch(domain:devforum.roblox.com)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(then luau-lsp --check src/ServerScriptService/ViciousStingerWeapon.server.lua)",
+      "Bash(then luau --compile=null src/ServerScriptService/ViciousStingerWeapon.server.lua)"
     ],
     "deny": []
   }

@@ -169,18 +169,14 @@ function ClientSystemsInitializer:SetupSystemCommunication()
 	
 	-- Health updates
 	SystemEvents.HealthChanged = function(health, maxHealth)
-		if systems.UICoordinator then
-			systems.UICoordinator:UpdateInGameUI("health", {health = health, maxHealth = maxHealth})
-		end
-		-- InGameUI is a LocalScript that handles its own updates
+		-- UI updates handled by FPSHUD directly
+		print("Health changed:", health, "/", maxHealth)
 	end
 	
 	-- Ammo updates
 	SystemEvents.AmmoChanged = function(current, reserve)
-		if systems.UICoordinator then
-			systems.UICoordinator:UpdateInGameUI("ammo", {current = current, reserve = reserve})
-		end
-		-- InGameUI is a LocalScript that handles its own updates
+		-- UI updates handled by FPSHUD directly
+		print("Ammo changed:", current, "/", reserve)
 	end
 	
 	-- Weapon equipped

@@ -1,14 +1,15 @@
-print("ViciousWeapon system loaded!")-- ViciousWeapon.server.lua
+-- ViciousWeapon.server.lua
 -- Server-side script for handling Vicious Bee weapon special abilities
--- Place this script in ServerScriptService
+-- IMMEDIATE EXECUTION - Creates RemoteEvents before any other scripts run
 
+-- Get services immediately
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local RunService = game:GetService("RunService")
 
--- Create RemoteEvents folder if it doesn't exist
+-- IMMEDIATE SETUP - Create RemoteEvents folder if it doesn't exist
 local remoteEvents = ReplicatedStorage:FindFirstChild("ViciousWeaponEvents")
 if not remoteEvents then
     remoteEvents = Instance.new("Folder")
@@ -16,7 +17,7 @@ if not remoteEvents then
     remoteEvents.Parent = ReplicatedStorage
 end
 
--- Create RemoteEvents
+-- IMMEDIATE SETUP - Create all RemoteEvents
 local weaponHitEvent = remoteEvents:FindFirstChild("WeaponHit")
 if not weaponHitEvent then
     weaponHitEvent = Instance.new("RemoteEvent")
@@ -44,6 +45,26 @@ if not earthquakeEvent then
     earthquakeEvent.Name = "TriggerEarthquake"
     earthquakeEvent.Parent = remoteEvents
 end
+
+-- IMMEDIATE SETUP - Set global variables IMMEDIATELY
+_G.ViciousWeaponEvents = remoteEvents
+_G.remoteEvents = remoteEvents
+_G.weaponHitEvent = weaponHitEvent
+_G.overdriveEvent = overdriveEvent
+_G.honeyFogEvent = honeyFogEvent
+_G.earthquakeEvent = earthquakeEvent
+
+-- Force replication to clients immediately
+game:GetService("RunService").Heartbeat:Wait()
+
+print("ViciousWeapon system loading...")
+print("IMMEDIATE SETUP COMPLETE - RemoteEvents and globals created:")
+print("  - Folder:", remoteEvents and "✓" or "✗")
+print("  - WeaponHit:", weaponHitEvent and "✓" or "✗")
+print("  - TriggerViciousOverdrive:", overdriveEvent and "✓" or "✗")
+print("  - TriggerHoneyFog:", honeyFogEvent and "✓" or "✗")
+print("  - TriggerEarthquake:", earthquakeEvent and "✓" or "✗")
+print("Global variables set for weapon model scripts.")
 
 -- Weapon configuration
 local WEAPON_CONFIG = {

@@ -25,6 +25,46 @@ local activeNotifications = {}
 -- Bounty System Manager
 local BountySystem = {}
 
+-- Remove bounty display function (defined first to avoid scope issues)
+local function removeBountyDisplay()
+    if bountyDisplay then
+        bountyDisplay:Destroy()
+        bountyDisplay = nil
+        print("Removed bounty display")
+    end
+end
+
+-- Create bounty display function
+local function createBountyDisplay(amount)
+    if bountyDisplay then
+        removeBountyDisplay() -- Remove existing display first
+    end
+
+    bountyDisplay = Instance.new("Frame")
+    bountyDisplay.Size = UDim2.new(0, 200, 0, 40)
+    bountyDisplay.Position = UDim2.new(1, -220, 0, 100)
+    bountyDisplay.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+    bountyDisplay.BackgroundTransparency = 0.1
+    bountyDisplay.BorderSizePixel = 0
+    bountyDisplay.Parent = playerGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = bountyDisplay
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -10, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "BOUNTY: $" .. tostring(amount)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.Parent = bountyDisplay
+
+    print("Created bounty display with amount:", amount)
+end
+
 -- Create notification function
 local function createNotification(message, color)
     if not playerGui then return end
