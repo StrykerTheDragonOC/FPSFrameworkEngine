@@ -94,19 +94,16 @@ function ClientSystemsInitializer:InitializeUI()
 	-- UI Coordinator removed - now using MenuController in StarterGui
 	print("✓ UI managed by MenuController (UICoordinator removed)")
 	
-	-- Main Menu Controller (LocalScript - runs automatically)
-	if script.Parent:FindFirstChild("MainMenuController") then
-		print("✓ Main Menu Controller found - will initialize automatically")
+	-- Main Menu Controller (in StarterGui per Claude.md guidelines)
+	local starterGui = game:GetService("StarterGui")
+	if starterGui:FindFirstChild("MenuController") then
+		print("✓ Menu Controller found in StarterGui - will initialize automatically")
 	else
-		print("⚠ Main Menu Controller not found")
+		print("⚠ Menu Controller not found in StarterGui")
 	end
-	
-	-- In-Game UI Controller (LocalScript - runs automatically)
-	if script.Parent:FindFirstChild("InGameUIController") then
-		print("✓ In-Game UI Controller found - will initialize automatically")
-	else
-		print("⚠ In-Game UI Controller not found")
-	end
+
+	-- In-Game UI Controllers are handled by individual client scripts
+	print("✓ In-Game UI systems handled by individual client controllers")
 end
 
 function ClientSystemsInitializer:InitializeGameplay()

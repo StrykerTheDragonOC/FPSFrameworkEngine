@@ -93,7 +93,13 @@
       "WebFetch(domain:devforum.roblox.com)",
       "Bash(dir:*)",
       "Bash(then luau-lsp --check src/ServerScriptService/ViciousStingerWeapon.server.lua)",
-      "Bash(then luau --compile=null src/ServerScriptService/ViciousStingerWeapon.server.lua)"
+      "Bash(then luau --compile=null src/ServerScriptService/ViciousStingerWeapon.server.lua)",
+      "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\PerkSystem.lua\")",
+      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\PerkSystem.lua\")",
+      "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\StarterGui\\MenuController.client.lua\")",
+      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\StarterGui\\MenuController.client.lua\")",
+      "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\ArmorySystem.lua\")",
+      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\ArmorySystem.lua\")"
     ],
     "deny": []
   }

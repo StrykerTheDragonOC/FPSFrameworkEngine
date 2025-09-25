@@ -155,6 +155,9 @@ local REMOTE_EVENTS = {
 	"WeaponStatsUpdated",
 	"InventoryUpdated",
 	"AchievementUnlocked",
+	"VoteForGamemode",
+	"StartVoting",
+	"UpdateVotes",
 
 	-- Miscellaneous
 	"ChatMessage",

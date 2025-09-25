@@ -149,12 +149,12 @@ local function CreateMainMenuUI()
     -- Game Title - Centered and properly positioned for 1920x1080
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(0, 1100, 0, 100)
-    titleLabel.Position = UDim2.new(0.5, -550, 0, 40)
+    titleLabel.Size = UDim2.new(0, 1000, 0, 80)
+    titleLabel.Position = UDim2.new(0.5, -500, 0, 50)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = "KFC'S: FUNNY RANDOMIZER 4.0"
     titleLabel.TextColor3 = Colors.Primary
-    titleLabel.TextSize = 58
+    titleLabel.TextSize = 42
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextStrokeTransparency = 0.2
     titleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
@@ -166,8 +166,8 @@ local function CreateMainMenuUI()
     -- Menu Panel - Fixed sizing for 1920x1080
     local menuPanel = Instance.new("Frame")
     menuPanel.Name = "MenuPanel"
-    menuPanel.Size = UDim2.new(0, 1400, 0, 750)
-    menuPanel.Position = UDim2.new(0.5, -700, 0, 160)
+    menuPanel.Size = UDim2.new(0, 1300, 0, 650)
+    menuPanel.Position = UDim2.new(0.5, -650, 0, 150)
     menuPanel.BackgroundColor3 = Colors.Panel
     menuPanel.BackgroundTransparency = 0.1
     menuPanel.BorderSizePixel = 0
@@ -208,7 +208,7 @@ local function CreateMainMenuUI()
     playerName.BackgroundTransparency = 1
     playerName.Text = "OPERATIVE"
     playerName.TextColor3 = Colors.Text
-    playerName.TextSize = 22
+    playerName.TextSize = 16
     playerName.Font = Enum.Font.GothamBold
     playerName.TextXAlignment = Enum.TextXAlignment.Right
     playerName.TextScaled = true
@@ -221,7 +221,7 @@ local function CreateMainMenuUI()
     playerLevel.BackgroundTransparency = 1
     playerLevel.Text = "RANK: 1"
     playerLevel.TextColor3 = Colors.Primary
-    playerLevel.TextSize = 16
+    playerLevel.TextSize = 12
     playerLevel.Font = Enum.Font.Gotham
     playerLevel.TextXAlignment = Enum.TextXAlignment.Right
     playerLevel.TextScaled = true
@@ -234,7 +234,7 @@ local function CreateMainMenuUI()
     playerCredits.BackgroundTransparency = 1
     playerCredits.Text = "CREDITS: 200"
     playerCredits.TextColor3 = Colors.Warning
-    playerCredits.TextSize = 16
+    playerCredits.TextSize = 12
     playerCredits.Font = Enum.Font.Gotham
     playerCredits.TextXAlignment = Enum.TextXAlignment.Right
     playerCredits.TextScaled = true
@@ -247,7 +247,7 @@ local function CreateMainMenuUI()
     playerXP.BackgroundTransparency = 1
     playerXP.Text = "XP: 0/1000"
     playerXP.TextColor3 = Colors.Primary
-    playerXP.TextSize = 16
+    playerXP.TextSize = 12
     playerXP.Font = Enum.Font.Gotham
     playerXP.TextXAlignment = Enum.TextXAlignment.Right
     playerXP.TextScaled = true
@@ -260,7 +260,7 @@ local function CreateMainMenuUI()
     playerKD.BackgroundTransparency = 1
     playerKD.Text = "K/D: 0.00"
     playerKD.TextColor3 = Colors.TextSecondary
-    playerKD.TextSize = 16
+    playerKD.TextSize = 12
     playerKD.Font = Enum.Font.Gotham
     playerKD.TextXAlignment = Enum.TextXAlignment.Right
     playerKD.TextScaled = true
@@ -269,7 +269,7 @@ local function CreateMainMenuUI()
     -- Navigation Buttons Frame - Fixed spacing
     local navFrame = Instance.new("Frame")
     navFrame.Name = "NavigationFrame"
-    navFrame.Size = UDim2.new(1, -40, 0, 90)
+    navFrame.Size = UDim2.new(1, -40, 0, 80)
     navFrame.Position = UDim2.new(0, 20, 0, 85)
     navFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     navFrame.BackgroundTransparency = 0.3
@@ -289,10 +289,10 @@ local function CreateMainMenuUI()
         {name = "SHOP", text = "[SHOP]\nPurchase items", color = Colors.Primary}
     }
 
-    local buttonWidth = 260
-    local buttonSpacing = 15
+    local buttonWidth = 220
+    local buttonSpacing = 10
     local totalWidth = (#navButtons * buttonWidth) + ((#navButtons - 1) * buttonSpacing)
-    local startX = (1360 - totalWidth) / 2 -- Center in 1360px wide frame
+    local startX = (1260 - totalWidth) / 2 -- Center in 1260px wide frame
 
     for i, buttonData in ipairs(navButtons) do
         local navButton = Instance.new("TextButton")
@@ -304,9 +304,9 @@ local function CreateMainMenuUI()
         navButton.BorderSizePixel = 0
         navButton.Text = buttonData.text
         navButton.TextColor3 = Colors.Text
-        navButton.TextSize = 18
+        navButton.TextSize = 14
         navButton.Font = Enum.Font.GothamBold
-        navButton.TextScaled = true
+        navButton.TextScaled = false
         navButton.Parent = navFrame
 
         local buttonCorner = Instance.new("UICorner")
@@ -324,8 +324,8 @@ local function CreateMainMenuUI()
     -- Sections Container - Fixed positioning with clipping
     local sectionsContainer = Instance.new("Frame")
     sectionsContainer.Name = "SectionsContainer"
-    sectionsContainer.Size = UDim2.new(1, -40, 1, -185)
-    sectionsContainer.Position = UDim2.new(0, 20, 0, 175)
+    sectionsContainer.Size = UDim2.new(1, -40, 1, -175)
+    sectionsContainer.Position = UDim2.new(0, 20, 0, 165)
     sectionsContainer.BackgroundTransparency = 1
     sectionsContainer.ClipsDescendants = true -- Prevent content overflow
     sectionsContainer.Parent = menuPanel
@@ -996,6 +996,53 @@ local function CreateMainMenuUI()
         local backCorner = Instance.new("UICorner")
         backCorner.CornerRadius = UDim.new(0, 8)
         backCorner.Parent = backButton
+    end
+
+    -- ARMORY SECTION (already created in the detailed section above, skipping duplicate)
+
+    -- SHOP SECTION
+    local shopSection = Instance.new("Frame")
+    shopSection.Name = "ShopSection"
+    shopSection.Size = UDim2.new(1, 0, 1, 0)
+    shopSection.BackgroundTransparency = 1
+    shopSection.Visible = false
+    shopSection.Parent = sectionsContainer
+
+    -- LEADERBOARD SECTION
+    local leaderboardSection = Instance.new("Frame")
+    leaderboardSection.Name = "LeaderboardSection"
+    leaderboardSection.Size = UDim2.new(1, 0, 1, 0)
+    leaderboardSection.BackgroundTransparency = 1
+    leaderboardSection.Visible = false
+    leaderboardSection.Parent = sectionsContainer
+
+    -- STATISTICS SECTION
+    local statisticsSection = Instance.new("Frame")
+    statisticsSection.Name = "StatisticsSection"
+    statisticsSection.Size = UDim2.new(1, 0, 1, 0)
+    statisticsSection.BackgroundTransparency = 1
+    statisticsSection.Visible = false
+    statisticsSection.Parent = sectionsContainer
+
+    -- SETTINGS SECTION
+    local settingsSection = Instance.new("Frame")
+    settingsSection.Name = "SettingsSection"
+    settingsSection.Size = UDim2.new(1, 0, 1, 0)
+    settingsSection.BackgroundTransparency = 1
+    settingsSection.Visible = false
+    settingsSection.Parent = sectionsContainer
+
+    -- Add placeholder content to sections so they're not completely empty (ArmorySection already has detailed content)
+    for _, sectionFrame in pairs({shopSection, leaderboardSection, statisticsSection, settingsSection}) do
+        local placeholder = Instance.new("TextLabel")
+        placeholder.Name = "PlaceholderText"
+        placeholder.Size = UDim2.new(1, 0, 1, 0)
+        placeholder.BackgroundTransparency = 1
+        placeholder.Text = sectionFrame.Name .. " - Coming Soon"
+        placeholder.TextColor3 = Colors.TextSecondary
+        placeholder.TextSize = 24
+        placeholder.Font = Enum.Font.Gotham
+        placeholder.Parent = sectionFrame
     end
 
     print("📋 Main Menu UI Created Successfully!")
