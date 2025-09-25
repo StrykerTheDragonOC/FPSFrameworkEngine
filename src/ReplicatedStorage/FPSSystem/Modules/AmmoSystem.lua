@@ -244,7 +244,7 @@ function AmmoSystem:SetupAmmoUI()
 	print("AmmoSystem: Connecting to unified FPSHUD")
 
 	local playerGui = player:WaitForChild("PlayerGui")
-	local fpshud = playerGui:WaitForChild("FPSHUD", 5)
+	local fpshud = playerGui:FindFirstChild("FPSHUD")
 
 	if fpshud then
 		local ammoFrame = fpshud:WaitForChild("AmmoFrame", 5)
@@ -259,124 +259,6 @@ function AmmoSystem:SetupAmmoUI()
 	warn("AmmoSystem: Could not find unified HUD ammo display")
 	return
 end
-
-	
-	-- Ammo type indicator (top right corner)
-	local ammoIndicator = Instance.new("Frame")
-	ammoIndicator.Name = "AmmoIndicator"
-	ammoIndicator.Size = UDim2.new(0, 200, 0, 40)
-	ammoIndicator.Position = UDim2.new(1, -220, 0, 20)
-	ammoIndicator.BackgroundColor3 = Color3.new(0, 0, 0)
-	ammoIndicator.BackgroundTransparency = 0.3
-	ammoIndicator.BorderSizePixel = 0
-	ammoIndicator.Parent = ammoUI
-	
-	local indicatorCorner = Instance.new("UICorner")
-	indicatorCorner.CornerRadius = UDim.new(0, 6)
-	indicatorCorner.Parent = ammoIndicator
-	
-	-- Ammo type color indicator
-	local colorBar = Instance.new("Frame")
-	colorBar.Name = "ColorBar"
-	colorBar.Size = UDim2.new(0, 4, 1, 0)
-	colorBar.Position = UDim2.new(0, 0, 0, 0)
-	colorBar.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
-	colorBar.BorderSizePixel = 0
-	colorBar.Parent = ammoIndicator
-	
-	-- Ammo type label
-	local ammoTypeLabel = Instance.new("TextLabel")
-	ammoTypeLabel.Name = "AmmoType"
-	ammoTypeLabel.Size = UDim2.new(1, -50, 0.6, 0)
-	ammoTypeLabel.Position = UDim2.new(0, 10, 0, 0)
-	ammoTypeLabel.BackgroundTransparency = 1
-	ammoTypeLabel.Text = "Standard Ball"
-	ammoTypeLabel.TextColor3 = Color3.new(1, 1, 1)
-	ammoTypeLabel.TextScaled = true
-	ammoTypeLabel.Font = Enum.Font.SourceSansBold
-	ammoTypeLabel.TextXAlignment = Enum.TextXAlignment.Left
-	ammoTypeLabel.Parent = ammoIndicator
-	
-	-- Ammo count label
-	local ammoCountLabel = Instance.new("TextLabel")
-	ammoCountLabel.Name = "AmmoCount"
-	ammoCountLabel.Size = UDim2.new(1, -50, 0.4, 0)
-	ammoCountLabel.Position = UDim2.new(0, 10, 0.6, 0)
-	ammoCountLabel.BackgroundTransparency = 1
-	ammoCountLabel.Text = "300 rounds"
-	ammoCountLabel.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-	ammoCountLabel.TextScaled = true
-	ammoCountLabel.Font = Enum.Font.SourceSans
-	ammoCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-	ammoCountLabel.Parent = ammoIndicator
-	
-	-- Ammo selector keybind hint
-	local keybindHint = Instance.new("TextLabel")
-	keybindHint.Name = "KeybindHint"
-	keybindHint.Size = UDim2.new(0, 40, 1, 0)
-	keybindHint.Position = UDim2.new(1, -45, 0, 0)
-	keybindHint.BackgroundTransparency = 1
-	keybindHint.Text = "[B]"
-	keybindHint.TextColor3 = Color3.new(1, 1, 0)
-	keybindHint.TextScaled = true
-	keybindHint.Font = Enum.Font.SourceSansBold
-	keybindHint.Parent = ammoIndicator
-	
-	-- Ammo selector menu (initially hidden)
-	local ammoSelector = Instance.new("Frame")
-	ammoSelector.Name = "AmmoSelector"
-	ammoSelector.Size = UDim2.new(0, 350, 0, 300)
-	ammoSelector.Position = UDim2.new(0.5, -175, 0.5, -150)
-	ammoSelector.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-	ammoSelector.BorderSizePixel = 0
-	ammoSelector.Visible = false
-	ammoSelector.Parent = ammoUI
-	
-	local selectorCorner = Instance.new("UICorner")
-	selectorCorner.CornerRadius = UDim.new(0, 8)
-	selectorCorner.Parent = ammoSelector
-	
-	-- Selector title
-	local selectorTitle = Instance.new("TextLabel")
-	selectorTitle.Name = "Title"
-	selectorTitle.Size = UDim2.new(1, 0, 0, 40)
-	selectorTitle.BackgroundTransparency = 1
-	selectorTitle.Text = "Select Ammunition Type"
-	selectorTitle.TextColor3 = Color3.new(1, 1, 1)
-	selectorTitle.TextScaled = true
-	selectorTitle.Font = Enum.Font.SourceSansBold
-	selectorTitle.Parent = ammoSelector
-	
-	-- Scroll frame for ammo options
-	local scrollFrame = Instance.new("ScrollingFrame")
-	scrollFrame.Name = "AmmoOptions"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -60)
-	scrollFrame.Position = UDim2.new(0, 10, 0, 50)
-	scrollFrame.BackgroundTransparency = 1
-	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 6
-	scrollFrame.Parent = ammoSelector
-	
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 5)
-	listLayout.Parent = scrollFrame
-	
-	-- Close button
-	local closeButton = Instance.new("TextButton")
-	closeButton.Size = UDim2.new(0, 30, 0, 30)
-	closeButton.Position = UDim2.new(1, -35, 0, 5)
-	closeButton.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
-	closeButton.Text = "X"
-	closeButton.TextColor3 = Color3.new(1, 1, 1)
-	closeButton.TextScaled = true
-	closeButton.Font = Enum.Font.SourceSansBold
-	closeButton.Parent = ammoSelector
-	
-	closeButton.MouseButton1Click:Connect(function()
-		self:CloseAmmoSelector()
-	end)
-
 
 function AmmoSystem:SetupInputHandling()
 	UserInputService.InputBegan:Connect(function(input, gameProcessed)

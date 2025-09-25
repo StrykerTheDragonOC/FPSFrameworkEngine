@@ -149,15 +149,16 @@ local function CreateMainMenuUI()
     -- Game Title - Centered and properly positioned for 1920x1080
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "TitleLabel"
-    titleLabel.Size = UDim2.new(0, 900, 0, 80)
-    titleLabel.Position = UDim2.new(0.5, -450, 0, 60)
+    titleLabel.Size = UDim2.new(0, 1100, 0, 100)
+    titleLabel.Position = UDim2.new(0.5, -550, 0, 40)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "KFCS'S: FUNNY RANDOMIZER 4.0"
+    titleLabel.Text = "KFC'S: FUNNY RANDOMIZER 4.0"
     titleLabel.TextColor3 = Colors.Primary
-    titleLabel.TextSize = 48
+    titleLabel.TextSize = 58
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextStrokeTransparency = 0.2
     titleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    titleLabel.TextScaled = true
     titleLabel.Parent = mainContainer
 
     -- Remove subtitle as requested
@@ -165,8 +166,8 @@ local function CreateMainMenuUI()
     -- Menu Panel - Fixed sizing for 1920x1080
     local menuPanel = Instance.new("Frame")
     menuPanel.Name = "MenuPanel"
-    menuPanel.Size = UDim2.new(0, 1200, 0, 650)
-    menuPanel.Position = UDim2.new(0.5, -600, 0, 180)
+    menuPanel.Size = UDim2.new(0, 1400, 0, 750)
+    menuPanel.Position = UDim2.new(0.5, -700, 0, 160)
     menuPanel.BackgroundColor3 = Colors.Panel
     menuPanel.BackgroundTransparency = 0.1
     menuPanel.BorderSizePixel = 0
@@ -194,8 +195,8 @@ local function CreateMainMenuUI()
     -- Player Info Container - Right side
     local playerInfo = Instance.new("Frame")
     playerInfo.Name = "PlayerInfo"
-    playerInfo.Size = UDim2.new(0, 350, 1, -10)
-    playerInfo.Position = UDim2.new(1, -360, 0, 5)
+    playerInfo.Size = UDim2.new(0, 400, 1, -10)
+    playerInfo.Position = UDim2.new(1, -410, 0, 5)
     playerInfo.BackgroundTransparency = 1
     playerInfo.Parent = topBar
 
@@ -207,9 +208,10 @@ local function CreateMainMenuUI()
     playerName.BackgroundTransparency = 1
     playerName.Text = "OPERATIVE"
     playerName.TextColor3 = Colors.Text
-    playerName.TextSize = 18
+    playerName.TextSize = 22
     playerName.Font = Enum.Font.GothamBold
     playerName.TextXAlignment = Enum.TextXAlignment.Right
+    playerName.TextScaled = true
     playerName.Parent = playerInfo
 
     local playerLevel = Instance.new("TextLabel")
@@ -219,9 +221,10 @@ local function CreateMainMenuUI()
     playerLevel.BackgroundTransparency = 1
     playerLevel.Text = "RANK: 1"
     playerLevel.TextColor3 = Colors.Primary
-    playerLevel.TextSize = 14
+    playerLevel.TextSize = 16
     playerLevel.Font = Enum.Font.Gotham
     playerLevel.TextXAlignment = Enum.TextXAlignment.Right
+    playerLevel.TextScaled = true
     playerLevel.Parent = playerInfo
 
     local playerCredits = Instance.new("TextLabel")
@@ -231,9 +234,10 @@ local function CreateMainMenuUI()
     playerCredits.BackgroundTransparency = 1
     playerCredits.Text = "CREDITS: 200"
     playerCredits.TextColor3 = Colors.Warning
-    playerCredits.TextSize = 14
+    playerCredits.TextSize = 16
     playerCredits.Font = Enum.Font.Gotham
     playerCredits.TextXAlignment = Enum.TextXAlignment.Right
+    playerCredits.TextScaled = true
     playerCredits.Parent = playerInfo
 
     local playerXP = Instance.new("TextLabel")
@@ -243,9 +247,10 @@ local function CreateMainMenuUI()
     playerXP.BackgroundTransparency = 1
     playerXP.Text = "XP: 0/1000"
     playerXP.TextColor3 = Colors.Primary
-    playerXP.TextSize = 14
+    playerXP.TextSize = 16
     playerXP.Font = Enum.Font.Gotham
     playerXP.TextXAlignment = Enum.TextXAlignment.Right
+    playerXP.TextScaled = true
     playerXP.Parent = playerInfo
 
     local playerKD = Instance.new("TextLabel")
@@ -255,9 +260,10 @@ local function CreateMainMenuUI()
     playerKD.BackgroundTransparency = 1
     playerKD.Text = "K/D: 0.00"
     playerKD.TextColor3 = Colors.TextSecondary
-    playerKD.TextSize = 14
+    playerKD.TextSize = 16
     playerKD.Font = Enum.Font.Gotham
     playerKD.TextXAlignment = Enum.TextXAlignment.Right
+    playerKD.TextScaled = true
     playerKD.Parent = playerInfo
 
     -- Navigation Buttons Frame - Fixed spacing
@@ -283,10 +289,10 @@ local function CreateMainMenuUI()
         {name = "SHOP", text = "[SHOP]\nPurchase items", color = Colors.Primary}
     }
 
-    local buttonWidth = 220
-    local buttonSpacing = 12
+    local buttonWidth = 260
+    local buttonSpacing = 15
     local totalWidth = (#navButtons * buttonWidth) + ((#navButtons - 1) * buttonSpacing)
-    local startX = (1160 - totalWidth) / 2 -- Center in 1160px wide frame
+    local startX = (1360 - totalWidth) / 2 -- Center in 1360px wide frame
 
     for i, buttonData in ipairs(navButtons) do
         local navButton = Instance.new("TextButton")
@@ -298,8 +304,9 @@ local function CreateMainMenuUI()
         navButton.BorderSizePixel = 0
         navButton.Text = buttonData.text
         navButton.TextColor3 = Colors.Text
-        navButton.TextSize = 16
+        navButton.TextSize = 18
         navButton.Font = Enum.Font.GothamBold
+        navButton.TextScaled = true
         navButton.Parent = navFrame
 
         local buttonCorner = Instance.new("UICorner")
@@ -548,8 +555,9 @@ local function CreateMainMenuUI()
                 catBtn.BorderSizePixel = 0
                 catBtn.Text = catName
                 catBtn.TextColor3 = Colors.Text
-                catBtn.TextSize = 9
+                catBtn.TextSize = 10
                 catBtn.Font = Enum.Font.Gotham
+                catBtn.TextScaled = true
                 catBtn.Parent = categoryFrame
             end
 
@@ -591,11 +599,36 @@ local function CreateMainMenuUI()
             -- CENTER AREA - 3D Weapon Display with Pegboard Background
             local centerArea = Instance.new("Frame")
             centerArea.Name = "CenterDisplay"
-            centerArea.Size = UDim2.new(1, -580, 1, 0) -- Space between left sidebar (280px) and right sidebar (300px)
-            centerArea.Position = UDim2.new(0, 280, 0, 0)
+            centerArea.Size = UDim2.new(1, -580, 1, -40) -- Space between left sidebar (280px) and right sidebar (300px), reserve space for attachment tabs
+            centerArea.Position = UDim2.new(0, 280, 0, 40)
             centerArea.BackgroundColor3 = Color3.fromRGB(200, 190, 180) -- Pegboard beige
             centerArea.BorderSizePixel = 0
             centerArea.Parent = section
+
+            -- Attachment management tabs (above center area)
+            local attachmentTabsFrame = Instance.new("Frame")
+            attachmentTabsFrame.Name = "AttachmentTabs"
+            attachmentTabsFrame.Size = UDim2.new(1, -580, 0, 40)
+            attachmentTabsFrame.Position = UDim2.new(0, 280, 0, 0)
+            attachmentTabsFrame.BackgroundColor3 = Color3.fromRGB(30, 60, 90)
+            attachmentTabsFrame.BorderSizePixel = 0
+            attachmentTabsFrame.Parent = section
+
+            local attachmentTabs = {"ATTACHMENTS", "PERKS", "SKINS", "WEAPONS"}
+            for i, tabName in ipairs(attachmentTabs) do
+                local attachTab = Instance.new("TextButton")
+                attachTab.Name = tabName .. "Tab"
+                attachTab.Size = UDim2.new(0.25, -2, 1, 0)
+                attachTab.Position = UDim2.new((i-1) * 0.25, (i-1)*2, 0, 0)
+                attachTab.BackgroundColor3 = (i == 1) and Colors.Primary or Color3.fromRGB(60, 100, 140)
+                attachTab.BorderSizePixel = 0
+                attachTab.Text = tabName
+                attachTab.TextColor3 = Colors.Text
+                attachTab.TextSize = 12
+                attachTab.Font = Enum.Font.GothamBold
+                attachTab.TextScaled = true
+                attachTab.Parent = attachmentTabsFrame
+            end
 
             -- Pegboard pattern background
             local pegboardPattern = Instance.new("Frame")

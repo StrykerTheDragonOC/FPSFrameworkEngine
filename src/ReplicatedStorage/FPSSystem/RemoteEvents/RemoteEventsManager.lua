@@ -147,7 +147,6 @@ local REMOTE_EVENTS = {
 	"UpdateStats",
 	"ClassUpdate",
 	"AmmoUpdate",
-	"DeployPlayer",
 	"ResetBountyUI",
 
 	-- Additional System Events
@@ -246,7 +245,8 @@ local REMOTE_FUNCTIONS = {
 	"GetClassConfig",
 	"ValidateClassChange",
 	"GetAmmoCount",
-	"CanDeploy"
+	"CanDeploy",
+	"DeployPlayer"
 }
 
 function RemoteEventsManager:Initialize()
