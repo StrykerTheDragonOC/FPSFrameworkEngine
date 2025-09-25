@@ -1,0 +1,10 @@
+{
+    "languageMode": "strict",
+    "typeErrors": false,
+    "lint": {
+        "*": false
+    },
+    "aliases": {
+        "game": "game"
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "className": "Tool",
+    "properties": {
+        "Name": "PocketKnife",
+        "RequiresHandle": true,
+        "CanBeDropped": false,
+        "ManualActivationOnly": true
+    }
+}

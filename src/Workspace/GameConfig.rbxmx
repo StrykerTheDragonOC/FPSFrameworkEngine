@@ -1,0 +1,67 @@
+<roblox version="4">
+	<Item class="Configuration" referent="RBX0">
+		<Properties>
+			<string name="Name">GameConfig</string>
+		</Properties>
+		<Item class="IntValue" referent="RBX1">
+			<Properties>
+				<string name="Name">GamemodeTimer</string>
+				<int name="Value">1200</int>
+			</Properties>
+		</Item>
+		<Item class="NumberValue" referent="RBX2">
+			<Properties>
+				<string name="Name">DayNightCycleSpeed</string>
+				<double name="Value">600</double>
+			</Properties>
+		</Item>
+		<Item class="BoolValue" referent="RBX3">
+			<Properties>
+				<string name="Name">FriendlyFire</string>
+				<bool name="Value">false</bool>
+			</Properties>
+		</Item>
+		<Item class="StringValue" referent="RBX4">
+			<Properties>
+				<string name="Name">CurrentGamemode</string>
+				<string name="Value">TDM</string>
+			</Properties>
+		</Item>
+		<Item class="IntValue" referent="RBX5">
+			<Properties>
+				<string name="Name">MaxPlayers</string>
+				<int name="Value">20</int>
+			</Properties>
+		</Item>
+		<Item class="IntValue" referent="RBX6">
+			<Properties>
+				<string name="Name">RespawnTime</string>
+				<int name="Value">5</int>
+			</Properties>
+		</Item>
+		<Item class="NumberValue" referent="RBX7">
+			<Properties>
+				<string name="Name">BaseXPPerKill</string>
+				<double name="Value">100</double>
+			</Properties>
+		</Item>
+		<Item class="NumberValue" referent="RBX8">
+			<Properties>
+				<string name="Name">HeadshotMultiplier</string>
+				<double name="Value">1.5</double>
+			</Properties>
+		</Item>
+		<Item class="IntValue" referent="RBX9">
+			<Properties>
+				<string name="Name">DefaultCredits</string>
+				<int name="Value">500</int>
+			</Properties>
+		</Item>
+		<Item class="BoolValue" referent="RBX10">
+			<Properties>
+				<string name="Name">AllowSpectating</string>
+				<bool name="Value">true</bool>
+			</Properties>
+		</Item>
+	</Item>
+</roblox>

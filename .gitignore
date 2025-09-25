@@ -1,0 +1,14 @@
+# Rojo
+*.rbxlx.lock
+
+# Weapon Models and ViewModels (ignore to prevent mesh ID removal)
+src/ReplicatedStorage/FPSSystem/WeaponModels/
+src/ReplicatedStorage/FPSSystem/ViewModels/
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db

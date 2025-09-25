@@ -1,0 +1,9 @@
+{
+    "className": "Tool",
+    "properties": {
+        "Name": "G36",
+        "RequiresHandle": true,
+        "CanBeDropped": false,
+        "ManualActivationOnly": false
+    }
+}

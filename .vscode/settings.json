@@ -1,4 +1,43 @@
 {
-    "stylua.targetReleaseVersion": "latest",
-    "claudeCodeChat.permissions.yoloMode": true
+    "luau-lsp.diagnostics.roblox": {
+        "unreachable-code": "off",
+        "unknown-global": "off",
+        "deprecated": "off"
+    },
+    "luau-lsp.require.mode": "relativeToFile",
+    "luau-lsp.autocomplete.enabled": true,
+    "luau-lsp.inlayHints.enabled": true,
+    "luau-lsp.inlayHints.typeHints": true,
+    "luau-lsp.inlayHints.parameterHints": true,
+    "luau-lsp.inlayHints.variableHints": false,
+    "luau-lsp.typeErrors": false,
+    "luau-lsp.diagnostics.enabled": false,
+    "luau-lsp.lint": {
+        "unreachable-code": "off",
+        "unknown-global": "off",
+        "deprecated": "off",
+        "unknown-type": "off",
+        "unknown-property": "off",
+        "type-mismatch": "off",
+        "unused-variable": "off",
+        "unused-function": "off",
+        "unused-import": "off",
+        "duplicate-destructured-variable": "off",
+        "duplicate-function": "off",
+        "duplicate-property": "off",
+        "shadowing-variable": "off",
+        "empty-else": "off",
+        "empty-loop": "off",
+        "same-block": "off",
+        "manual-array-copy": "off",
+        "manual-table-clone": "off",
+        "use-of-_G": "off",
+        "one-statement-per-line": "off",
+        "simplify-UDim2": "off",
+        "roblox-ts-migration": "off"
+    },
+    "luau-lsp.types.definitionFilesEnabled": false,
+    "luau-lsp.types.roblox": false,
+    "luau-lsp.languageMode": "nonstrict",
+    "stylua.targetReleaseVersion": "latest"
 }

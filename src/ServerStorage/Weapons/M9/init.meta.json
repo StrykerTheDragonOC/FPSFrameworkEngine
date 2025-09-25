@@ -1,0 +1,9 @@
+{
+    "className": "Tool",
+    "properties": {
+        "Name": "M9",
+        "RequiresHandle": true,
+        "CanBeDropped": false,
+        "ManualActivationOnly": false
+    }
+}

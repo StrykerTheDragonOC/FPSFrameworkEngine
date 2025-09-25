@@ -1,35 +1,42 @@
 {
-  "name": "FPSEngine",
+  "name": "KFCSFUNNYRANDOMIZER",
   "tree": {
     "$ignoreUnknownInstances": true,
     "$className": "DataModel",
+
+    "ReplicatedFirst": {
+      "$className": "ReplicatedFirst",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/ReplicatedFirst"
+    },
+
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "$ignoreUnknownInstances": true,
-      "$path": "src/ReplicatedStorage",
-      "FPSSystem": {
-        "$className": "FPSSystem",
-        "$ignoreUnknownInstances": true,
-        "$path": "ReplicatedStorage/FPSSystem",
-        "RemoteEvents": {
-          "$className": "RemoteEvents",
-          "$ignoreUnknownInstances": true,
-          "$path": "ReplicatedStorage/FPSSystem/RemoteEvents"
-        }
-      }
+      "$path": "src/ReplicatedStorage"
     },
+
     "ServerScriptService": {
       "$className": "ServerScriptService",
       "$ignoreUnknownInstances": true,
       "$path": "src/ServerScriptService"
     },
+
     "ServerStorage": {
       "$className": "ServerStorage",
       "$ignoreUnknownInstances": true,
       "$path": "src/ServerStorage"
     },
+
+    "StarterPack": {
+      "$className": "StarterPack",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/StarterPack"
+    },
+
     "StarterPlayer": {
       "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
         "$ignoreUnknownInstances": true,
@@ -39,18 +46,67 @@
         "$className": "StarterCharacterScripts",
         "$ignoreUnknownInstances": true,
         "$path": "src/StarterPlayer/StarterCharacterScripts"
-      },
-      "$ignoreUnknownInstances": true
+      }
     },
+
+    "StarterGui": {
+      "$className": "StarterGui",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/StarterGui"
+    },
+
+    "Workspace": {
+      "$className": "Workspace",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/Workspace"
+    },
+
+    "Lighting": {
+      "$className": "Lighting",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/Lighting"
+    },
+
+    "SoundService": {
+      "$className": "SoundService",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/SoundService"
+    },
+
+    "Players": {
+      "$className": "Players",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/Players"
+    },
+
+    "Teams": {
+      "$className": "Teams",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/Teams"
+    },
+
     "TestService": {
       "$className": "TestService",
       "$ignoreUnknownInstances": true,
       "$path": "src/TestService"
     },
-    "Workspace": {
-      "$className": "Workspace",
+
+    "HttpService": {
+      "$className": "HttpService",
       "$ignoreUnknownInstances": true,
-      "$path": "src/Workspace"
+      "$path": "src/HttpService"
+    },
+
+    "TextChatService": {
+      "$className": "TextChatService",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/TextChatService"
+    },
+
+    "LocalizationService": {
+      "$className": "LocalizationService",
+      "$ignoreUnknownInstances": true,
+      "$path": "src/LocalizationService"
     }
   }
 }

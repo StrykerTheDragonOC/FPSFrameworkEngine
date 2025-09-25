@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<roblox version="4">
+  <Item class="MeshPart" referent="RBX0">
+    <Properties>
+      <string name="Name">TestMesh</string>
+      <Content name="MeshId"><null></null></Content>
+    </Properties>
+  </Item>
+</roblox>
