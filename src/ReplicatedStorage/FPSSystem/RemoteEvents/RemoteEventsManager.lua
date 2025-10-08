@@ -6,250 +6,67 @@ local remoteEvents = {}
 local remoteFunctions = {}
 
 local REMOTE_EVENTS = {
-	-- Weapon System
 	"WeaponFired",
-	"WeaponReloaded",
+	"WeaponReloaded", 
 	"WeaponEquipped",
 	"WeaponUnequipped",
-	"WeaponSwitched",
-	"MagicWeaponActivated",
-	"AdminWeaponUsed",
-	"WeaponJammed",
-	"WeaponOverheat",
-
-	-- Combat System
 	"PlayerDamaged",
 	"PlayerKilled",
-	"PlayerAssist",
-	"HeadshotKill",
-	"BackstabKill",
-	"LongRangeKill",
-	"WallbangKill",
-	"DoubleKill",
-	"TripleKill",
-	"QuadKill",
-	"KillStreak",
-	"MeleeAttack",
-	"GrenadeThrown",
-	"GrenadeExploded",
-	"GrenadeCooked",
-	"C4Planted",
-	"C4Detonated",
-
-	-- Movement & Status
 	"PlayerSpawned",
-	"PlayerMoved",
-	"PlayerSliding",
-	"PlayerLedgeGrab",
-	"PlayerDolphinDive",
-	"PlayerCrouched",
-	"PlayerProne",
-	"StatusEffect",
-	"StatusEffectRemoved",
-	"PlayerBleeding",
-	"PlayerFractured",
-	"PlayerDeafened",
-	"PlayerBurning",
-	"PlayerFrozen",
-
-	-- XP & Progression
 	"XPAwarded",
 	"LevelUp",
-	"CreditsAwarded",
-	"WeaponUnlocked",
-	"AttachmentUnlocked",
-	"MasteryUnlocked",
-	"PerkUnlocked",
-
-	-- Team & Spotting
 	"SpotPlayer",
 	"LoseSpot",
 	"CreateMapPing",
 	"ChangeTeam",
-	"TeamSwitched",
-	"PlayerDeployed",
-	"PlayerJoinedBattle",
-	"ReturnToLobby",
-
-	-- Game Management
-	"GamePhaseChanged",
-	"GameStarted",
-	"GameEnded",
-	"GamemodeChanged",
-	"MapChanged",
-	"RoundStarted",
-	"RoundEnded",
-	"TimeUpdate",
-	"DayNightChanged",
-	"ObjectiveCaptured",
-	"ObjectiveLost",
-
-	-- UI & Menu
-	"MenuStateChanged",
-	"LoadoutChanged",
-	"AttachmentEquipped",
-	"AttachmentRemoved",
-	"WeaponCustomized",
-	"SkinEquipped",
-	"SettingsChanged",
-	"TabPressed",
-	"ScoreboardToggled",
-
-	-- Shop & Economy
-	"PurchaseItem",
-	"PurchaseResult",
-	"ShopItemBought",
-	"SkinPurchased",
-	"WeaponPurchased",
-	"AttachmentPurchased",
-	"DailySkinRotation",
-
-	-- Voting System
-	"VoteGamemode",
-	"VotingStarted",
-	"VotingEnded",
-	"VoteUpdate",
-	"VoteCast",
-
-	-- Pickups & Environment
-	"PickupSpawned",
-	"PickupCollected",
-	"PickupDespawned",
-	"AmmoRefilled",
-	"HealthRestored",
-	"ArmorPickedUp",
-	"NightVisionPickedUp",
-	"DestructionTriggered",
-	"ExplosionDamage",
-
-	-- Admin System
-	"AdminCommand",
-	"AdminTeamChange",
-	"AdminKick",
-	"AdminBan",
-	"AdminError",
-	"AdminSuccess",
-	"TeamChangedByAdmin",
-	"AdminModeToggled",
-
-	-- Vehicle System
-	"SpawnVehicle",
-	"DestroyVehicle",
-	"ClearVehicles",
-	"VehicleAction",
-	"VehicleEntered",
-	"VehicleExited",
-	"VehicleDamaged",
-	"VehicleDestroyed",
-	"VehicleRepaired",
-
-	-- Missing Events (from error log)
 	"UpdateStats",
-	"ClassUpdate",
-	"AmmoUpdate",
-	"ResetBountyUI",
-
-	-- Additional System Events
-	"SystemInitialized",
-	"PlayerDataLoaded",
-	"WeaponStatsUpdated",
-	"InventoryUpdated",
-	"AchievementUnlocked",
-	"VoteForGamemode",
-	"StartVoting",
-	"UpdateVotes",
-
-	-- Miscellaneous
-	"ChatMessage",
-	"PlayerJoined",
-	"PlayerLeft",
-	"ErrorOccurred",
-	"DebugMessage"
+	"StatusEffect",
+	"GrenadeThrown",
+    "MeleeAttack",
+    "GamePhaseChanged",
+    "AmmoUpdate",
+    "ClassUpdate",
+    "TimeUpdate",
+    "PickupSpawned",
+    "PlayerDeployed",
+    "GameStarted",
+    "GameEnded",
+    "AttachmentDataUpdated",
+    "SaveWeaponLoadout",
+    "KillStreakAchieved",
+    "PurchaseResult",
+    "MenuStateChanged",
+    "DeployPlayer",
+    "LoadoutChanged",
+    "PlayerJoinedBattle",
+    "ReturnToLobby",
+    "VoteGamemode",
+    "VotingStarted",
+    "VotingEnded",
+    "VoteUpdate",
+    "AdminTeamChange",
+    "AdminError",
+    "AdminSuccess",
+    "TeamChangedByAdmin",
+    "VoteForGamemode",
+    "PlayerDeploy",
+    "SpawnVehicle",
+    "DestroyVehicle",
+    "ClearVehicles",
 }
 
 local REMOTE_FUNCTIONS = {
-	-- Player Data
 	"GetPlayerData",
-	"GetPlayerStats",
-	"GetPlayerLoadout",
-	"GetPlayerUnlockedWeapons",
-	"GetPlayerAttachments",
-	"GetPlayerProgress",
-	"GetPlayerCredits",
-	"GetPlayerLevel",
-
-	-- Weapon System
 	"GetWeaponConfig",
-	"GetWeaponStats",
-	"GetWeaponPool",
-	"GetRandomWeaponPool",
-	"GetWeaponAttachments",
 	"ValidateWeaponAction",
-	"ValidateLoadout",
-	"GetWeaponMastery",
-	"CanUseWeapon",
-
-	-- Shop & Economy
-	"GetShopItems",
-	"GetDailyShop",
-	"PurchaseItem",
-	"PurchaseWeapon",
-	"PurchaseAttachment",
-	"PurchaseSkin",
-	"ValidatePurchase",
-	"GetItemPrice",
-
-	-- Game Management
 	"GetTeamSpawns",
 	"GetGamemodeInfo",
-	"GetCurrentGamemode",
-	"GetMapInfo",
-	"GetServerSettings",
-	"GetGameState",
-	"GetObjectiveStatus",
-	"GetRoundTimeLeft",
-
-	-- Leaderboard & Statistics
-	"GetLeaderboard",
-	"GetTopPlayers",
-	"GetPlayerRank",
-	"GetMatchStats",
-	"GetWeaponStats",
-	"GetKillFeed",
-
-	-- Admin Functions
-	"IsPlayerAdmin",
-	"GetAdminCommands",
-	"ExecuteAdminCommand",
-	"GetPlayerPermissions",
-	"ValidateAdminAction",
-
-	-- Vehicle Functions
-	"GetActiveVehicles",
-	"GetVehicleConfig",
-	"CanSpawnVehicle",
-	"GetVehicleHealth",
-
-	-- Attachment System
-	"GetAvailableAttachments",
-	"GetAttachmentConfig",
-	"CanEquipAttachment",
-	"GetAttachmentUnlockRequirements",
-
-	-- Validation Functions
-	"ValidateMovement",
-	"ValidateCombatAction",
-	"ValidateTeamAction",
-	"ValidateShopAction",
-	"AntiCheatValidation",
-
-	-- Missing Functions (from error log)
-	"GetPlayerClasses",
-	"GetClassConfig",
-	"ValidateClassChange",
-	"GetAmmoCount",
-	"CanDeploy",
-	"DeployPlayer"
+	"GetPlayerStats",
+	"PurchaseItem",
+	"GetShopItems",
+    "ValidateLoadout",
+    "IsPlayerAdmin",
+    
 }
 
 function RemoteEventsManager:Initialize()

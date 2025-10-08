@@ -17,6 +17,7 @@ local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 local RaycastSystem = require(ReplicatedStorage.FPSSystem.Modules.RaycastSystem)
 local AttachmentManager = require(ReplicatedStorage.FPSSystem.Modules.AttachmentManager)
 local ViewmodelSystem = require(ReplicatedStorage.FPSSystem.Modules.ViewmodelSystem)
+local WeaponUI = require(ReplicatedStorage.FPSSystem.Modules.WeaponUI)
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -57,19 +58,19 @@ local customKeybinds = WeaponConfig:GetWeaponKeybinds(weaponName)
 
 function fireWeapon()
 	if not canFire or isReloading or currentAmmo <= 0 then return end
-	
+
 	local currentTime = tick()
 	local fireRate = 60 / weaponStats.FireRate
-	
+
 	if currentTime - lastFireTime < fireRate then return end
-	
+
 	lastFireTime = currentTime
 	currentAmmo = currentAmmo - 1
-	
+
 	-- Perform raycast
 	local rayDirection = Camera.CFrame.LookVector
 	local rayResult = RaycastSystem:FireRay(Camera.CFrame.Position, rayDirection, weaponStats.Range, weaponName, weaponStats.Damage, 1.0, {player.Character})
-	
+
 	-- Send to server
 	RemoteEventsManager:FireServer("WeaponFired", {
 		WeaponName = weaponName,
@@ -79,10 +80,18 @@ function fireWeapon()
 		Distance = rayResult.Distance,
 		Damage = weaponStats.Damage
 	})
-	
+
 	-- Play effects
 	playFireEffects()
-	
+
+	-- Update weapon UI
+	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
+
+	-- Show hitmarker if hit
+	if rayResult.Hit then
+		WeaponUI:ShowHitmarker()
+	end
+
 	-- Check for reload
 	if currentAmmo <= 0 then
 		reloadWeapon()
@@ -133,28 +142,35 @@ end
 
 function reloadWeapon()
 	if isReloading or currentAmmo >= weaponStats.ClipSize or totalAmmo <= 0 then return end
-	
+
 	isReloading = true
-	
+
+	-- Show reload indicator
+	WeaponUI:ShowReloadIndicator()
+
 	-- Play reload animation/sound
 	local reloadSound = Instance.new("Sound")
 	reloadSound.SoundId = "rbxassetid://138084889" -- Reload sound
 	reloadSound.Volume = 0.4
 	reloadSound.Parent = Camera
 	reloadSound:Play()
-	
+
 	-- Wait for reload time
 	wait(weaponStats.ReloadTime)
-	
+
 	-- Calculate ammo
 	local ammoNeeded = weaponStats.ClipSize - currentAmmo
 	local ammoToAdd = math.min(ammoNeeded, totalAmmo)
-	
+
 	currentAmmo = currentAmmo + ammoToAdd
 	totalAmmo = totalAmmo - ammoToAdd
-	
+
 	isReloading = false
-	
+
+	-- Update weapon UI
+	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
+	WeaponUI:HideReloadIndicator()
+
 	-- Notify server
 	RemoteEventsManager:FireServer("WeaponReloaded", {
 		WeaponName = weaponName,
@@ -164,27 +180,34 @@ function reloadWeapon()
 end
 
 function onEquipped()
+	-- Initialize and show weapon UI
+	WeaponUI:Initialize()
+	WeaponUI:Show()
+	WeaponUI:UpdateWeaponName(weaponName)
+	WeaponUI:UpdateFireMode(currentFireMode)
+	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
+
 	-- Setup input connections
 	connections.mouseButton1 = mouse.Button1Down:Connect(function()
 		fireWeapon()
 	end)
-	
+
 	-- Auto-fire for assault rifles
 	connections.autoFire = mouse.Button1Up:Connect(function()
 		-- Stop auto-fire logic if implemented
 	end)
-	
+
 	connections.reload = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
-		
+
 		if input.KeyCode == Enum.KeyCode.R then
 			reloadWeapon()
 		end
 	end)
-	
+
 	-- Setup viewmodel using ViewmodelSystem
 	ViewmodelSystem:CreateViewmodel(weaponName, "Primary")
-	
+
 	-- Notify server
 	RemoteEventsManager:FireServer("WeaponEquipped", {
 		WeaponName = weaponName,
@@ -193,15 +216,18 @@ function onEquipped()
 end
 
 function onUnequipped()
+	-- Hide weapon UI
+	WeaponUI:Hide()
+
 	-- Disconnect all connections
 	for _, connection in pairs(connections) do
 		connection:Disconnect()
 	end
 	connections = {}
-	
+
 	-- Clean up viewmodel
 	ViewmodelSystem:DestroyViewmodel()
-	
+
 	-- Notify server
 	RemoteEventsManager:FireServer("WeaponUnequipped", {
 		WeaponName = weaponName,
@@ -219,6 +245,7 @@ WeaponConfig:Initialize()
 RaycastSystem:Initialize()
 AttachmentManager:Initialize()
 ViewmodelSystem:Initialize()
+-- WeaponUI is initialized on equip to avoid multiple initializations
 
 -- Enhanced weapon system ready
 print(weaponName .. " weapon system initialized with enhanced features")

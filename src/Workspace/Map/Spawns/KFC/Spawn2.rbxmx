@@ -2,7 +2,7 @@
 	<Meta name="ExplicitAutoJoints">true</Meta>
 	<External>null</External>
 	<External>nil</External>
-	<Item class="SpawnLocation" referent="RBXC28CB941FFB549F3A95ACDDAA5592418">
+	<Item class="SpawnLocation" referent="RBX16244DC051F84CCE876048123B21C816">
 		<Properties>
 			<bool name="AllowTeamChangeOnTouch">false</bool>
 			<bool name="Anchored">true</bool>
@@ -57,7 +57,7 @@
 			<bool name="Massless">false</bool>
 			<token name="Material">256</token>
 			<string name="MaterialVariantSerialized"></string>
-			<string name="Name">Spawn2</string>
+			<string name="Name">Spawn</string>
 			<bool name="Neutral">false</bool>
 			<CoordinateFrame name="PivotOffset">
 				<X>0</X>

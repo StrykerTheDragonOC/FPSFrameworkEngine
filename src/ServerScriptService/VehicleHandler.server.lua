@@ -357,34 +357,47 @@ local function isAdmin(player)
 end
 
 -- RemoteEvent handlers
-spawnVehicleRemote.OnServerEvent:Connect(function(player, vehicleType, position)
-	if isAdmin(player) then
-		VehicleHandler:SpawnVehicle(vehicleType, position)
-	else
-		warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to spawn vehicle without admin privileges")
-	end
-end)
-
-destroyVehicleRemote.OnServerEvent:Connect(function(player, vehicle)
-	if isAdmin(player) then
-		if activeVehicles[vehicle] then
-			VehicleHandler:DestroyVehicle(vehicle)
+if spawnVehicleRemote then
+	spawnVehicleRemote.OnServerEvent:Connect(function(player, vehicleType, position)
+		if isAdmin(player) then
+			VehicleHandler:SpawnVehicle(vehicleType, position)
+		else
+			warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to spawn vehicle without admin privileges")
 		end
-	else
-		warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to destroy vehicle without admin privileges")
-	end
-end)
+	end)
+else
+	warn("SpawnVehicle RemoteEvent not found - vehicle spawning disabled")
+end
 
-clearVehiclesRemote.OnServerEvent:Connect(function(player)
-	if isAdmin(player) then
-		for vehicle, _ in pairs(activeVehicles) do
-			VehicleHandler:DestroyVehicle(vehicle)
+if destroyVehicleRemote then
+	destroyVehicleRemote.OnServerEvent:Connect(function(player, vehicle)
+		if isAdmin(player) then
+			if activeVehicles[vehicle] then
+				VehicleHandler:DestroyVehicle(vehicle)
+			end
+		else
+			warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to destroy vehicle without admin privileges")
 		end
-		print("Cleared all vehicles by " .. player.Name)
-	else
-		warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to clear vehicles without admin privileges")
-	end
-end)
+	end)
+else
+	warn("DestroyVehicle RemoteEvent not found - vehicle destruction disabled")
+end
+
+local clearVehiclesRemote = RemoteEventsManager:GetEvent("ClearVehicles")
+if clearVehiclesRemote then
+	clearVehiclesRemote.OnServerEvent:Connect(function(player)
+		if isAdmin(player) then
+			for vehicle, _ in pairs(activeVehicles) do
+				VehicleHandler:DestroyVehicle(vehicle)
+			end
+			print("Cleared all vehicles by " .. player.Name)
+		else
+			warn(player.Name .. " (ID: " .. player.UserId .. ") attempted to clear vehicles without admin privileges")
+		end
+	end)
+else
+	warn("ClearVehicles RemoteEvent not found - vehicle clearing disabled")
+end
 
 -- Console commands for vehicle spawning
 local function executeCommand(player, command)

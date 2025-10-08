@@ -602,16 +602,23 @@ player.CharacterAdded:Connect(function(character)
     -- Clean up any UI when respawning
     BountySystem:RemoveBountyDisplay()
 
-    character.Humanoid.Died:Connect(function()
-        BountySystem:HandlePlayerDeath(player)
-    end)
+    -- Wait for Humanoid to exist
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        humanoid.Died:Connect(function()
+            BountySystem:HandlePlayerDeath(player)
+        end)
+    end
 end)
 
 -- Handle current character if already spawned
-if player.Character and player.Character:FindFirstChild("Humanoid") then
-    player.Character.Humanoid.Died:Connect(function()
-        BountySystem:HandlePlayerDeath(player)
-    end)
+if player.Character then
+    local humanoid = player.Character:FindFirstChild("Humanoid") or player.Character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        humanoid.Died:Connect(function()
+            BountySystem:HandlePlayerDeath(player)
+        end)
+    end
 end
 
 -- Initialize cleanup on script start

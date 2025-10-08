@@ -6,6 +6,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+-- CLIENT-ONLY MODULE CHECK
+if RunService:IsServer() then
+	warn("ViewmodelSystem is a client-only module and should not be required on the server")
+	return ViewmodelSystem
+end
+
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
@@ -94,45 +100,55 @@ end
 -- First-person camera lock system
 function ViewmodelSystem:LockFirstPerson()
 	if isFirstPersonLocked then return end
-	
+
+	-- Store original values
+	if not originalMaxZoomDistance then
+		originalMaxZoomDistance = player.CameraMaxZoomDistance
+	end
+
 	isFirstPersonLocked = true
 	fpsWeaponEquipped = true
-	
+
 	-- Force first-person view
+	player.CameraMode = Enum.CameraMode.LockFirstPerson
 	player.CameraMaxZoomDistance = 0.5
 	player.CameraMinZoomDistance = 0.5
-	
+
 	-- Apply player FOV setting from DataStore
 	-- Default FOV (can be modified via client settings)
 	local playerFOV = 90
 
-	-- Try to get FOV from server if needed
-	local getSettingEvent = RemoteEventsManager:GetEvent("GetPlayerSetting")
-	if getSettingEvent then
-		local serverFOV = getSettingEvent:InvokeServer("FOV")
-		if serverFOV then
-			playerFOV = serverFOV
+	-- Try to get FOV from server if needed (but don't wait for it)
+	pcall(function()
+		local getSettingEvent = RemoteEventsManager:GetEvent("GetPlayerSetting")
+		if getSettingEvent then
+			local serverFOV = getSettingEvent:InvokeServer("FOV")
+			if serverFOV then
+				playerFOV = serverFOV
+			end
 		end
-	end
+	end)
+
 	Camera.FieldOfView = playerFOV
-	
-	print("First-person view locked")
+
+	print("✓ First-person view locked")
 end
 
 function ViewmodelSystem:UnlockFirstPerson()
 	if not isFirstPersonLocked then return end
-	
+
 	isFirstPersonLocked = false
 	fpsWeaponEquipped = false
-	
+
 	-- Restore original camera settings
+	player.CameraMode = Enum.CameraMode.Classic
 	player.CameraMaxZoomDistance = originalMaxZoomDistance or 400
 	player.CameraMinZoomDistance = 0.5
-	
+
 	-- Reset to default FOV
 	Camera.FieldOfView = 70
-	
-	print("First-person view unlocked")
+
+	print("✓ First-person view unlocked")
 end
 
 -- Enhanced mouse sway with multiple layers
@@ -243,7 +259,7 @@ function ViewmodelSystem:OnToolEquipped(tool)
 	local weaponConfig = WeaponConfig:GetWeaponConfig(tool.Name)
 	if weaponConfig then
 		self:LockFirstPerson()
-		self:CreateViewmodel(tool.Name, weaponConfig)
+		self:CreateViewmodel(tool.Name)
 	end
 end
 
@@ -257,17 +273,17 @@ function ViewmodelSystem:OnToolUnequipped(tool)
 end
 
 -- Create viewmodel for weapon
-function ViewmodelSystem:CreateViewmodel(weaponName, weaponCategory)
+function ViewmodelSystem:CreateViewmodel(weaponName)
 	-- Remove existing viewmodel
 	self:RemoveViewmodel()
-	
+
 	-- Get weapon config
 	local weaponConfig = WeaponConfig:GetWeaponConfig(weaponName)
 	if not weaponConfig then
 		warn("No weapon config found for: " .. weaponName)
 		return
 	end
-	
+
 	-- Lock first-person view
 	self:LockFirstPerson()
 	
@@ -285,34 +301,65 @@ function ViewmodelSystem:CreateViewmodel(weaponName, weaponCategory)
 	end
 	
 	local typeFolder = categoryFolder:FindFirstChild(weaponConfig.Type)
-	if not typeFolder then 
+	if not typeFolder then
 		warn("Type folder not found: " .. weaponConfig.Type)
-		return 
+		return
 	end
-	
+
+	-- Try to find weapon - could be a folder or direct RBXM file
 	local weaponFolder = typeFolder:FindFirstChild(weaponName)
-	if not weaponFolder then 
-		warn("Weapon folder not found: " .. weaponName)
-		return 
+	local viewmodelModel = nil
+
+	if weaponFolder then
+		-- Found a folder/model with the weapon name
+		if weaponFolder:IsA("Model") or weaponFolder:IsA("Tool") then
+			-- The item itself is the viewmodel
+			viewmodelModel = weaponFolder
+		else
+			-- Look for a Model or Tool inside the folder
+			viewmodelModel = weaponFolder:FindFirstChildOfClass("Model") or weaponFolder:FindFirstChildOfClass("Tool")
+		end
+	else
+		-- No folder found - try looking for direct Model/Tool in typeFolder
+		viewmodelModel = typeFolder:FindFirstChild(weaponName)
+		if viewmodelModel and not (viewmodelModel:IsA("Model") or viewmodelModel:IsA("Tool")) then
+			viewmodelModel = nil
+		end
 	end
-	
-	local viewmodelModel = weaponFolder:FindFirstChildOfClass("Model")
-	if not viewmodelModel then 
-		warn("Viewmodel model not found for: " .. weaponName)
-		return 
+
+	if not viewmodelModel then
+		warn("Viewmodel not found for: " .. weaponName)
+		warn("  Searched in: " .. typeFolder:GetFullName())
+		warn("  Looking for folder or direct model named: " .. weaponName)
+		return
 	end
 	
 	-- Clone and setup viewmodel
 	activeViewmodel = viewmodelModel:Clone()
 	activeViewmodel.Name = "ActiveViewmodel"
+
+	-- Set all parts to Massless and CanCollide false
+	for _, descendant in pairs(activeViewmodel:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+			descendant.Massless = true
+			descendant.CastShadow = false
+
+			-- Set collision group to Viewmodels
+			pcall(function()
+				descendant.CollisionGroup = "Viewmodels"
+			end)
+		end
+	end
+
 	activeViewmodel.Parent = Camera
-	
+
 	-- Get base offset for weapon category
 	baseOffset = viewmodelOffsets[weaponConfig.Category].Position
-	
+
 	-- Set initial position
 	self:UpdateViewmodelPosition()
-	
+
 	print("Viewmodel created for " .. weaponName .. " (" .. weaponConfig.Category .. ")")
 end
 -- Apply recoil to viewmodel

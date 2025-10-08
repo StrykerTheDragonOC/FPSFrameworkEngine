@@ -9,7 +9,14 @@ local UserInputService = game:GetService("UserInputService")
 
 local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
-local player = Players.LocalPlayer
+-- CLIENT-ONLY: Only load ViewmodelSystem on client
+local ViewmodelSystem = nil
+if RunService:IsClient() then
+	ViewmodelSystem = require(ReplicatedStorage.FPSSystem.Modules.ViewmodelSystem)
+end
+
+local player = RunService:IsClient() and Players.LocalPlayer or nil
+local currentGrenadeEquipped = nil
 
 -- Grenade configurations
 local GRENADE_CONFIGS = {
@@ -136,11 +143,16 @@ local placedC4s = {}
 local cookingGrenades = {}
 
 function GrenadeSystem:Initialize()
+	-- CLIENT-ONLY initialization
+	if RunService:IsServer() then
+		return -- Server doesn't need to initialize client-side systems
+	end
+
 	RemoteEventsManager:Initialize()
-	
+
 	-- Setup input handling
 	self:SetupInputHandling()
-	
+
 	-- Listen for grenade events
 	local grenadeExplodedEvent = RemoteEventsManager:GetEvent("GrenadeExploded")
 	if grenadeExplodedEvent then
@@ -148,7 +160,10 @@ function GrenadeSystem:Initialize()
 			self:HandleExplosionEffect(explosionData)
 		end)
 	end
-	
+
+	-- Setup viewmodel handling for grenades
+	self:SetupViewmodelHandling()
+
 	print("GrenadeSystem initialized")
 end
 
@@ -505,6 +520,83 @@ end
 
 function GrenadeSystem:GetAllGrenadeConfigs()
 	return GRENADE_CONFIGS
+end
+
+function GrenadeSystem:SetupViewmodelHandling()
+	if RunService:IsServer() or not ViewmodelSystem or not player then
+		return
+	end
+
+	local character = player.Character or player.CharacterAdded:Wait()
+
+	-- Monitor when grenades are equipped
+	player.CharacterAdded:Connect(function(newCharacter)
+		character = newCharacter
+		self:MonitorGrenadeTools(character)
+	end)
+
+	if character then
+		self:MonitorGrenadeTools(character)
+	end
+end
+
+function GrenadeSystem:MonitorGrenadeTools(character)
+	-- Monitor tools being added to character
+	character.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") and self:IsGrenadeWeapon(child.Name) then
+			self:OnGrenadeEquipped(child)
+		end
+	end)
+
+	-- Monitor tools being removed from character
+	character.ChildRemoved:Connect(function(child)
+		if child:IsA("Tool") and self:IsGrenadeWeapon(child.Name) then
+			self:OnGrenadeUnequipped(child)
+		end
+	end)
+
+	-- Check for already equipped grenade
+	for _, child in pairs(character:GetChildren()) do
+		if child:IsA("Tool") and self:IsGrenadeWeapon(child.Name) then
+			self:OnGrenadeEquipped(child)
+		end
+	end
+end
+
+function GrenadeSystem:OnGrenadeEquipped(tool)
+	local grenadeName = tool.Name
+	currentGrenadeEquipped = grenadeName
+
+	-- Create viewmodel
+	if not ViewmodelSystem then
+		warn("ViewmodelSystem not available (running on server?)")
+		return
+	end
+
+	local success, result = pcall(function()
+		return ViewmodelSystem:CreateViewmodel(grenadeName)
+	end)
+
+	if success and result then
+		print("Grenade viewmodel created for:", grenadeName)
+	else
+		warn("Failed to create grenade viewmodel for:", grenadeName, "Error:", result or "unknown")
+	end
+end
+
+function GrenadeSystem:OnGrenadeUnequipped(tool)
+	currentGrenadeEquipped = nil
+
+	-- Destroy viewmodel
+	local success = pcall(function()
+		ViewmodelSystem:DestroyViewmodel()
+	end)
+
+	if success then
+		print("Grenade viewmodel destroyed")
+	else
+		warn("Failed to destroy grenade viewmodel")
+	end
 end
 
 return GrenadeSystem

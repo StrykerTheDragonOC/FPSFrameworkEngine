@@ -11,7 +11,24 @@ local playerGui = player:WaitForChild("PlayerGui")
 repeat wait() until playerGui:FindFirstChild("FPSMainMenu")
 
 local mainMenu = playerGui.FPSMainMenu
-local settingsSection = mainMenu.MainContainer.MenuPanel.SectionsContainer.SettingsSection
+
+-- Wait for settings section to be created (new structure)
+local settingsSection = nil
+local maxWait = 10
+local waited = 0
+while not settingsSection and waited < maxWait do
+	wait(0.1)
+	waited = waited + 0.1
+	local contentArea = mainMenu.MainContainer:FindFirstChild("ContentArea")
+	if contentArea then
+		settingsSection = contentArea:FindFirstChild("SettingsSection")
+	end
+end
+
+if not settingsSection then
+	warn("SettingsSection not found after " .. maxWait .. " seconds")
+	return
+end
 
 -- Settings data
 local settingsData = {

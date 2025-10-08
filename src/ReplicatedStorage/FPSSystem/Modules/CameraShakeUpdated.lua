@@ -124,7 +124,7 @@ function CameraShakeManager:ApplyCombinedShake()
     if #activeShakes == 0 then return end
 
     local currentCamera = getCurrentCamera()
-    if not currentCamera then return end
+    if not currentCamera or currentCamera.CameraType == Enum.CameraType.Scriptable then return end
 
     local totalPosition = Vector3.new()
     local totalRotation = Vector3.new()
@@ -137,9 +137,16 @@ function CameraShakeManager:ApplyCombinedShake()
         end
     end
 
-    -- Apply to camera
-    currentCamera.CFrame = currentCamera.CFrame + totalPosition
-    currentCamera.CFrame = currentCamera.CFrame * CFrame.Angles(totalRotation.X, totalRotation.Y, totalRotation.Z)
+    -- Apply to camera (safely)
+    local success = pcall(function()
+        currentCamera.CFrame = currentCamera.CFrame + totalPosition
+        currentCamera.CFrame = currentCamera.CFrame * CFrame.Angles(totalRotation.X, totalRotation.Y, totalRotation.Z)
+    end)
+
+    if not success then
+        -- Silently fail if camera can't be modified
+        return
+    end
 end
 
 function CameraShakeManager:StopAll()

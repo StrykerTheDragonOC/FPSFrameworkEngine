@@ -146,20 +146,30 @@ function WeaponHandler:HandleWeaponReloaded(player, reloadData)
 end
 
 function WeaponHandler:HandleWeaponEquipped(player, weaponData)
+	if not weaponData or not weaponData.WeaponName then
+		warn("Invalid weapon data in HandleWeaponEquipped")
+		return
+	end
+
 	local playerData = playerWeaponData[player]
 	if playerData then
 		playerData.equippedWeapon = weaponData.WeaponName
 	end
-	
+
 	print(player.Name .. " equipped " .. weaponData.WeaponName)
 end
 
 function WeaponHandler:HandleWeaponUnequipped(player, weaponData)
+	if not weaponData or not weaponData.WeaponName then
+		warn("Invalid weapon data in HandleWeaponUnequipped")
+		return
+	end
+
 	local playerData = playerWeaponData[player]
 	if playerData then
 		playerData.equippedWeapon = nil
 	end
-	
+
 	print(player.Name .. " unequipped " .. weaponData.WeaponName)
 end
 

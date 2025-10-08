@@ -8,7 +8,14 @@ local TweenService = game:GetService("TweenService")
 
 local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
-local player = Players.LocalPlayer
+-- CLIENT-ONLY: Only load ViewmodelSystem on client
+local ViewmodelSystem = nil
+if RunService:IsClient() then
+	ViewmodelSystem = require(ReplicatedStorage.FPSSystem.Modules.ViewmodelSystem)
+end
+
+local player = RunService:IsClient() and Players.LocalPlayer or nil
+local currentMeleeEquipped = nil
 
 -- Melee weapon configurations
 local MELEE_CONFIGS = {
@@ -160,10 +167,15 @@ local isAttacking = false
 local lastAttackTime = 0
 
 function MeleeSystem:Initialize()
+	-- CLIENT-ONLY initialization
+	if RunService:IsServer() then
+		return -- Server doesn't need to initialize client-side systems
+	end
+
 	RemoteEventsManager:Initialize()
-	
+
 	self:SetupInputHandling()
-	
+
 	-- Listen for melee events
 	local meleeHitEvent = RemoteEventsManager:GetEvent("MeleeHit")
 	if meleeHitEvent then
@@ -171,7 +183,10 @@ function MeleeSystem:Initialize()
 			self:HandleMeleeHitEffect(hitData)
 		end)
 	end
-	
+
+	-- Setup viewmodel handling for melee weapons
+	self:SetupViewmodelHandling()
+
 	print("MeleeSystem initialized")
 end
 
@@ -225,9 +240,26 @@ end
 
 function MeleeSystem:OnMeleeEquipped(tool)
 	equippedMelee = tool
+	currentMeleeEquipped = tool.Name
 	local config = MELEE_CONFIGS[tool.Name]
 	if not config then return end
-	
+
+	-- Create viewmodel
+	if not ViewmodelSystem then
+		warn("ViewmodelSystem not available (running on server?)")
+		return
+	end
+
+	local success, errorMsg = pcall(function()
+		ViewmodelSystem:CreateViewmodel(tool.Name)
+	end)
+
+	if success then
+		print("✓ Melee viewmodel created for:", tool.Name)
+	else
+		warn("Failed to create melee viewmodel for:", tool.Name, "Error:", errorMsg or "unknown")
+	end
+
 	-- Apply movement speed modifier
 	local character = player.Character
 	if character then
@@ -236,7 +268,7 @@ function MeleeSystem:OnMeleeEquipped(tool)
 			humanoid.WalkSpeed = humanoid.WalkSpeed * config.MovementSpeedMultiplier
 		end
 	end
-	
+
 	-- Setup attack handling
 	tool.Activated:Connect(function()
 		self:PerformAttack(false)
@@ -245,6 +277,19 @@ end
 
 function MeleeSystem:OnMeleeUnequipped(tool)
 	if equippedMelee == tool then
+		-- Destroy viewmodel
+		local success = pcall(function()
+			ViewmodelSystem:DestroyViewmodel()
+		end)
+
+		if success then
+			print("Melee viewmodel destroyed")
+		else
+			warn("Failed to destroy melee viewmodel")
+		end
+
+		currentMeleeEquipped = nil
+
 		local config = MELEE_CONFIGS[tool.Name]
 		if config then
 			-- Restore movement speed
@@ -547,6 +592,47 @@ end
 
 function MeleeSystem:GetAllMeleeConfigs()
 	return MELEE_CONFIGS
+end
+
+function MeleeSystem:SetupViewmodelHandling()
+	if RunService:IsServer() or not ViewmodelSystem or not player then
+		return
+	end
+
+	local character = player.Character or player.CharacterAdded:Wait()
+
+	-- Monitor when melee weapons are equipped
+	player.CharacterAdded:Connect(function(newCharacter)
+		character = newCharacter
+		self:MonitorMeleeTools(character)
+	end)
+
+	if character then
+		self:MonitorMeleeTools(character)
+	end
+end
+
+function MeleeSystem:MonitorMeleeTools(character)
+	-- Monitor tools being added to character
+	character.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") and self:IsMeleeWeapon(child.Name) then
+			self:OnMeleeEquipped(child)
+		end
+	end)
+
+	-- Monitor tools being removed from character
+	character.ChildRemoved:Connect(function(child)
+		if child:IsA("Tool") and self:IsMeleeWeapon(child.Name) then
+			self:OnMeleeUnequipped(child)
+		end
+	end)
+
+	-- Check for already equipped melee
+	for _, child in pairs(character:GetChildren()) do
+		if child:IsA("Tool") and self:IsMeleeWeapon(child.Name) then
+			self:OnMeleeEquipped(child)
+		end
+	end
 end
 
 return MeleeSystem

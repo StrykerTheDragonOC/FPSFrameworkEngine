@@ -278,6 +278,9 @@ function TeamSpawnSystem:GetSpawnAwayFromEnemies(teamName)
 	end
 end
 
+-- Make globally accessible
+_G.TeamSpawnSystem = TeamSpawnSystem
+
 TeamSpawnSystem:Initialize()
 
 return TeamSpawnSystem

@@ -99,7 +99,13 @@
       "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\StarterGui\\MenuController.client.lua\")",
       "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\StarterGui\\MenuController.client.lua\")",
       "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\ArmorySystem.lua\")",
-      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\ArmorySystem.lua\")"
+      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\ArmorySystem.lua\")",
+      "Bash(then luau-lsp --check \"src/StarterGUI/MenuController.client.lua\")",
+      "Bash(then luau --compile=null \"src/StarterGUI/MenuController.client.lua\")",
+      "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\DamageSystem.lua\")",
+      "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\DamageSystem.lua\")",
+      "Read(//c/Users/drago/Documents/**)",
+      "Bash(findstr:*)"
     ],
     "deny": []
   }

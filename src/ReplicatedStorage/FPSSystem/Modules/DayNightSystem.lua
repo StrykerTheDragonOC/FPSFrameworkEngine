@@ -10,7 +10,7 @@ local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.Rem
 
 -- Day/Night configuration
 local DAY_NIGHT_CONFIG = {
-	CycleLength = 480, -- 8 minutes (480 seconds) for full day/night cycle
+	CycleLength = 36000, -- 10 hours (36000 seconds) for full day/night cycle
 	TimeScale = 1, -- Speed multiplier for time
 	EnableCycle = true,
 	StartTime = 12, -- Start at noon (12:00)

@@ -5,8 +5,11 @@ local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
--- Check if we're in Studio edit mode
-local isStudioEditMode = RunService:IsEdit()
+-- Check if we're in Studio edit mode (safely handle lacking capability)
+local isStudioEditMode = false
+pcall(function()
+	isStudioEditMode = RunService:IsEdit()
+end)
 
 -- Wait for FPS System to load (with timeout for Studio edit mode)
 local maxWaitTime = isStudioEditMode and 5 or 10
@@ -72,7 +75,6 @@ else
 end
 
 local menuFrame = mainMenu.MainContainer
-local particleContainer = mainMenu.MainContainer.BackgroundParticles
 
 -- Player data cache
 local playerData = {
@@ -106,77 +108,37 @@ local function PlayClickSound()
     end)
 end
 
--- Update player data display
+-- Update player data display (not shown in current menu design)
 function MenuController:UpdatePlayerData()
-    if not mainMenu then return end
-    
-    local playerInfo = mainMenu.MainContainer.MenuPanel.TopBar.PlayerInfo
-    
-    if playerInfo then
-        local playerName = playerInfo:FindFirstChild("PlayerName")
-        local playerLevel = playerInfo:FindFirstChild("PlayerLevel")
-        local playerCredits = playerInfo:FindFirstChild("PlayerCredits")
-        local playerXP = playerInfo:FindFirstChild("PlayerXP")
-        local playerKD = playerInfo:FindFirstChild("PlayerKD")
-        
-        if playerName then
-            playerName.Text = player.Name:upper()
-        end
-        
-        if playerLevel then
-            playerLevel.Text = "RANK: " .. playerData.level
-        end
-        
-        if playerCredits then
-            playerCredits.Text = "CREDITS: " .. playerData.credits
-        end
-        
-        if playerXP then
-            playerXP.Text = "XP: " .. playerData.xp .. "/" .. playerData.nextLevelXP
-        end
-        
-        if playerKD then
-            playerKD.Text = "K/D: " .. string.format("%.2f", playerData.kdr)
-        end
-    end
+    -- New menu doesn't have player data display in sidebar
+    -- Could add this to a profile section later
 end
 
--- Initialize particle system
-function MenuController:InitializeParticleSystem()
-    if not particleContainer then return end
-    
-    print("Initializing particle system...")
-    
-    -- Add subtle animation to existing stars
-    for _, star in pairs(particleContainer:GetChildren()) do
-        if star:IsA("Frame") and star.Name:match("Star") then
-            -- Add subtle pulsing effect
-            local pulseTween = TweenService:Create(star, 
-                TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-                {Size = UDim2.new(0, star.Size.X.Offset + 2, 0, star.Size.Y.Offset + 2)}
-            )
-            pulseTween:Play()
-        end
-    end
-end
+-- Particle system removed (no longer used in Battlefield-style menu)
 
--- Initialize voting system
+-- Initialize voting system (disabled for now - will add later)
 function MenuController:InitializeVotingSystem()
+    print("Voting system initialization skipped (not in current menu design)")
+end
+
+-- Update vote counts display
+function MenuController:UpdateVoteCounts(votes)
     if not mainMenu then return end
-    
-    print("Initializing voting system...")
-    
+
     local votingFrame = mainMenu.MainContainer.MenuPanel.SectionsContainer.MainSection:FindFirstChild("MapVoting")
     if not votingFrame then return end
-    
-    -- Connect gamemode vote buttons
+
+    -- Update each vote button's count
     for _, child in pairs(votingFrame:GetChildren()) do
         if child:IsA("TextButton") and child.Name:match("Vote") then
-            child.MouseButton1Click:Connect(function()
-                PlayClickSound()
-                print("Voted for: " .. child.Name:gsub("Vote", ""))
-                -- Add voting logic here
-            end)
+            local gamemode = child.Name:gsub("Vote", "")
+            local voteCount = votes[gamemode] or 0
+
+            -- Update vote count label
+            local voteCountLabel = child:FindFirstChild("VoteCount")
+            if voteCountLabel then
+                voteCountLabel.Text = voteCount .. " vote" .. (voteCount ~= 1 and "s" or "")
+            end
         end
     end
 end
@@ -233,51 +195,146 @@ function MenuController:StartPeriodicUpdates()
     end)
 end
 
--- Update server status
+-- Update server status (not shown in simple menu)
 function MenuController:UpdateServerStatus()
-    if not mainMenu then return end
-    
-    local serverStatus = mainMenu.MainContainer.MenuPanel.SectionsContainer.MainSection:FindFirstChild("ServerStatus")
-    if not serverStatus then return end
-    
-    local playerCount = serverStatus:FindFirstChild("PlayerCount")
-    local matchStatus = serverStatus:FindFirstChild("MatchStatus")
-    local nextMatch = serverStatus:FindFirstChild("NextMatch")
-    
-    if playerCount then
-        local totalPlayers = #Players:GetPlayers()
-        playerCount.Text = "PLAYERS ONLINE: " .. totalPlayers .. "/64"
+    -- Simple menu doesn't have server status display
+end
+
+-- Deploy player to team
+function MenuController:DeployPlayer(teamName)
+    print("Deploying player to team:", teamName)
+    isDeployed = true
+
+    -- Request deployment from server
+    local deployEvent = RemoteEventsManager:GetEvent("PlayerDeploy")
+    if deployEvent then
+        RemoteEventsManager:FireServer("PlayerDeploy", {Team = teamName})
+    else
+        warn("PlayerDeploy event not found")
     end
-    
-    if matchStatus then
-        matchStatus.Text = "MATCH STATUS: WAITING"
-    end
-    
-    if nextMatch then
-        -- Calculate time until next match (placeholder)
-        local timeLeft = 165 -- 2:45 in seconds
-        local minutes = math.floor(timeLeft / 60)
-        local seconds = timeLeft % 60
-        nextMatch.Text = "NEXT MATCH STARTS IN: " .. string.format("%02d:%02d", minutes, seconds)
+
+    -- Hide menu
+    self:HideMenu()
+end
+
+-- Show menu
+function MenuController:ShowMenu()
+    if mainMenu then
+        mainMenu.Enabled = true
+
+        -- Lock player input
+        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        UserInputService.MouseIconEnabled = true
+
+        -- Lock player in menu
+        if player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = 0
+                humanoid.JumpPower = 0
+            end
+        end
+
+        print("Menu shown - MouseBehavior:", UserInputService.MouseBehavior)
     end
 end
+
+-- Hide menu
+function MenuController:HideMenu()
+    if mainMenu then
+        mainMenu.Enabled = false
+
+        -- Unlock player input
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        UserInputService.MouseIconEnabled = false
+
+        -- Unlock player movement
+        if player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = 16 -- Default walkspeed
+                humanoid.JumpPower = 50 -- Default jump
+            end
+        end
+
+        print("Menu hidden - MouseBehavior:", UserInputService.MouseBehavior)
+    end
+end
+
+-- Setup deploy button
+function MenuController:SetupDeployButton()
+    if not mainMenu then return end
+
+    -- New structure: MainContainer -> ContentArea -> DeploySection -> DeployButton
+    local contentArea = mainMenu.MainContainer:FindFirstChild("ContentArea")
+    if not contentArea then
+        warn("ContentArea not found")
+        return
+    end
+
+    local deploySection = contentArea:FindFirstChild("DeploySection")
+    if not deploySection then
+        warn("DeploySection not found")
+        return
+    end
+
+    local deployButton = deploySection:FindFirstChild("DeployButton")
+    if deployButton and deployButton:IsA("TextButton") then
+        deployButton.MouseButton1Click:Connect(function()
+            PlayClickSound()
+            -- Deploy to random team (KFC or FBI)
+            local teams = {"KFC", "FBI"}
+            local randomTeam = teams[math.random(1, #teams)]
+            self:DeployPlayer(randomTeam)
+        end)
+        print("✓ Deploy button connected")
+    else
+        warn("DeployButton not found in DeploySection")
+    end
+end
+
+-- Listen for Space key to deploy
+function MenuController:SetupSpaceKeyDeploy()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+
+        if input.KeyCode == Enum.KeyCode.Space and mainMenu and mainMenu.Enabled then
+            -- Deploy to random team
+            local teams = {"KFC", "FBI"}
+            local randomTeam = teams[math.random(1, #teams)]
+            self:DeployPlayer(randomTeam)
+        end
+    end)
+    print("✓ Space key deploy enabled")
+end
+
+-- Track deployment state
+local isDeployed = false
 
 -- Initialize the controller
 function MenuController:Initialize()
     print("MenuController: Initializing...")
 
+    -- Hide default Roblox UI
+    local StarterGui = game:GetService("StarterGui")
+    pcall(function()
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+    end)
+
     -- Debug: Check if UI elements exist
     print("Debug - UI Structure Check:")
     print("  FPSMainMenu:", mainMenu and "✓" or "✗")
     print("  MainContainer:", menuFrame and "✓" or "✗")
-    
+
     if mainMenu and menuFrame then
-        local menuPanel = menuFrame:FindFirstChild("MenuPanel")
-        print("  MenuPanel:", menuPanel and "✓" or "✗")
-        
-        if menuPanel then
-            print("  NavigationFrame:", menuPanel:FindFirstChild("NavigationFrame") and "✓" or "✗")
-            print("  SectionsContainer:", menuPanel:FindFirstChild("SectionsContainer") and "✓" or "✗")
+        print("  Sidebar:", menuFrame:FindFirstChild("Sidebar") and "✓" or "✗")
+        print("  ContentArea:", menuFrame:FindFirstChild("ContentArea") and "✓" or "✗")
+
+        local contentArea = menuFrame:FindFirstChild("ContentArea")
+        if contentArea then
+            print("  DeploySection:", contentArea:FindFirstChild("DeploySection") and "✓" or "✗")
         end
     end
 
@@ -294,17 +351,58 @@ function MenuController:Initialize()
     -- Load player data
     self:LoadPlayerData()
 
-    -- Initialize systems that don't require navigation (since it's handled by the UI generator)
-    self:InitializeParticleSystem()
+    -- Initialize systems
     self:InitializeVotingSystem()
     self:InitializeLeaderboard()
-    
+
+    -- Setup deploy functionality
+    self:SetupDeployButton()
+    self:SetupSpaceKeyDeploy()
+
     -- Start periodic updates for server data
     self:StartPeriodicUpdates()
+
+    -- Setup character respawn handling
+    self:SetupRespawnHandling()
+
+    -- Show menu on start
+    self:ShowMenu()
 
     print("MenuController: Initialization Complete!")
     print("Note: Navigation is handled by the UI generator script")
 end
+
+-- Setup respawn handling
+function MenuController:SetupRespawnHandling()
+    -- Handle respawns
+    player.CharacterAdded:Connect(function(character)
+        print("Character respawned - checking deployment state")
+
+        -- Wait for character to fully load
+        wait(0.5)
+
+        -- If player is not deployed, show menu again
+        if not isDeployed then
+            self:ShowMenu()
+            print("Showing menu after respawn (not deployed)")
+        else
+            print("Player is deployed, keeping menu hidden")
+        end
+    end)
+
+    -- Track when player dies
+    if player.Character then
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.Died:Connect(function()
+                print("Player died")
+                -- Don't change deployment state, will be handled by respawn
+            end)
+        end
+    end
+end
+
+-- Deployment state is tracked in the first DeployPlayer function (line 204)
 
 -- Initialize the controller
 MenuController:Initialize()
