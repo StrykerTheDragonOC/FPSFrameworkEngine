@@ -15,8 +15,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 -- Wait for FPS System
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 -- UI state
 local hudScreenGui = nil
 local isInitialized = false
@@ -487,8 +485,6 @@ end
 function InGameHUD:Initialize()
 	if isInitialized then return end
 
-	RemoteEventsManager:Initialize()
-
 	self:CreateHUD()
 
 	-- Connect to character spawn
@@ -514,14 +510,14 @@ function InGameHUD:Initialize()
 	player.CharacterAdded:Connect(onCharacterAdded)
 
 	-- Connect remote events for HUD updates
-	local killFeedEvent = RemoteEventsManager:GetEvent("KillFeedUpdate")
+	local killFeedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillFeedUpdate")
 	if killFeedEvent then
 		killFeedEvent.OnClientEvent:Connect(function(data)
 			self:AddKillFeedEntry(data.Killer, data.Victim, data.Weapon, data.IsHeadshot)
 		end)
 	end
 
-	local matchUpdateEvent = RemoteEventsManager:GetEvent("MatchUpdate")
+	local matchUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MatchUpdate")
 	if matchUpdateEvent then
 		matchUpdateEvent.OnClientEvent:Connect(function(data)
 			if data.Time then

@@ -7,8 +7,6 @@ local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 -- CLIENT-ONLY: Only load ViewmodelSystem on client
 local ViewmodelSystem = nil
 if RunService:IsClient() then
@@ -148,13 +146,11 @@ function GrenadeSystem:Initialize()
 		return -- Server doesn't need to initialize client-side systems
 	end
 
-	RemoteEventsManager:Initialize()
-
 	-- Setup input handling
 	self:SetupInputHandling()
 
 	-- Listen for grenade events
-	local grenadeExplodedEvent = RemoteEventsManager:GetEvent("GrenadeExploded")
+	local grenadeExplodedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GrenadeExploded")
 	if grenadeExplodedEvent then
 		grenadeExplodedEvent.OnClientEvent:Connect(function(explosionData)
 			self:HandleExplosionEffect(explosionData)
@@ -328,13 +324,16 @@ function GrenadeSystem:ThrowGrenade(grenadeName, fuseTime)
 	local throwPosition = humanoidRootPart.Position + throwDirection * 2
 	
 	-- Send to server
-	RemoteEventsManager:FireServer("ThrowGrenade", {
-		GrenadeType = grenadeName,
-		Position = throwPosition,
-		Direction = throwDirection,
-		Force = config.ThrowForce,
-		FuseTime = fuseTime or config.FuseTime
-	})
+	local throwGrenadeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ThrowGrenade")
+	if throwGrenadeEvent then
+		throwGrenadeEvent:FireServer({
+			GrenadeType = grenadeName,
+			Position = throwPosition,
+			Direction = throwDirection,
+			Force = config.ThrowForce,
+			FuseTime = fuseTime or config.FuseTime
+		})
+	end
 end
 
 function GrenadeSystem:HandleExplosionEffect(explosionData)
@@ -461,10 +460,13 @@ function GrenadeSystem:CreateFlashEffect(explosionData)
 	end)
 	
 	-- Apply blinded status effect
-	RemoteEventsManager:FireServer("ApplyStatusEffect", {
-		Effect = "Blinded",
-		Duration = duration * 0.7
-	})
+	local applyStatusEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ApplyStatusEffect")
+	if applyStatusEvent then
+		applyStatusEvent:FireServer({
+			Effect = "Blinded",
+			Duration = duration * 0.7
+		})
+	end
 end
 
 function GrenadeSystem:CreateFlareEffect(explosionData)
@@ -573,14 +575,14 @@ function GrenadeSystem:OnGrenadeEquipped(tool)
 		return
 	end
 
-	local success, result = pcall(function()
-		return ViewmodelSystem:CreateViewmodel(grenadeName)
+	local success, errorMsg = pcall(function()
+		ViewmodelSystem:CreateViewmodel(grenadeName)
 	end)
 
-	if success and result then
-		print("Grenade viewmodel created for:", grenadeName)
+	if success then
+		print("✓ Grenade viewmodel created for:", grenadeName)
 	else
-		warn("Failed to create grenade viewmodel for:", grenadeName, "Error:", result or "unknown")
+		warn("Failed to create grenade viewmodel for:", grenadeName, "Error:", errorMsg or "unknown")
 	end
 end
 

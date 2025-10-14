@@ -114,9 +114,9 @@ function HotbarController:DetermineWeaponCategory(weaponName)
 		return "Grenade"
 	end
 
-	-- Special/Magic weapons
-	if weaponName:match("ViciousStinger") or weaponName:match("Vicious") or
-	   weaponName:match("NTW20_Admin") or weaponName:match("Admin") then
+	-- Special/Magic weapons (exact match to avoid false positives)
+	if weaponName == "ViciousStinger" or weaponName == "Vicious Stinger" or
+	   weaponName == "NTW20_Admin" or weaponName == "NTW-20 Admin" then
 		return "Special"
 	end
 

@@ -7,8 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local UserInputService = game:GetService("UserInputService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -202,21 +200,19 @@ local currentlyNearPickup = nil
 local pickupConnection = nil
 
 function PickupSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	self:SetupPickupUI()
 	self:SetupInputHandling()
 	self:StartPickupDetection()
-	
+
 	-- Listen for pickup events from server
-	local pickupTakenEvent = RemoteEventsManager:GetEvent("PickupTaken")
+	local pickupTakenEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupTaken")
 	if pickupTakenEvent then
 		pickupTakenEvent.OnClientEvent:Connect(function(pickupData)
 			self:HandlePickupTaken(pickupData)
 		end)
 	end
-	
-	local pickupSpawnedEvent = RemoteEventsManager:GetEvent("PickupSpawned")
+
+	local pickupSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupSpawned")
 	if pickupSpawnedEvent then
 		pickupSpawnedEvent.OnClientEvent:Connect(function(pickupData)
 			self:HandlePickupSpawned(pickupData)
@@ -418,13 +414,17 @@ function PickupSystem:TryPickupNearbyItem()
 	
 	local pickupData = currentlyNearPickup:FindFirstChild("PickupData")
 	if not pickupData then return end
-	
+
+
 	-- Send pickup request to server
-	RemoteEventsManager:FireServer("PickupItem", {
-		PickupId = currentlyNearPickup.Name,
-		PickupType = pickupData.Value,
-		Position = currentlyNearPickup.Position
-	})
+	local pickupItemEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupItem")
+	if pickupItemEvent then
+		pickupItemEvent:FireServer({
+			PickupId = currentlyNearPickup.Name,
+			PickupType = pickupData.Value,
+			Position = currentlyNearPickup.Position
+		})
+	end
 end
 
 function PickupSystem:HandlePickupTaken(pickupData)
@@ -619,10 +619,13 @@ end
 
 function PickupSystem:SpawnPickup(pickupType, position)
 	-- For testing/admin commands
-	RemoteEventsManager:FireServer("SpawnPickup", {
-		PickupType = pickupType,
-		Position = position
-	})
+	local spawnPickupEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpawnPickup")
+	if spawnPickupEvent then
+		spawnPickupEvent:FireServer({
+			PickupType = pickupType,
+			Position = position
+		})
+	end
 end
 
 function PickupSystem:GetPickupConfig(pickupType)

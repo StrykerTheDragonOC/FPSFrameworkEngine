@@ -7,7 +7,6 @@ local TweenService = game:GetService("TweenService")
 
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local AttachmentManager = require(ReplicatedStorage.FPSSystem.Modules.AttachmentManager)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 
@@ -22,41 +21,39 @@ local currentLoadout = {}
 local playerData = nil
 
 function AttachmentController:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	self:CreateAttachmentGUI()
 	self:SetupEventConnections()
-	
+
 	-- Request player data if not loaded
-	local playerDataEvent = RemoteEventsManager:GetEvent("RequestPlayerData")
+	local playerDataEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("RequestPlayerData")
 	if playerDataEvent then
 		playerDataEvent:FireServer()
 	end
-	
+
 	print("AttachmentController initialized")
 end
 
 function AttachmentController:SetupEventConnections()
 	-- Listen for attachment data updates
-	local attachmentDataUpdated = RemoteEventsManager:GetEvent("AttachmentDataUpdated")
+	local attachmentDataUpdated = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AttachmentDataUpdated")
 	if attachmentDataUpdated then
 		attachmentDataUpdated.OnClientEvent:Connect(function(data)
 			self:UpdatePlayerData(data)
 		end)
 	end
-	
+
 	-- Listen for player data updates
-	local playerDataUpdated = RemoteEventsManager:GetEvent("PlayerDataUpdated")
+	local playerDataUpdated = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDataUpdated")
 	if playerDataUpdated then
 		playerDataUpdated.OnClientEvent:Connect(function(data)
 			self:UpdatePlayerData(data)
 		end)
 	end
-	
+
 	-- No standalone attachment menu - integrated into loadout menu
-	
+
 	-- Listen for equipped weapon changes
-	local weaponEquippedEvent = RemoteEventsManager:GetEvent("WeaponEquipped")
+	local weaponEquippedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponEquipped")
 	if weaponEquippedEvent then
 		weaponEquippedEvent.OnClientEvent:Connect(function(weaponName)
 			currentWeapon = weaponName
@@ -421,19 +418,22 @@ function AttachmentController:SaveCurrentLoadout()
 	if not currentWeapon then
 		return
 	end
-	
+
 	local valid, errorMessage = AttachmentManager:ValidateLoadout(currentWeapon, currentLoadout)
 	if not valid then
 		print("Invalid loadout: " .. errorMessage)
 		return
 	end
-	
+
 	-- Send to server
-	RemoteEventsManager:FireServer("SaveWeaponLoadout", {
-		WeaponName = currentWeapon,
-		Attachments = currentLoadout
-	})
-	
+	local saveWeaponLoadoutEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SaveWeaponLoadout")
+	if saveWeaponLoadoutEvent then
+		saveWeaponLoadoutEvent:FireServer({
+			WeaponName = currentWeapon,
+			Attachments = currentLoadout
+		})
+	end
+
 	print("Saved loadout for " .. currentWeapon)
 end
 

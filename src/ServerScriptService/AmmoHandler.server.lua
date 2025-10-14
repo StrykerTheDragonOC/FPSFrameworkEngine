@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 
 local AmmoHandler = {}
@@ -24,11 +23,10 @@ local AMMO_UNLOCK_LEVELS = {
 }
 
 function AmmoHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DataStoreManager:Initialize()
-	
+
 	-- Handle ammo selection from clients
-	local selectAmmoEvent = RemoteEventsManager:GetEvent("SelectAmmoType")
+	local selectAmmoEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SelectAmmoType")
 	if selectAmmoEvent then
 		selectAmmoEvent.OnServerEvent:Connect(function(player, ammoData)
 			self:HandleAmmoSelection(player, ammoData)
@@ -149,12 +147,15 @@ end
 function AmmoHandler:SyncAmmoWithClient(player)
 	local playerData = playerAmmoData[player]
 	if not playerData then return end
-	
-	RemoteEventsManager:FireClient(player, "AmmoUpdate", {
-		CurrentAmmoType = playerData.CurrentAmmoType,
-		AmmoCount = playerData.AmmoCount,
-		UnlockedAmmoTypes = playerData.UnlockedAmmoTypes
-	})
+
+	local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoUpdate")
+	if event then
+		event:FireClient(player, {
+			CurrentAmmoType = playerData.CurrentAmmoType,
+			AmmoCount = playerData.AmmoCount,
+			UnlockedAmmoTypes = playerData.UnlockedAmmoTypes
+		})
+	end
 end
 
 function AmmoHandler:CheckAmmoUnlocks(player)
@@ -186,10 +187,13 @@ function AmmoHandler:CheckAmmoUnlocks(player)
 			end
 			
 			-- Notify client of unlock
-			RemoteEventsManager:FireClient(player, "AmmoUnlock", {
-				AmmoType = ammoType,
-				UnlockLevel = unlockLevel
-			})
+			local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoUnlock")
+			if event then
+				event:FireClient(player, {
+					AmmoType = ammoType,
+					UnlockLevel = unlockLevel
+				})
+			end
 			
 			print("Player " .. player.Name .. " unlocked ammo type: " .. ammoType)
 		end
@@ -271,10 +275,13 @@ function AmmoHandler:ForceUnlockAmmoType(player, ammoType)
 		end
 		
 		-- Notify client
-		RemoteEventsManager:FireClient(player, "AmmoUnlock", {
-			AmmoType = ammoType,
-			UnlockLevel = 0
-		})
+		local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoUnlock")
+		if event then
+			event:FireClient(player, {
+				AmmoType = ammoType,
+				UnlockLevel = 0
+			})
+		end
 		
 		self:SyncAmmoWithClient(player)
 		

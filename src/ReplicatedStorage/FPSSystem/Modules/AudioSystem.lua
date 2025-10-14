@@ -7,8 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
@@ -412,16 +410,14 @@ end
 
 function AudioSystem:SetupBulletAudio()
 	-- Listen for bullet events
-	RemoteEventsManager:Initialize()
-	
-	local bulletWhizzEvent = RemoteEventsManager:GetEvent("BulletWhizz")
+	local bulletWhizzEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("BulletWhizz")
 	if bulletWhizzEvent then
 		bulletWhizzEvent.OnClientEvent:Connect(function(bulletData)
 			self:PlayBulletWhizz(bulletData)
 		end)
 	end
-	
-	local bulletImpactEvent = RemoteEventsManager:GetEvent("BulletImpact")
+
+	local bulletImpactEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("BulletImpact")
 	if bulletImpactEvent then
 		bulletImpactEvent.OnClientEvent:Connect(function(impactData)
 			self:PlayBulletImpact(impactData)
@@ -538,7 +534,7 @@ end
 
 function AudioSystem:SetupRemoteEvents()
 	-- Setup additional remote events for multiplayer audio sync
-	local weaponSoundEvent = RemoteEventsManager:GetEvent("WeaponSound")
+	local weaponSoundEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponSound")
 	if weaponSoundEvent then
 		weaponSoundEvent.OnClientEvent:Connect(function(soundData)
 			self:PlayWeaponSound(soundData)

@@ -4,7 +4,10 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
+-- Wait for FPS System to load
+repeat wait(0.1) until ReplicatedStorage:FindFirstChild("FPSSystem")
+
+local GlobalStateManager = require(ReplicatedStorage.FPSSystem.Modules.GlobalStateManager)
 
 local MovementSystem = {}
 
@@ -49,21 +52,46 @@ local slideForce = nil
 local bodyVelocity = nil
 
 function MovementSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	player.CharacterAdded:Connect(function(newCharacter)
 		self:SetupCharacter(newCharacter)
 	end)
-	
+
 	if player.Character then
 		self:SetupCharacter(player.Character)
 	end
-	
+
 	self:SetupInputHandling()
 	self:SetupLedgeGrabDetection()
 	self:SetupPhysicsComponents()
-	
+	self:SetupPlayerStateTracking()
+
 	print("MovementSystem initialized")
+end
+
+-- Setup continuous player state tracking for GlobalStateManager
+function MovementSystem:SetupPlayerStateTracking()
+	-- Initialize player state in GlobalStateManager
+	GlobalStateManager:InitializePlayerState(player)
+
+	-- Continuously update movement state
+	local stateUpdateConnection = RunService.Heartbeat:Connect(function()
+		if not character or not humanoid or not rootPart then return end
+
+		-- Calculate if player is moving
+		local isMoving = humanoid.MoveDirection.Magnitude > 0.1
+		local isSprinting = humanoid.WalkSpeed > originalWalkSpeed and isMoving
+
+		-- Update GlobalStateManager
+		GlobalStateManager:UpdatePlayerState(player, "IsMoving", isMoving)
+		GlobalStateManager:UpdatePlayerState(player, "IsSprinting", isSprinting)
+		GlobalStateManager:UpdatePlayerState(player, "IsCrouching", isCrouching)
+		GlobalStateManager:UpdatePlayerState(player, "IsProne", isProne)
+		GlobalStateManager:UpdatePlayerState(player, "Velocity", rootPart.AssemblyLinearVelocity)
+	end)
+
+	table.insert(movementConnections, stateUpdateConnection)
+
+	print("Player state tracking initialized")
 end
 
 function MovementSystem:SetupCharacter(newCharacter)
@@ -510,13 +538,16 @@ function MovementSystem:ClimbUp(ledgePosition, wallNormal)
 		humanoid.PlatformStand = false
 		humanoid:ChangeState(Enum.HumanoidStateType.Running)
 	end)
-	
+
 	-- Award XP for successful climb
-	RemoteEventsManager:FireServer("MovementAction", {
-		Action = "LedgeClimb",
-		Position = climbPosition
-	})
-	
+	local movementActionEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MovementAction")
+	if movementActionEvent then
+		movementActionEvent:FireServer({
+			Action = "LedgeClimb",
+			Position = climbPosition
+		})
+	end
+
 	print("Climbed up ledge")
 end
 
@@ -645,14 +676,17 @@ function MovementSystem:EnhancedStartSlide()
 			self:EnhancedStopSlide()
 		end
 	end)
-	
+
 	-- Fire slide event for effects/sounds
-	RemoteEventsManager:FireServer("MovementAction", {
-		Action = "StartSlide",
-		Position = rootPart.Position,
-		Direction = moveDirection
-	})
-	
+	local movementActionEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MovementAction")
+	if movementActionEvent then
+		movementActionEvent:FireServer({
+			Action = "StartSlide",
+			Position = rootPart.Position,
+			Direction = moveDirection
+		})
+	end
+
 	print("Enhanced sliding started")
 end
 

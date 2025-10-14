@@ -39,13 +39,7 @@ end
 
 function ClientSystemsInitializer:InitializeCore()
 	print("Initializing core systems...")
-	
-	-- Remote Events Manager (should be initialized first)
-	local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-	RemoteEventsManager:Initialize()
-	systems.RemoteEvents = RemoteEventsManager
-	print("✓ Remote Events Manager initialized")
-	
+
 	-- Game Config
 	local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 	GameConfig:Initialize()
@@ -121,7 +115,13 @@ function ClientSystemsInitializer:InitializeGameplay()
 	ViewmodelSystem:Initialize()
 	systems.Viewmodel = ViewmodelSystem
 	print("✓ Viewmodel System initialized")
-	
+
+	-- Scope System (for sniper scopes and optics)
+	local ScopeSystem = require(ReplicatedStorage.FPSSystem.Modules.ScopeSystem)
+	ScopeSystem:Initialize()
+	systems.Scope = ScopeSystem
+	print("✓ Scope System initialized")
+
 	-- Audio System (if exists)
 	if ReplicatedStorage.FPSSystem.Modules:FindFirstChild("AudioSystem") then
 		local AudioSystem = require(ReplicatedStorage.FPSSystem.Modules.AudioSystem)
@@ -196,32 +196,32 @@ function ClientSystemsInitializer:SetupSystemCommunication()
 end
 
 function ClientSystemsInitializer:SetupEventConnections()
-	local RemoteEventsManager = systems.RemoteEvents
-	if not RemoteEventsManager then return end
-	
+	local remoteEventsFolder = ReplicatedStorage.FPSSystem.RemoteEvents
+	if not remoteEventsFolder then return end
+
 	-- Level up notifications
-	local levelUpEvent = RemoteEventsManager:GetEvent("LevelUp")
+	local levelUpEvent = remoteEventsFolder:FindFirstChild("LevelUp")
 	if levelUpEvent then
 		levelUpEvent.OnClientEvent:Connect(function(levelData)
 			print("LEVEL UP! New Level: " .. levelData.NewLevel .. " | Credits Earned: " .. levelData.CreditsEarned)
-			
+
 			-- Show UI notification if available
 			-- InGameUI handles level up notifications automatically
 		end)
 	end
-	
+
 	-- XP awards
-	local xpAwardedEvent = RemoteEventsManager:GetEvent("XPAwarded")
+	local xpAwardedEvent = remoteEventsFolder:FindFirstChild("XPAwarded")
 	if xpAwardedEvent then
 		xpAwardedEvent.OnClientEvent:Connect(function(xpData)
 			print("XP Gained: +" .. xpData.Amount .. " (" .. xpData.Reason .. ")")
-			
+
 			-- InGameUI handles XP notifications automatically
 		end)
 	end
-	
+
 	-- Kill feed
-	local playerKilledEvent = RemoteEventsManager:GetEvent("PlayerKilled")
+	local playerKilledEvent = remoteEventsFolder:FindFirstChild("PlayerKilled")
 	if playerKilledEvent then
 		playerKilledEvent.OnClientEvent:Connect(function(killData)
 			local message = killData.Killer .. " killed " .. killData.Victim
@@ -232,12 +232,12 @@ function ClientSystemsInitializer:SetupEventConnections()
 				message = message .. " (Streak: " .. killData.KillStreak .. ")"
 			end
 			print(message)
-			
+
 			-- Add to kill feed if available
 			-- InGameUI handles kill feed automatically
 		end)
 	end
-	
+
 	print("✓ Event connections established")
 end
 

@@ -7,26 +7,40 @@ local Players = game:GetService("Players")
 local RaycastSystem = require(ReplicatedStorage.FPSSystem.Modules.RaycastSystem)
 local DamageSystem = require(ReplicatedStorage.FPSSystem.Modules.DamageSystem)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
+local GlobalStateManager = require(ReplicatedStorage.FPSSystem.Modules.GlobalStateManager)
 
 local GRAVITY = 9.81
 local AIR_RESISTANCE = 0.02
+local CONSECUTIVE_SHOT_RESET_TIME = 0.5 -- Reset consecutive shots after 0.5 seconds
 
 function BallisticsSystem:Initialize()
 	RaycastSystem:Initialize()
 	DamageSystem:Initialize()
-	
+
 	if RunService:IsServer() then
-		RemoteEventsManager:Initialize()
-		
-		local weaponFiredEvent = RemoteEventsManager:GetEvent("WeaponFired")
+		local weaponFiredEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFired")
 		if weaponFiredEvent then
 			weaponFiredEvent.OnServerEvent:Connect(function(player, fireData)
 				self:ProcessWeaponFire(player, fireData)
 			end)
 		end
+
+		-- Initialize player states for all players
+		for _, player in pairs(Players:GetPlayers()) do
+			GlobalStateManager:InitializePlayerState(player)
+		end
+
+		-- Initialize new players
+		Players.PlayerAdded:Connect(function(player)
+			GlobalStateManager:InitializePlayerState(player)
+		end)
+
+		-- Clean up on player leave
+		Players.PlayerRemoving:Connect(function(player)
+			GlobalStateManager:RemovePlayerState(player)
+		end)
 	end
-	
+
 	print("BallisticsSystem initialized")
 end
 
@@ -90,14 +104,17 @@ function BallisticsSystem:ProcessBulletFire(shooter, weaponConfig, origin, direc
 			end
 		end
 	end
-	
-	RemoteEventsManager:FireAllClients("WeaponFired", shooter, {
-		WeaponName = weaponConfig.Name,
-		Origin = origin,
-		Direction = direction,
-		BallisticData = ballisticData,
-		PlayerId = shooter.UserId
-	})
+
+	local weaponFiredEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFired")
+	if weaponFiredEvent then
+		weaponFiredEvent:FireAllClients(shooter, {
+			WeaponName = weaponConfig.Name,
+			Origin = origin,
+			Direction = direction,
+			BallisticData = ballisticData,
+			PlayerId = shooter.UserId
+		})
+	end
 end
 
 function BallisticsSystem:CalculateBallisticTrajectory(origin, direction, velocity, gravity, maxRange)
@@ -180,17 +197,41 @@ function BallisticsSystem:CalculateLeadTarget(targetPosition, targetVelocity, sh
 end
 
 function BallisticsSystem:ApplyWeaponSpread(direction, weaponConfig, shooter)
-	local isAiming = false -- TODO: Get from player state
-	local isMoving = false -- TODO: Get from player state
-	local consecutiveShots = 0 -- TODO: Track this per player
-	
+	-- Get player state from GlobalStateManager
+	local playerState = GlobalStateManager:GetPlayerState(shooter)
+
+	local isAiming = false
+	local isMoving = false
+	local consecutiveShots = 0
+
+	if playerState then
+		isAiming = playerState.IsAiming or false
+		isMoving = playerState.IsMoving or false
+		consecutiveShots = playerState.ConsecutiveShots or 0
+
+		-- Update consecutive shots
+		local currentTime = tick()
+		local lastShotTime = playerState.LastShotTime or 0
+
+		if currentTime - lastShotTime < CONSECUTIVE_SHOT_RESET_TIME then
+			consecutiveShots = consecutiveShots + 1
+		else
+			consecutiveShots = 1
+		end
+
+		GlobalStateManager:UpdatePlayerState(shooter, "ConsecutiveShots", consecutiveShots)
+		GlobalStateManager:UpdatePlayerState(shooter, "LastShotTime", currentTime)
+	else
+		warn("BallisticsSystem: Player state not found for", shooter.Name)
+	end
+
 	local totalSpread = self:CalculateSpread(weaponConfig, isAiming, isMoving, consecutiveShots)
-	
+
 	-- Apply random spread to direction
 	local spreadX = (math.random() - 0.5) * totalSpread
 	local spreadY = (math.random() - 0.5) * totalSpread
 	local spreadZ = (math.random() - 0.5) * totalSpread
-	
+
 	local spreadDirection = (direction + Vector3.new(spreadX, spreadY, spreadZ)).Unit
 	return spreadDirection
 end
@@ -270,14 +311,17 @@ function BallisticsSystem:ProcessGrenadeFire(shooter, weaponConfig, origin, dire
 	local explosionRadius = weaponConfig.ExplosionRadius or 10
 	local damage = weaponConfig.Damage or 100
 	
-	RemoteEventsManager:FireAllClients("GrenadeThrown", shooter, {
-		GrenadeType = weaponConfig.Name,
-		Origin = origin,
-		Direction = direction,
-		ThrowForce = throwForce,
-		FuseTime = fuseTime,
-		PlayerId = shooter.UserId
-	})
+	local grenadeThrownEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GrenadeThrown")
+	if grenadeThrownEvent then
+		grenadeThrownEvent:FireAllClients(shooter, {
+			GrenadeType = weaponConfig.Name,
+			Origin = origin,
+			Direction = direction,
+			ThrowForce = throwForce,
+			FuseTime = fuseTime,
+			PlayerId = shooter.UserId
+		})
+	end
 	
 	spawn(function()
 		local grenadeTrajectory = self:CalculateGrenadeTrajectory(origin, direction, throwForce, fuseTime)
@@ -349,12 +393,15 @@ function BallisticsSystem:ProcessGrenadeExplosion(shooter, weaponConfig, positio
 		DamageSystem:ApplyDamage(result.Player, result.Damage)
 	end
 	
-	RemoteEventsManager:FireAllClients("GrenadeExplosion", {
-		Position = position,
-		Radius = radius,
-		GrenadeType = weaponConfig.Name,
-		Damage = damage
-	})
+	local grenadeExplosionEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GrenadeExplosion")
+	if grenadeExplosionEvent then
+		grenadeExplosionEvent:FireAllClients({
+			Position = position,
+			Radius = radius,
+			GrenadeType = weaponConfig.Name,
+			Damage = damage
+		})
+	end
 end
 
 function BallisticsSystem:ProcessMeleeAttack(shooter, weaponConfig, origin, direction)
@@ -385,14 +432,17 @@ function BallisticsSystem:ProcessMeleeAttack(shooter, weaponConfig, origin, dire
 			print(shooter.Name .. " melee attacked " .. targetPlayer.Name .. " for " .. damageInfo.FinalDamage .. " damage")
 		end
 	end
-	
-	RemoteEventsManager:FireAllClients("MeleeAttack", shooter, {
-		WeaponName = weaponConfig.Name,
-		Origin = origin,
-		Direction = direction,
-		Range = range,
-		PlayerId = shooter.UserId
-	})
+
+	local meleeAttackEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeAttack")
+	if meleeAttackEvent then
+		meleeAttackEvent:FireAllClients(shooter, {
+			WeaponName = weaponConfig.Name,
+			Origin = origin,
+			Direction = direction,
+			Range = range,
+			PlayerId = shooter.UserId
+		})
+	end
 end
 
 function BallisticsSystem:IsBackstabAttack(attacker, victim, attackDirection)

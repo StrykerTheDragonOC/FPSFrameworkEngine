@@ -1,6 +1,6 @@
 --[[
-	G36 Assault Rifle - LocalScript
-	Enhanced weapon system with proper config integration, magic weapon detection, and improved functionality
+	G36 Assault Rifle Client Script
+	Fixed version with proper remote events and viewmodel system
 ]]
 
 local Players = game:GetService("Players")
@@ -8,24 +8,26 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
-local SoundService = game:GetService("SoundService")
 
-repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
+repeat task.wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
+-- Modules
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
-local RaycastSystem = require(ReplicatedStorage.FPSSystem.Modules.RaycastSystem)
-local AttachmentManager = require(ReplicatedStorage.FPSSystem.Modules.AttachmentManager)
 local ViewmodelSystem = require(ReplicatedStorage.FPSSystem.Modules.ViewmodelSystem)
-local WeaponUI = require(ReplicatedStorage.FPSSystem.Modules.WeaponUI)
+
+-- Remote Events (NO RemoteEventsManager!)
+local RemoteEvents = ReplicatedStorage.FPSSystem.RemoteEvents
+local WeaponFired = RemoteEvents:WaitForChild("WeaponFired")
+local WeaponReloaded = RemoteEvents:WaitForChild("WeaponReloaded")
+local WeaponEquipped = RemoteEvents:WaitForChild("WeaponEquipped")
+local WeaponUnequipped = RemoteEvents:WaitForChild("WeaponUnequipped")
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
-
 local tool = script.Parent
 local weaponName = tool.Name
 
--- Get weapon configuration
+-- Get weapon config
 local weaponConfig = WeaponConfig:GetWeaponConfig(weaponName)
 if not weaponConfig then
 	warn("No weapon config found for:", weaponName)
@@ -33,219 +35,244 @@ if not weaponConfig then
 end
 
 -- Weapon state
-local weaponStats = WeaponConfig:GetWeaponStats(weaponName)
-local currentAmmo = weaponConfig.MaxAmmo
-local totalAmmo = weaponConfig.MaxReserveAmmo
+local currentAmmo = weaponConfig.ClipSize or 30
+local reserveAmmo = weaponConfig.TotalAmmo or 210
 local isReloading = false
 local canFire = true
 local lastFireTime = 0
-local currentFireMode = weaponConfig.DefaultFireMode
-local isFullAuto = false
-local recoilPattern = {x = 0, y = 0}
-local shotsInBurst = 0
+local isEquipped = false
+local isFiring = false
+local fireMode = "Auto"  -- "Auto", "Semi", "Burst"
 
--- Input connections
-local connections = {}
-
--- Check if this is a magic weapon
-local isMagicWeapon = WeaponConfig:IsMagicWeapon(weaponName)
-local isAdminWeapon = WeaponConfig:IsAdminOnlyWeapon(weaponName)
-
--- Custom keybinds for magic weapons
-local customKeybinds = WeaponConfig:GetWeaponKeybinds(weaponName)
-
--- Viewmodel handling
-
-function fireWeapon()
-	if not canFire or isReloading or currentAmmo <= 0 then return end
+-- Fire weapon
+local function FireWeapon()
+	if not canFire or isReloading or currentAmmo <= 0 or not isEquipped then
+		if currentAmmo <= 0 then
+			-- Play dry fire sound
+			local drySound = Instance.new("Sound")
+			drySound.SoundId = "rbxassetid://2697295462"  -- Dry fire sound
+			drySound.Volume = 0.3
+			drySound.Parent = Camera
+			drySound:Play()
+			game:GetService("Debris"):AddItem(drySound, 1)
+		end
+		return
+	end
 
 	local currentTime = tick()
-	local fireRate = 60 / weaponStats.FireRate
+	local fireRate = 60 / (weaponConfig.FireRate or 750)
 
 	if currentTime - lastFireTime < fireRate then return end
 
 	lastFireTime = currentTime
 	currentAmmo = currentAmmo - 1
 
-	-- Perform raycast
-	local rayDirection = Camera.CFrame.LookVector
-	local rayResult = RaycastSystem:FireRay(Camera.CFrame.Position, rayDirection, weaponStats.Range, weaponName, weaponStats.Damage, 1.0, {player.Character})
+	-- Get camera direction
+	local origin = Camera.CFrame.Position
+	local direction = (mouse.Hit.Position - origin).Unit
 
-	-- Send to server
-	RemoteEventsManager:FireServer("WeaponFired", {
-		WeaponName = weaponName,
-		Origin = Camera.CFrame.Position,
-		Direction = rayDirection,
-		Hit = rayResult.Hit,
-		Distance = rayResult.Distance,
-		Damage = weaponStats.Damage
-	})
+	-- Perform raycast
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterDescendantsInstances = {player.Character}
+	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+	local raycastResult = workspace:Raycast(origin, direction * (weaponConfig.Range or 500), raycastParams)
+
+	-- Fire to server
+	WeaponFired:FireServer(weaponName, origin, direction, raycastResult)
 
 	-- Play effects
-	playFireEffects()
+	PlayFireEffects(raycastResult)
 
-	-- Update weapon UI
-	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
-
-	-- Show hitmarker if hit
-	if rayResult.Hit then
-		WeaponUI:ShowHitmarker()
-	end
-
-	-- Check for reload
+	-- Auto reload if empty
 	if currentAmmo <= 0 then
-		reloadWeapon()
+		ReloadWeapon()
 	end
 end
 
-function playFireEffects()
-	-- Muzzle flash
-	local viewmodel = ViewmodelSystem:GetActiveViewmodel()
-	if viewmodel then
-		local muzzle = viewmodel:FindFirstChild("Muzzle")
-		if muzzle then
-			-- Create muzzle flash effect
-			local flash = Instance.new("Explosion")
-			flash.Position = muzzle.WorldPosition
-			flash.BlastRadius = 0
-			flash.BlastPressure = 0
-			flash.Visible = false
-			flash.Parent = workspace
-		end
-	end
-	
-	-- Sound effect
+-- Play fire effects
+function PlayFireEffects(raycastResult)
+	-- Fire sound
 	local fireSound = Instance.new("Sound")
-	fireSound.SoundId = "rbxassetid://4759267374" -- G36 fire sound
-	fireSound.Volume = 0.3
+	fireSound.SoundId = "rbxassetid://4759267374"  -- G36 fire sound
+	fireSound.Volume = 0.5
 	fireSound.Parent = Camera
 	fireSound:Play()
-	
-	fireSound.Ended:Connect(function()
-		fireSound:Destroy()
-	end)
-	
-	-- Screen shake/recoil
-	applyRecoil()
-end
+	game:GetService("Debris"):AddItem(fireSound, 2)
 
-function applyRecoil()
-	local recoilAmount = weaponStats.Recoil or 1
+	-- Camera recoil
+	local recoilAmount = weaponConfig.Recoil or 1.2
 	local randomX = (math.random() - 0.5) * recoilAmount * 0.1
-	local randomY = math.random() * recoilAmount * 0.1
-	
+	local randomY = math.random() * recoilAmount * 0.15
 	Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(-randomY), math.rad(randomX), 0)
-	
-	-- Apply viewmodel recoil
-	ViewmodelSystem:ApplyRecoil(Vector3.new(randomX, randomY, recoilAmount * 0.1))
+
+	-- Viewmodel recoil
+	ViewmodelSystem:ApplyRecoil(Vector3.new(randomX, randomY, recoilAmount * 0.12))
+
+	-- Muzzle flash (if viewmodel exists)
+	local viewmodel = ViewmodelSystem:GetActiveViewmodel()
+	if viewmodel then
+		local muzzle = viewmodel:FindFirstChild("Muzzle", true)
+		if muzzle and muzzle:IsA("Attachment") then
+			-- Create muzzle flash
+			local flash = Instance.new("Part")
+			flash.Name = "MuzzleFlash"
+			flash.Size = Vector3.new(0.4, 0.4, 0.4)
+			flash.CFrame = muzzle.WorldCFrame
+			flash.Material = Enum.Material.Neon
+			flash.Color = Color3.fromRGB(255, 200, 100)
+			flash.Transparency = 0.3
+			flash.CanCollide = false
+			flash.Anchored = true
+			flash.Parent = workspace
+
+			local light = Instance.new("PointLight")
+			light.Brightness = 4
+			light.Range = 10
+			light.Color = Color3.fromRGB(255, 200, 100)
+			light.Parent = flash
+
+			game:GetService("Debris"):AddItem(flash, 0.05)
+		end
+	end
+
+	-- Bullet tracer
+	if raycastResult then
+		local distance = (raycastResult.Position - origin).Magnitude
+		if distance > 10 then  -- Only show tracer for distant shots
+			local tracer = Instance.new("Part")
+			tracer.Size = Vector3.new(0.05, 0.05, distance)
+			tracer.CFrame = CFrame.new(origin, raycastResult.Position) * CFrame.new(0, 0, -distance/2)
+			tracer.Material = Enum.Material.Neon
+			tracer.Color = Color3.fromRGB(255, 200, 100)
+			tracer.Transparency = 0.5
+			tracer.CanCollide = false
+			tracer.Anchored = true
+			tracer.Parent = workspace
+
+			game:GetService("Debris"):AddItem(tracer, 0.1)
+		end
+
+		-- Bullet impact
+		local hitPosition = raycastResult.Position
+		local hitNormal = raycastResult.Normal  -- ✓ CORRECT - Get Normal from raycast result
+
+		local impact = Instance.new("Part")
+		impact.Size = Vector3.new(0.2, 0.2, 0.1)
+		impact.CFrame = CFrame.new(hitPosition, hitPosition + hitNormal)
+		impact.Material = Enum.Material.Neon
+		impact.Color = Color3.fromRGB(255, 150, 50)
+		impact.Transparency = 0.3
+		impact.CanCollide = false
+		impact.Anchored = true
+		impact.Parent = workspace
+
+		game:GetService("Debris"):AddItem(impact, 0.2)
+	end
 end
 
-function reloadWeapon()
-	if isReloading or currentAmmo >= weaponStats.ClipSize or totalAmmo <= 0 then return end
+-- Reload weapon
+function ReloadWeapon()
+	if isReloading or currentAmmo >= weaponConfig.ClipSize or reserveAmmo <= 0 then
+		return
+	end
 
 	isReloading = true
+	isFiring = false  -- Stop firing during reload
 
-	-- Show reload indicator
-	WeaponUI:ShowReloadIndicator()
-
-	-- Play reload animation/sound
+	-- Play reload sound
 	local reloadSound = Instance.new("Sound")
-	reloadSound.SoundId = "rbxassetid://138084889" -- Reload sound
+	reloadSound.SoundId = "rbxassetid://138084889"  -- Reload sound
 	reloadSound.Volume = 0.4
 	reloadSound.Parent = Camera
 	reloadSound:Play()
+	game:GetService("Debris"):AddItem(reloadSound, 3)
 
 	-- Wait for reload time
-	wait(weaponStats.ReloadTime)
+	task.wait(weaponConfig.ReloadTime or 2.5)
 
 	-- Calculate ammo
-	local ammoNeeded = weaponStats.ClipSize - currentAmmo
-	local ammoToAdd = math.min(ammoNeeded, totalAmmo)
+	local ammoNeeded = weaponConfig.ClipSize - currentAmmo
+	local ammoToAdd = math.min(ammoNeeded, reserveAmmo)
 
 	currentAmmo = currentAmmo + ammoToAdd
-	totalAmmo = totalAmmo - ammoToAdd
+	reserveAmmo = reserveAmmo - ammoToAdd
 
 	isReloading = false
 
-	-- Update weapon UI
-	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
-	WeaponUI:HideReloadIndicator()
-
 	-- Notify server
-	RemoteEventsManager:FireServer("WeaponReloaded", {
-		WeaponName = weaponName,
-		CurrentAmmo = currentAmmo,
-		TotalAmmo = totalAmmo
-	})
+	WeaponReloaded:FireServer(weaponName, currentAmmo, reserveAmmo)
+
+	print("Reloaded:", weaponName, "Ammo:", currentAmmo .. "/" .. reserveAmmo)
 end
 
-function onEquipped()
-	-- Initialize and show weapon UI
-	WeaponUI:Initialize()
-	WeaponUI:Show()
-	WeaponUI:UpdateWeaponName(weaponName)
-	WeaponUI:UpdateFireMode(currentFireMode)
-	WeaponUI:UpdateAmmo(currentAmmo, totalAmmo)
-
-	-- Setup input connections
-	connections.mouseButton1 = mouse.Button1Down:Connect(function()
-		fireWeapon()
-	end)
-
-	-- Auto-fire for assault rifles
-	connections.autoFire = mouse.Button1Up:Connect(function()
-		-- Stop auto-fire logic if implemented
-	end)
-
-	connections.reload = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-
-		if input.KeyCode == Enum.KeyCode.R then
-			reloadWeapon()
-		end
-	end)
-
-	-- Setup viewmodel using ViewmodelSystem
-	ViewmodelSystem:CreateViewmodel(weaponName, "Primary")
-
-	-- Notify server
-	RemoteEventsManager:FireServer("WeaponEquipped", {
-		WeaponName = weaponName,
-		Player = player.Name
-	})
-end
-
-function onUnequipped()
-	-- Hide weapon UI
-	WeaponUI:Hide()
-
-	-- Disconnect all connections
-	for _, connection in pairs(connections) do
-		connection:Disconnect()
+-- Auto-fire loop for assault rifles
+local function StartAutoFire()
+	isFiring = true
+	while isFiring and isEquipped do
+		FireWeapon()
+		task.wait(0.01)  -- Small delay to prevent overload
 	end
-	connections = {}
-
-	-- Clean up viewmodel
-	ViewmodelSystem:DestroyViewmodel()
-
-	-- Notify server
-	RemoteEventsManager:FireServer("WeaponUnequipped", {
-		WeaponName = weaponName,
-		Player = player.Name
-	})
 end
 
--- Tool events
-tool.Equipped:Connect(onEquipped)
-tool.Unequipped:Connect(onUnequipped)
+-- Tool equipped
+tool.Equipped:Connect(function()
+	isEquipped = true
+	print("Equipped:", weaponName)
 
--- Initialize
-RemoteEventsManager:Initialize()
-WeaponConfig:Initialize()
-RaycastSystem:Initialize()
-AttachmentManager:Initialize()
-ViewmodelSystem:Initialize()
--- WeaponUI is initialized on equip to avoid multiple initializations
+	-- Notify server (FIXED: send table with WeaponName key, not just string)
+	WeaponEquipped:FireServer({WeaponName = weaponName})
 
--- Enhanced weapon system ready
-print(weaponName .. " weapon system initialized with enhanced features")
+	-- ViewmodelSystem automatically creates viewmodel when tool equipped
+	-- No manual viewmodel creation needed!
+end)
+
+-- Tool unequipped
+tool.Unequipped:Connect(function()
+	isEquipped = false
+	isReloading = false
+	isFiring = false
+	print("Unequipped:", weaponName)
+
+	-- Notify server (FIXED: send table with WeaponName key, not just string)
+	WeaponUnequipped:FireServer({WeaponName = weaponName})
+
+	-- ViewmodelSystem automatically removes viewmodel
+end)
+
+-- Mouse input (Full-auto support)
+mouse.Button1Down:Connect(function()
+	if isEquipped and fireMode == "Auto" then
+		-- Start auto-fire
+		StartAutoFire()
+	elseif isEquipped and fireMode == "Semi" then
+		-- Single shot
+		FireWeapon()
+	end
+end)
+
+mouse.Button1Up:Connect(function()
+	-- Stop auto-fire
+	isFiring = false
+end)
+
+-- Keyboard input
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed or not isEquipped then return end
+
+	if input.KeyCode == Enum.KeyCode.R then
+		-- Reload
+		ReloadWeapon()
+	elseif input.KeyCode == Enum.KeyCode.V then
+		-- Toggle fire mode
+		if fireMode == "Auto" then
+			fireMode = "Semi"
+			print("Fire mode: Semi-Auto")
+		else
+			fireMode = "Auto"
+			print("Fire mode: Full-Auto")
+		end
+	end
+end)
+
+print("G36 script loaded ✓")

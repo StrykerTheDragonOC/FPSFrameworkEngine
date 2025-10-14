@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 
@@ -32,11 +31,10 @@ local SHOP_ITEMS = {
 }
 
 function ShopHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DataStoreManager:Initialize()
 	
 	-- Handle purchase requests
-	local purchaseItemEvent = RemoteEventsManager:GetEvent("PurchaseItem")
+	local purchaseItemEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PurchaseItem")
 	if purchaseItemEvent then
 		purchaseItemEvent.OnServerEvent:Connect(function(player, purchaseData)
 			self:HandlePurchase(player, purchaseData)
@@ -190,17 +188,23 @@ function ShopHandler:UnlockSkin(player, skinName, cost)
 end
 
 function ShopHandler:SendPurchaseResult(player, success, message)
-	RemoteEventsManager:FireClient(player, "PurchaseResult", {
-		Success = success,
-		Message = message
-	})
-	
+	local purchaseResultEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PurchaseResult")
+	if purchaseResultEvent then
+		purchaseResultEvent:FireClient(player, {
+			Success = success,
+			Message = message
+		})
+	end
+
 	if success then
 		-- Refresh player data on client
 		local playerData = DataStoreManager:GetPlayerData(player)
-		RemoteEventsManager:FireClient(player, "PlayerDataUpdated", {
-			Data = DataStoreManager:GetClientSafeData(playerData)
-		})
+		local playerDataUpdatedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDataUpdated")
+		if playerDataUpdatedEvent then
+			playerDataUpdatedEvent:FireClient(player, {
+				Data = DataStoreManager:GetClientSafeData(playerData)
+			})
+		end
 	end
 end
 

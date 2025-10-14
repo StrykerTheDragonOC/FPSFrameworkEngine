@@ -1,7 +1,7 @@
 -- GlobalStateManager
 -- Centralized state management to replace _G usage
 -- Provides a clean, organized way to share data between modules
-
+--!nocheck
 local GlobalStateManager = {}
 GlobalStateManager.__index = GlobalStateManager
 
@@ -11,7 +11,6 @@ local listeners = {}
 
 -- Initialize the global state manager
 function GlobalStateManager:Initialize()
-    -- Initialize default state
     globalState = {
         -- Core Systems
         DataStoreManager = nil,
@@ -21,7 +20,7 @@ function GlobalStateManager:Initialize()
         WeaponSystem = nil,
         AmmoHandler = nil,
         MovementSystem = nil,
-        
+
         -- Game State
         GameSettings = {
             Sensitivity = 0.5,
@@ -35,7 +34,7 @@ function GlobalStateManager:Initialize()
             AutoReload = true,
             DamageNumbers = true
         },
-        
+
         -- Handlers
         SpottingHandler = nil,
         GrenadeHandler = nil,
@@ -49,23 +48,98 @@ function GlobalStateManager:Initialize()
         DayNightHandler = nil,
         PickupHandler = nil,
         KillStreakManager = nil,
-        
+
         -- Client Systems
         ClientSystems = nil,
         SystemEvents = nil,
         HUDController = nil,
         RagdollSystem = nil,
-        
+
         -- Debug
         ClientDebug = nil,
-        
+
         -- Input Events
         onInputBegan = nil,
         onInputEnded = nil,
-        onFire = nil
+        onFire = nil,
+
+        -- Player States
+        PlayerStates = {}
     }
-    
-    print("GlobalStateManager: Initialized")
+
+    print("? GlobalStateManager: Initialized")
+end
+
+-- Initialize player state
+function GlobalStateManager:InitializePlayerState(player)
+    if not globalState.PlayerStates then
+        globalState.PlayerStates = {}
+    end
+
+    local userId = player.UserId
+
+    if not globalState.PlayerStates[userId] then
+        globalState.PlayerStates[userId] = {
+            Player = player,
+            IsAiming = false,
+            IsMoving = false,
+            IsSprinting = false,
+            IsCrouching = false,
+            IsProne = false,
+            ConsecutiveShots = 0,
+            LastShotTime = 0,
+            CurrentWeapon = nil,
+            Velocity = Vector3.new(0, 0, 0),
+            LastPosition = nil
+        }
+    end
+
+    return globalState.PlayerStates[userId]
+end
+
+-- Get player state
+function GlobalStateManager:GetPlayerState(player)
+    if not globalState.PlayerStates then
+        globalState.PlayerStates = {}
+    end
+
+    local userId = type(player) == "number" and player or player.UserId
+    return globalState.PlayerStates[userId]
+end
+
+-- Update player state
+function GlobalStateManager:UpdatePlayerState(player, key, value)
+    if not globalState.PlayerStates then
+        globalState.PlayerStates = {}
+    end
+
+    local userId = type(player) == "number" and player or player.UserId
+    if not globalState.PlayerStates[userId] then
+        warn("?? Player state not initialized for userId:", userId)
+        return false
+    end
+
+    local oldValue = globalState.PlayerStates[userId][key]
+    globalState.PlayerStates[userId][key] = value
+
+    -- Notify listeners
+    local listenerKey = "PlayerState." .. userId .. "." .. key
+    if listeners[listenerKey] then
+        for _, callback in pairs(listeners[listenerKey]) do
+            task.spawn(function()
+                callback(value, oldValue, player)
+            end)
+        end
+    end
+
+    return true
+end
+
+-- Remove player state on disconnect
+function GlobalStateManager:RemovePlayerState(player)
+    if not globalState.PlayerStates then return end
+    local userId = type(player) == "number" and player or player.UserId
+    globalState.PlayerStates[userId] = nil
 end
 
 -- Get a value from global state
@@ -77,16 +151,15 @@ end
 function GlobalStateManager:Set(key, value)
     local oldValue = globalState[key]
     globalState[key] = value
-    
-    -- Notify listeners
+
     if listeners[key] then
         for _, callback in pairs(listeners[key]) do
-            spawn(function()
+            task.spawn(function()
                 callback(value, oldValue)
             end)
         end
     end
-    
+
     return value
 end
 
@@ -96,7 +169,7 @@ function GlobalStateManager:Update(path, value)
     for key in path:gmatch("[^%.]+") do
         table.insert(keys, key)
     end
-    
+
     local current = globalState
     for i = 1, #keys - 1 do
         if not current[keys[i]] then
@@ -104,19 +177,18 @@ function GlobalStateManager:Update(path, value)
         end
         current = current[keys[i]]
     end
-    
+
     local oldValue = current[keys[#keys]]
     current[keys[#keys]] = value
-    
-    -- Notify listeners for the full path
+
     if listeners[path] then
         for _, callback in pairs(listeners[path]) do
-            spawn(function()
+            task.spawn(function()
                 callback(value, oldValue)
             end)
         end
     end
-    
+
     return value
 end
 
@@ -133,7 +205,7 @@ function GlobalStateManager:GetNested(path)
     return current
 end
 
--- Listen for changes to a key
+-- Listen for changes
 function GlobalStateManager:Listen(key, callback)
     if not listeners[key] then
         listeners[key] = {}
@@ -153,12 +225,12 @@ function GlobalStateManager:Unlisten(key, callback)
     end
 end
 
--- Get all data (for debugging)
+-- Debug: Get all state
 function GlobalStateManager:GetAll()
     return globalState
 end
 
--- Clear all data (for cleanup)
+-- Clear all data
 function GlobalStateManager:Clear()
     globalState = {}
     listeners = {}

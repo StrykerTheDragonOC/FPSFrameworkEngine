@@ -5,7 +5,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 repeat task.wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 local gameMode = {
 	["TDM"] = {
@@ -80,13 +79,9 @@ local modeOptions = {}
 local voteCounts = {}
 
 function VotingSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
-	-- Remote events are automatically created by RemoteEventsManager
-	
 	-- Server-side events
 	if game:GetService("RunService"):IsServer() then
-		local voteEvent = RemoteEventsManager:GetEvent("VoteForGamemode")
+		local voteEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("VoteForGamemode")
 		if voteEvent then
 			voteEvent.OnServerEvent:Connect(function(player, gamemode)
 				self:ProcessVote(player, gamemode)
@@ -128,9 +123,10 @@ function VotingSystem:StartVoting(duration)
 	for _, mode in ipairs(modeOptions) do
 		voteCounts[mode] = 0
 	end
-	
+
+
 	-- Broadcast voting start
-	local startEvent = RemoteEventsManager:GetEvent("StartVoting")
+	local startEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StartVoting")
 	if startEvent then
 		startEvent:FireAllClients({
 			modes = modeOptions,
@@ -158,9 +154,9 @@ function VotingSystem:ProcessVote(player, gamemode)
 	-- Add new vote
 	playerVotes[player.Name] = gamemode
 	voteCounts[gamemode] = (voteCounts[gamemode] or 0) + 1
-	
+
 	-- Broadcast vote update
-	local updateEvent = RemoteEventsManager:GetEvent("UpdateVotes")
+	local updateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UpdateVotes")
 	if updateEvent then
 		updateEvent:FireAllClients({
 			votes = voteCounts,
@@ -187,9 +183,10 @@ function VotingSystem:EndVoting()
 			winningMode = mode
 		end
 	end
-	
+
+
 	-- Broadcast result
-	local endEvent = RemoteEventsManager:GetEvent("EndVoting")
+	local endEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("EndVoting")
 	if endEvent then
 		endEvent:FireAllClients({
 			winner = winningMode,
@@ -197,7 +194,7 @@ function VotingSystem:EndVoting()
 			modeData = gameMode[winningMode]
 		})
 	end
-	
+
 	return winningMode
 end
 

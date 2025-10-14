@@ -7,8 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
@@ -23,27 +21,25 @@ local spottedPlayers = {}
 local mapPings = {}
 
 function SpottingSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	self:SetupInputHandling()
 	self:SetupSpottingUI()
-	
+
 	-- Listen for spot events from server
-	local playerSpottedEvent = RemoteEventsManager:GetEvent("PlayerSpotted")
+	local playerSpottedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerSpotted")
 	if playerSpottedEvent then
 		playerSpottedEvent.OnClientEvent:Connect(function(spotData)
 			self:HandlePlayerSpotted(spotData)
 		end)
 	end
-	
-	local spotRemovedEvent = RemoteEventsManager:GetEvent("SpotRemoved")
+
+	local spotRemovedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpotRemoved")
 	if spotRemovedEvent then
 		spotRemovedEvent.OnClientEvent:Connect(function(spotData)
 			self:HandleSpotRemoved(spotData)
 		end)
 	end
-	
-	local mapPingEvent = RemoteEventsManager:GetEvent("MapPing")
+
+	local mapPingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MapPing")
 	if mapPingEvent then
 		mapPingEvent.OnClientEvent:Connect(function(pingData)
 			self:HandleMapPing(pingData)
@@ -134,10 +130,13 @@ function SpottingSystem:TrySpotPlayer()
 					-- Check line of sight
 					if self:HasLineOfSight(head.Position, hitCharacter.HumanoidRootPart.Position) then
 						-- Send spot to server
-						RemoteEventsManager:FireServer("SpotPlayer", {
-							TargetPlayer = targetPlayer,
-							Position = rayResult.Position
-						})
+						local spotPlayerEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpotPlayer")
+						if spotPlayerEvent then
+							spotPlayerEvent:FireServer({
+								TargetPlayer = targetPlayer,
+								Position = rayResult.Position
+							})
+						end
 						return targetPlayer
 					end
 				end
@@ -186,13 +185,17 @@ function SpottingSystem:CreateMapPing()
 	raycastParams.FilterDescendantsInstances = {player.Character}
 	
 	local rayResult = Workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
-	
+
+
 	if rayResult then
 		-- Send ping to server
-		RemoteEventsManager:FireServer("CreateMapPing", {
-			Position = rayResult.Position,
-			Message = "Spotted Here"
-		})
+		local createMapPingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("CreateMapPing")
+		if createMapPingEvent then
+			createMapPingEvent:FireServer({
+				Position = rayResult.Position,
+				Message = "Spotted Here"
+			})
+		end
 	end
 end
 
@@ -333,9 +336,12 @@ function SpottingSystem:UpdateSpotIndicators()
 						spotData.CoverStartTime = tick()
 					elseif tick() - spotData.CoverStartTime > 3 then
 						-- Lost spot after 3 seconds in cover
-						RemoteEventsManager:FireServer("LoseSpot", {
-							TargetPlayer = targetPlayer
-						})
+						local loseSpotEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LoseSpot")
+						if loseSpotEvent then
+							loseSpotEvent:FireServer({
+								TargetPlayer = targetPlayer
+							})
+						end
 					end
 				else
 					-- Reset cover timer

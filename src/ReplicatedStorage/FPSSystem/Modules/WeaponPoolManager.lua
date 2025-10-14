@@ -7,7 +7,14 @@
 local WeaponPoolManager = {}
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
+
+-- Only require DataStoreManager on server
+local DataStoreManager = nil
+if RunService:IsServer() then
+	DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
+end
 
 -- Default weapon pools for Rank 0 players
 local DEFAULT_POOLS = {
@@ -25,30 +32,66 @@ end
 
 -- Get all unlocked weapons for a player in a category
 function WeaponPoolManager:GetUnlockedWeapons(player, category)
-	-- TODO: Integrate with DataStore system when implemented
-	-- For now, return default weapons
-	return self:GetDefaultWeaponPool(category)
+	-- Get all weapons in the category from WeaponConfig
+	local allWeapons = WeaponConfig:GetWeaponsByCategory(category)
+	local unlockedWeapons = {}
+
+	-- Check if DataStoreManager is available (server-side)
+	if DataStoreManager then
+		-- Check each weapon to see if it's unlocked
+		for weaponName, weaponConfig in pairs(allWeapons) do
+			if DataStoreManager:HasWeaponUnlocked(player, weaponName) then
+				table.insert(unlockedWeapons, weaponName)
+			end
+		end
+
+		-- If no weapons unlocked, return defaults
+		if #unlockedWeapons == 0 then
+			return self:GetDefaultWeaponPool(category)
+		end
+
+		return unlockedWeapons
+	else
+		-- Client-side or DataStoreManager not available - return defaults
+		return self:GetDefaultWeaponPool(category)
+	end
 end
 
 -- Check if a specific weapon is unlocked
 function WeaponPoolManager:IsWeaponUnlocked(player, weaponName)
-	-- TODO: Integrate with DataStore system
-	-- For now, check if weapon is in default pools
-	for category, weapons in pairs(DEFAULT_POOLS) do
-		for _, weapon in pairs(weapons) do
-			if weapon == weaponName then
-				return true
+	-- Use DataStoreManager if available (server-side)
+	if DataStoreManager then
+		return DataStoreManager:HasWeaponUnlocked(player, weaponName)
+	else
+		-- Client-side fallback - check if weapon is in default pools
+		for category, weapons in pairs(DEFAULT_POOLS) do
+			for _, weapon in pairs(weapons) do
+				if weapon == weaponName then
+					return true
+				end
 			end
 		end
+		return false
 	end
-	return false
 end
 
 -- Add weapon to player's unlock pool
-function WeaponPoolManager:AddWeaponToPool(player, weaponName)
-	-- TODO: Integrate with DataStore system
-	print("WeaponPoolManager: Unlocked", weaponName, "for", player.Name)
-	return true
+function WeaponPoolManager:AddWeaponToPool(player, weaponName, cost)
+	-- Use DataStoreManager if available (server-side)
+	if DataStoreManager then
+		local success = DataStoreManager:UnlockWeapon(player, weaponName, cost)
+		if success then
+			print("WeaponPoolManager: Unlocked", weaponName, "for", player.Name)
+			return true
+		else
+			warn("WeaponPoolManager: Failed to unlock", weaponName, "for", player.Name)
+			return false
+		end
+	else
+		-- Client-side - can't unlock weapons
+		warn("WeaponPoolManager:AddWeaponToPool can only be called on server")
+		return false
+	end
 end
 
 -- Get a random weapon from a category pool
@@ -88,10 +131,59 @@ function WeaponPoolManager:GetRandomLoadout(player)
 end
 
 -- Get current player loadout (for respawns)
-function WeaponPoolManager:GetCurrentLoadout(player)
-	-- TODO: Store and retrieve player's current loadout
-	-- For now, generate a new random one
-	return self:GetRandomLoadout(player)
+function WeaponPoolManager:GetCurrentLoadout(player, className)
+	-- Use DataStoreManager if available (server-side)
+	if DataStoreManager then
+		local loadout = DataStoreManager:GetPlayerLoadout(player, className or "Assault")
+		if loadout then
+			print("WeaponPoolManager: Retrieved saved loadout for", player.Name, "(" .. (className or "Assault") .. ")")
+			return loadout
+		else
+			-- No saved loadout - generate a random one
+			warn("WeaponPoolManager: No saved loadout found for", player.Name, "- generating random loadout")
+			return self:GetRandomLoadout(player)
+		end
+	else
+		-- Client-side - generate random loadout
+		return self:GetRandomLoadout(player)
+	end
+end
+
+-- Save player's current loadout
+function WeaponPoolManager:SaveLoadout(player, className, loadout)
+	-- Use DataStoreManager if available (server-side)
+	if DataStoreManager then
+		local success = DataStoreManager:SetPlayerLoadout(player, className, loadout)
+		if success then
+			print("WeaponPoolManager: Saved loadout for", player.Name, "(" .. className .. ")")
+			return true
+		else
+			warn("WeaponPoolManager: Failed to save loadout for", player.Name)
+			return false
+		end
+	else
+		-- Client-side - can't save loadouts
+		warn("WeaponPoolManager:SaveLoadout can only be called on server")
+		return false
+	end
+end
+
+-- Get player's level (for unlock requirements)
+function WeaponPoolManager:GetPlayerLevel(player)
+	if DataStoreManager then
+		return DataStoreManager:GetPlayerLevel(player)
+	else
+		return 0
+	end
+end
+
+-- Get player's credits
+function WeaponPoolManager:GetPlayerCredits(player)
+	if DataStoreManager then
+		return DataStoreManager:GetPlayerCredits(player)
+	else
+		return 0
+	end
 end
 
 -- Initialize the weapon pool manager

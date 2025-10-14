@@ -6,8 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 
 -- Status effect configurations
@@ -130,19 +128,18 @@ local activeEffects = {}
 local effectGUI = nil
 
 function StatusEffectsSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	self:CreateStatusEffectGUI()
-	
+
+
 	-- Listen for status effect events
-	local statusEffectAppliedEvent = RemoteEventsManager:GetEvent("StatusEffectApplied")
+	local statusEffectAppliedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StatusEffectApplied")
 	if statusEffectAppliedEvent then
 		statusEffectAppliedEvent.OnClientEvent:Connect(function(effectData)
 			self:ApplyStatusEffect(effectData)
 		end)
 	end
-	
-	local statusEffectRemovedEvent = RemoteEventsManager:GetEvent("StatusEffectRemoved")
+
+	local statusEffectRemovedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StatusEffectRemoved")
 	if statusEffectRemovedEvent then
 		statusEffectRemovedEvent.OnClientEvent:Connect(function(effectData)
 			self:RemoveStatusEffect(effectData.EffectName)
@@ -500,11 +497,14 @@ function StatusEffectsSystem:UpdateStatusEffects()
 				end
 				
 				-- Apply damage via server
-				RemoteEventsManager:FireServer("StatusEffectDamage", {
-					EffectName = effectName,
-					Damage = damage,
-					Source = effectData.Source
-				})
+				local statusEffectDamageEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StatusEffectDamage")
+				if statusEffectDamageEvent then
+					statusEffectDamageEvent:FireServer({
+						EffectName = effectName,
+						Damage = damage,
+						Source = effectData.Source
+					})
+				end
 				
 				effectData.LastTickTime = currentTime
 			end

@@ -1,8 +1,7 @@
+--!nocheck
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 
 local ClassHandler = {}
@@ -63,19 +62,18 @@ local CLASS_CONFIGS = {
 }
 
 function ClassHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DataStoreManager:Initialize()
-	
+
 	-- Handle class selection from clients
-	local selectClassEvent = RemoteEventsManager:GetEvent("SelectClass")
+	local selectClassEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SelectClass")
 	if selectClassEvent then
 		selectClassEvent.OnServerEvent:Connect(function(player, classData)
 			self:HandleClassSelection(player, classData)
 		end)
 	end
-	
+
 	-- Handle ability usage from clients
-	local useAbilityEvent = RemoteEventsManager:GetEvent("UseAbility")
+	local useAbilityEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UseAbility")
 	if useAbilityEvent then
 		useAbilityEvent.OnServerEvent:Connect(function(player, abilityData)
 			self:HandleAbilityUsage(player, abilityData)
@@ -274,27 +272,30 @@ function ClassHandler:ApplyInstantAbility(player, ability)
 							local otherHumanoid = otherCharacter:FindFirstChild("Humanoid")
 							if otherHumanoid then
 								otherHumanoid.Health = math.min(otherHumanoid.MaxHealth, otherHumanoid.Health + 50)
-								
+
 								-- Notify client of heal effect
-								RemoteEventsManager:FireClient(otherPlayer, "AbilityEffect", {
-									EffectType = "Heal",
-									Amount = 50
-								})
+								local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+								if abilityEffectEvent then
+									abilityEffectEvent:FireClient(otherPlayer, {
+										EffectType = "Heal",
+										Amount = 50
+									})
+								end
 							end
-						end
 					end
 				end
 			end
 		end
-		
+	end
+
 	elseif ability.Name == "Ammo Crate" then
 		-- Create ammo resupply crate
 		self:CreateAmmoCrate(player)
-		
+
 	elseif ability.Name == "UAV Scan" then
 		-- Reveal enemies to team
 		self:PerformUAVScan(player)
-		
+
 	elseif ability.Name == "EMP Pulse" then
 		-- Disable enemy equipment
 		self:PerformEMPPulse(player)
@@ -353,11 +354,14 @@ function ClassHandler:CreateAmmoCrate(player)
 								ammoHandler:GiveAmmo(teammate, "556", "Standard", 30)
 								ammoHandler:GiveAmmo(teammate, "9mm", "Standard", 15)
 								ammoHandler:GiveAmmo(teammate, "762", "Standard", 20)
-								
+
 								-- Visual feedback
-								RemoteEventsManager:FireClient(teammate, "AbilityEffect", {
-									EffectType = "AmmoResupply"
-								})
+								local ammoResupplyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+								if ammoResupplyEvent then
+									ammoResupplyEvent:FireClient(teammate, {
+										EffectType = "AmmoResupply"
+									})
+								end
 							end
 						end
 					end
@@ -398,13 +402,16 @@ function ClassHandler:PerformUAVScan(player)
 	end
 	
 	-- Share scan results with team
-	for _, teammate in pairs(Players:GetPlayers()) do
-		if teammate.Team == player.Team then
-			RemoteEventsManager:FireClient(teammate, "AbilityEffect", {
-				EffectType = "UAVScan",
-				ScannedEnemies = scannedEnemies,
-				Duration = 15
-			})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		for _, teammate in pairs(Players:GetPlayers()) do
+			if teammate.Team == player.Team then
+				abilityEffectEvent:FireClient(teammate, {
+					EffectType = "UAVScan",
+					ScannedEnemies = scannedEnemies,
+					Duration = 15
+				})
+			end
 		end
 	end
 	
@@ -419,17 +426,20 @@ function ClassHandler:PerformEMPPulse(player)
 	local empRadius = 15
 	
 	-- Affect all enemies within EMP radius
-	for _, enemy in pairs(Players:GetPlayers()) do
-		if enemy.Team ~= player.Team then
-			local enemyCharacter = enemy.Character
-			if enemyCharacter and enemyCharacter:FindFirstChild("HumanoidRootPart") then
-				local distance = (empCenter - enemyCharacter.HumanoidRootPart.Position).Magnitude
-				if distance <= empRadius then
-					-- Apply EMP effects
-					RemoteEventsManager:FireClient(enemy, "AbilityEffect", {
-						EffectType = "EMP",
-						Duration = 8
-					})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		for _, enemy in pairs(Players:GetPlayers()) do
+			if enemy.Team ~= player.Team then
+				local enemyCharacter = enemy.Character
+				if enemyCharacter and enemyCharacter:FindFirstChild("HumanoidRootPart") then
+					local distance = (empCenter - enemyCharacter.HumanoidRootPart.Position).Magnitude
+					if distance <= empRadius then
+						-- Apply EMP effects
+						abilityEffectEvent:FireClient(enemy, {
+							EffectType = "EMP",
+							Duration = 8
+						})
+					end
 				end
 			end
 		end
@@ -472,22 +482,28 @@ function ClassHandler:ApplySpeedMultiplier(player, multiplier)
 	
 	humanoid.WalkSpeed = baseWalkSpeed * multiplier
 	playerClassData[player].ClassStats.CurrentSpeedMultiplier = multiplier
-	
+
 	-- Notify client
-	RemoteEventsManager:FireClient(player, "AbilityEffect", {
-		EffectType = "SpeedBoost",
-		Multiplier = multiplier
-	})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		abilityEffectEvent:FireClient(player, {
+			EffectType = "SpeedBoost",
+			Multiplier = multiplier
+		})
+	end
 end
 
 function ClassHandler:ApplyDamageResistance(player, resistance)
 	playerClassData[player].ClassStats.DamageResistance = resistance
-	
+
 	-- Notify client
-	RemoteEventsManager:FireClient(player, "AbilityEffect", {
-		EffectType = "DamageResistance",
-		Resistance = resistance
-	})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		abilityEffectEvent:FireClient(player, {
+			EffectType = "DamageResistance",
+			Resistance = resistance
+		})
+	end
 end
 
 function ClassHandler:ApplyCloakEffect(player)
@@ -500,20 +516,26 @@ function ClassHandler:ApplyCloakEffect(player)
 			part.Transparency = 0.8
 		end
 	end
-	
+
 	-- Notify client
-	RemoteEventsManager:FireClient(player, "AbilityEffect", {
-		EffectType = "Cloak",
-		Duration = 12
-	})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		abilityEffectEvent:FireClient(player, {
+			EffectType = "Cloak",
+			Duration = 12
+		})
+	end
 end
 
 function ClassHandler:ApplyEagleEyeEffect(player)
 	-- Notify client to apply eagle eye effects
-	RemoteEventsManager:FireClient(player, "AbilityEffect", {
-		EffectType = "EagleEye",
-		Duration = 20
-	})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		abilityEffectEvent:FireClient(player, {
+			EffectType = "EagleEye",
+			Duration = 20
+		})
+	end
 end
 
 function ClassHandler:GetPlayerBaseStats(player)
@@ -580,10 +602,13 @@ function ClassHandler:RemoveAbilityEffect(player, effectName)
 	end
 	
 	-- Notify client
-	RemoteEventsManager:FireClient(player, "AbilityEffect", {
-		EffectType = "Remove",
-		EffectName = effectName
-	})
+	local abilityEffectEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AbilityEffect")
+	if abilityEffectEvent then
+		abilityEffectEvent:FireClient(player, {
+			EffectType = "Remove",
+			EffectName = effectName
+		})
+	end
 end
 
 function ClassHandler:RestoreSpeed(player)
@@ -621,13 +646,16 @@ function ClassHandler:CheckClassUnlocks(player)
 		if playerLevel >= unlockLevel and not table.find(playerData.UnlockedClasses, className) then
 			-- Unlock this class
 			table.insert(playerData.UnlockedClasses, className)
-			
+
 			-- Notify client
-			RemoteEventsManager:FireClient(player, "ClassUnlock", {
-				ClassName = className,
-				UnlockLevel = unlockLevel
-			})
-			
+			local classUnlockEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClassUpdate")
+			if classUnlockEvent then
+				classUnlockEvent:FireClient(player, {
+					ClassName = className,
+					UnlockLevel = unlockLevel
+				})
+			end
+
 			print("Player " .. player.Name .. " unlocked class: " .. className)
 		end
 	end
@@ -679,13 +707,16 @@ end
 function ClassHandler:SyncClassWithClient(player)
 	local playerData = playerClassData[player]
 	if not playerData then return end
-	
-	RemoteEventsManager:FireClient(player, "ClassUpdate", {
-		CurrentClass = playerData.CurrentClass,
-		UnlockedClasses = playerData.UnlockedClasses,
-		AbilityCooldowns = playerData.AbilityCooldowns,
-		ActiveEffects = playerData.ActiveEffects
-	})
+
+	local classUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClassUpdate")
+	if classUpdateEvent then
+		classUpdateEvent:FireClient(player, {
+			CurrentClass = playerData.CurrentClass,
+			UnlockedClasses = playerData.UnlockedClasses,
+			AbilityCooldowns = playerData.AbilityCooldowns,
+			ActiveEffects = playerData.ActiveEffects
+		})
+	end
 end
 
 function ClassHandler:GetPlayerClass(player)

@@ -2,13 +2,18 @@
 	Menu UI Generator - Phantom Forces Style
 	Left sidebar navigation with sections on the right
 	Based on PhantomForcesMainMenuExample.png reference
+	UPDATED: Now integrates with existing RBXM files and MenuSections module
 ]]
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
+-- Load MenuSections module
+local MenuSections = require(script.Parent:WaitForChild("MenuSections"))
 
 local MenuGenerator = {}
 
@@ -24,11 +29,23 @@ local COLORS = {
 	Accent = Color3.fromRGB(50, 200, 255)
 }
 
--- Create main ScreenGui
+-- Create or get main ScreenGui (use existing RBXM if available)
 function MenuGenerator:CreateScreenGui()
 	local existing = playerGui:FindFirstChild("FPSMainMenu")
-	if existing then existing:Destroy() end
 
+	-- If RBXM exists, use it instead of destroying!
+	if existing then
+		print("✓ Found existing FPSMainMenu RBXM, using it")
+		-- Ensure properties are correct
+		existing.ResetOnSpawn = false
+		existing.DisplayOrder = 100
+		existing.IgnoreGuiInset = true
+		existing.Enabled = true
+		return existing
+	end
+
+	-- No RBXM found, create new ScreenGui
+	print("⚠ No FPSMainMenu RBXM found, creating new ScreenGui")
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "FPSMainMenu"
 	screenGui.ResetOnSpawn = false
@@ -40,8 +57,20 @@ function MenuGenerator:CreateScreenGui()
 	return screenGui
 end
 
--- Create main container
+-- Create or get main container
 function MenuGenerator:CreateMainContainer(parent)
+	-- Check if MainContainer already exists in RBXM
+	local existing = parent:FindFirstChild("MainContainer")
+	if existing then
+		print("✓ Found existing MainContainer, using it")
+		-- Ensure properties are correct
+		existing.Size = UDim2.new(1, 0, 1, 0)
+		existing.BackgroundColor3 = COLORS.Background
+		existing.BorderSizePixel = 0
+		return existing
+	end
+
+	print("⚠ Creating new MainContainer")
 	local container = Instance.new("Frame")
 	container.Name = "MainContainer"
 	container.Size = UDim2.new(1, 0, 1, 0)
@@ -52,8 +81,38 @@ function MenuGenerator:CreateMainContainer(parent)
 	return container
 end
 
--- Create left sidebar
+-- Create or get left sidebar
 function MenuGenerator:CreateSidebar(parent)
+	-- Check if Sidebar already exists in RBXM
+	local existing = parent:FindFirstChild("Sidebar")
+	if existing then
+		print("✓ Found existing Sidebar, populating it")
+		-- Ensure properties are correct
+		existing.Size = UDim2.new(0, 200, 1, 0)
+		existing.Position = UDim2.new(0, 0, 0, 0)
+		existing.BackgroundColor3 = COLORS.Sidebar
+		existing.BorderSizePixel = 0
+
+		-- Check for title, add if missing
+		local title = existing:FindFirstChild("MenuTitle")
+		if not title then
+			title = Instance.new("TextLabel")
+			title.Name = "MenuTitle"
+			title.Size = UDim2.new(1, -20, 0, 50)
+			title.Position = UDim2.new(0, 10, 0, 10)
+			title.BackgroundTransparency = 1
+			title.Text = "MAIN MENU"
+			title.TextColor3 = COLORS.Accent
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = 20
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.Parent = existing
+		end
+
+		return existing
+	end
+
+	print("⚠ Creating new Sidebar")
 	local sidebar = Instance.new("Frame")
 	sidebar.Name = "Sidebar"
 	sidebar.Size = UDim2.new(0, 200, 1, 0)
@@ -112,8 +171,20 @@ function MenuGenerator:CreateSidebarButton(parent, text, position, isFirst)
 	return button
 end
 
--- Create content area
+-- Create or get content area
 function MenuGenerator:CreateContentArea(parent)
+	-- Check if ContentArea already exists in RBXM
+	local existing = parent:FindFirstChild("ContentArea")
+	if existing then
+		print("✓ Found existing ContentArea, using it")
+		-- Ensure properties are correct
+		existing.Size = UDim2.new(1, -200, 1, 0)
+		existing.Position = UDim2.new(0, 200, 0, 0)
+		existing.BackgroundTransparency = 1
+		return existing
+	end
+
+	print("⚠ Creating new ContentArea")
 	local content = Instance.new("Frame")
 	content.Name = "ContentArea"
 	content.Size = UDim2.new(1, -200, 1, 0)
@@ -126,6 +197,32 @@ end
 
 -- Create Deploy section
 function MenuGenerator:CreateDeploySection(parent)
+	-- Check if DeploySection already exists in RBXM
+	local existing = parent:FindFirstChild("DeploySection")
+	if existing then
+		print("✓ Found existing DeploySection in RBXM, using it")
+		-- Ensure it's visible and properly configured
+		existing.Size = UDim2.new(1, 0, 1, 0)
+		existing.BackgroundTransparency = 1
+		existing.Visible = true
+
+		-- Setup hover effects on existing deploy button if found
+		local existingBtn = existing:FindFirstChild("DeployButton")
+		if existingBtn and existingBtn:IsA("TextButton") then
+			-- Clear any existing connections and add new ones
+			existingBtn.MouseEnter:Connect(function()
+				TweenService:Create(existingBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 200, 110)}):Play()
+			end)
+			existingBtn.MouseLeave:Connect(function()
+				TweenService:Create(existingBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 180, 100)}):Play()
+			end)
+			print("✓ Connected hover effects to existing DeployButton")
+		end
+
+		return existing
+	end
+
+	print("⚠ Creating new DeploySection")
 	local section = Instance.new("Frame")
 	section.Name = "DeploySection"
 	section.Size = UDim2.new(1, 0, 1, 0)
@@ -133,64 +230,107 @@ function MenuGenerator:CreateDeploySection(parent)
 	section.Visible = true
 	section.Parent = parent
 
-	-- Game title
-	local title = Instance.new("TextLabel")
-	title.Name = "GameTitle"
-	title.Size = UDim2.new(0, 700, 0, 80)
-	title.Position = UDim2.new(0.5, -350, 0.15, 0)
-	title.BackgroundTransparency = 1
-	title.Text = "KFC'S FUNNY RANDOMIZER 4.0"
-	title.TextColor3 = COLORS.Accent
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 38
-	title.Parent = section
+	-- Check if GameTitle already exists before creating (in case RBXM has it elsewhere)
+	local existingTitle = section:FindFirstChild("GameTitle", true) or parent:FindFirstChild("GameTitle", true)
+	if not existingTitle then
+		-- Game title
+		local title = Instance.new("TextLabel")
+		title.Name = "GameTitle"
+		title.Size = UDim2.new(0, 700, 0, 80)
+		title.Position = UDim2.new(0.5, -350, 0.15, 0)
+		title.BackgroundTransparency = 1
+		title.Text = "KFC'S FUNNY RANDOMIZER 4.0"
+		title.TextColor3 = COLORS.Accent
+		title.Font = Enum.Font.GothamBold
+		title.TextSize = 38
+		title.Parent = section
+		print("✓ Created GameTitle")
+	else
+		print("✓ GameTitle already exists, skipping creation")
+		-- Move it to section if it's in parent
+		if existingTitle.Parent == parent then
+			existingTitle.Parent = section
+		end
+	end
 
-	-- Deploy button
-	local deployBtn = Instance.new("TextButton")
-	deployBtn.Name = "DeployButton"
-	deployBtn.Size = UDim2.new(0, 400, 0, 80)
-	deployBtn.Position = UDim2.new(0.5, -200, 0.45, 0)
-	deployBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
-	deployBtn.BorderSizePixel = 0
-	deployBtn.Text = "ENTER THE BATTLEFIELD"
-	deployBtn.TextColor3 = COLORS.Text
-	deployBtn.Font = Enum.Font.GothamBold
-	deployBtn.TextSize = 24
-	deployBtn.AutoButtonColor = false
-	deployBtn.Parent = section
+	-- Check if DeployButton already exists before creating
+	local existingBtn = section:FindFirstChild("DeployButton", true) or parent:FindFirstChild("DeployButton", true)
+	if not existingBtn then
+		-- Deploy button
+		local deployBtn = Instance.new("TextButton")
+		deployBtn.Name = "DeployButton"
+		deployBtn.Size = UDim2.new(0, 400, 0, 80)
+		deployBtn.Position = UDim2.new(0.5, -200, 0.45, 0)
+		deployBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+		deployBtn.BorderSizePixel = 0
+		deployBtn.Text = "ENTER THE BATTLEFIELD"
+		deployBtn.TextColor3 = COLORS.Text
+		deployBtn.Font = Enum.Font.GothamBold
+		deployBtn.TextSize = 24
+		deployBtn.AutoButtonColor = false
+		deployBtn.Parent = section
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = deployBtn
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 8)
+		corner.Parent = deployBtn
 
-	-- Hover effect
-	deployBtn.MouseEnter:Connect(function()
-		TweenService:Create(deployBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 200, 110)}):Play()
-	end)
+		-- Hover effect
+		deployBtn.MouseEnter:Connect(function()
+			TweenService:Create(deployBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 200, 110)}):Play()
+		end)
 
-	deployBtn.MouseLeave:Connect(function()
-		TweenService:Create(deployBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 180, 100)}):Play()
-	end)
+		deployBtn.MouseLeave:Connect(function()
+			TweenService:Create(deployBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 180, 100)}):Play()
+		end)
+		print("✓ Created DeployButton")
+	else
+		print("✓ DeployButton already exists, skipping creation")
+		-- Move it to section if it's in parent and connect hover effects
+		if existingBtn.Parent == parent then
+			existingBtn.Parent = section
+		end
 
-	-- Hint text
-	local hint = Instance.new("TextLabel")
-	hint.Name = "Hint"
-	hint.Size = UDim2.new(1, 0, 0, 30)
-	hint.Position = UDim2.new(0, 0, 0.58, 0)
-	hint.BackgroundTransparency = 1
-	hint.Text = "Press SPACE or click to deploy"
-	hint.TextColor3 = COLORS.TextDim
-	hint.Font = Enum.Font.Gotham
-	hint.TextSize = 16
-	hint.Parent = section
+		-- Connect hover effects to existing button
+		if existingBtn:IsA("TextButton") then
+			existingBtn.MouseEnter:Connect(function()
+				TweenService:Create(existingBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(70, 200, 110)}):Play()
+			end)
+			existingBtn.MouseLeave:Connect(function()
+				TweenService:Create(existingBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(60, 180, 100)}):Play()
+			end)
+		end
+	end
+
+	-- Check if Hint already exists before creating
+	local existingHint = section:FindFirstChild("Hint", true) or parent:FindFirstChild("Hint", true)
+	if not existingHint then
+		-- Hint text
+		local hint = Instance.new("TextLabel")
+		hint.Name = "Hint"
+		hint.Size = UDim2.new(1, 0, 0, 30)
+		hint.Position = UDim2.new(0, 0, 0.58, 0)
+		hint.BackgroundTransparency = 1
+		hint.Text = "Press SPACE or click to deploy"
+		hint.TextColor3 = COLORS.TextDim
+		hint.Font = Enum.Font.Gotham
+		hint.TextSize = 16
+		hint.Parent = section
+		print("✓ Created Hint text")
+	else
+		print("✓ Hint text already exists, skipping creation")
+		-- Move it to section if it's in parent
+		if existingHint.Parent == parent then
+			existingHint.Parent = section
+		end
+	end
 
 	return section
 end
 
--- Create Customize section
+-- Create Loadout/Customize section (renamed to LoadoutSection to match MenuController)
 function MenuGenerator:CreateCustomizeSection(parent)
 	local section = Instance.new("Frame")
-	section.Name = "CustomizeSection"
+	section.Name = "LoadoutSection"  -- Changed from CustomizeSection to match MenuController
 	section.Size = UDim2.new(1, 0, 1, 0)
 	section.BackgroundTransparency = 1
 	section.Visible = false
@@ -804,47 +944,172 @@ function MenuGenerator:CreatePlaceholderSection(parent, name)
 end
 
 -- Setup sidebar navigation
-function MenuGenerator:SetupNavigation(sidebar, sections)
-	for _, button in pairs(sidebar:GetChildren()) do
-		if button:IsA("TextButton") then
-			button.MouseButton1Click:Connect(function()
-				-- Update button states
-				for _, btn in pairs(sidebar:GetChildren()) do
-					if btn:IsA("TextButton") then
-						local indicator = btn:FindFirstChild("ActiveIndicator")
-						if btn == button then
-							btn.BackgroundColor3 = COLORS.ButtonActive
-							if indicator then indicator.Visible = true end
-						else
-							btn.BackgroundColor3 = COLORS.ButtonInactive
-							if indicator then indicator.Visible = false end
-						end
-					end
-				end
-
-				-- Show corresponding section
-				local sectionName = button.Name:gsub("Button", "Section")
-				for _, section in pairs(sections) do
-					section.Visible = (section.Name == sectionName)
-				end
-			end)
-
-			-- Hover effects
-			button.MouseEnter:Connect(function()
-				local indicator = button:FindFirstChild("ActiveIndicator")
-				if not indicator or not indicator.Visible then
-					button.BackgroundColor3 = COLORS.ButtonHover
-				end
-			end)
-
-			button.MouseLeave:Connect(function()
-				local indicator = button:FindFirstChild("ActiveIndicator")
-				if not indicator or not indicator.Visible then
-					button.BackgroundColor3 = COLORS.ButtonInactive
-				end
-			end)
+function MenuGenerator:SetupNavigation(sidebar, contentArea)
+	-- Get all existing buttons from sidebar
+	local buttons = {}
+	for _, child in pairs(sidebar:GetChildren()) do
+		if child:IsA("TextButton") then
+			table.insert(buttons, child)
 		end
 	end
+
+	-- Get all existing sections from contentArea
+	local sections = {}
+	for _, child in pairs(contentArea:GetChildren()) do
+		if child:IsA("Frame") or child:IsA("ScrollingFrame") then
+			if child.Name:match("Section$") then
+				sections[child.Name:gsub("Section", "")] = child
+			end
+		end
+	end
+
+	-- Connect each button to show its section
+	for _, button in pairs(buttons) do
+		button.MouseButton1Click:Connect(function()
+			-- Update button states
+			for _, btn in pairs(buttons) do
+				local indicator = btn:FindFirstChild("ActiveIndicator")
+				if btn == button then
+					btn.BackgroundColor3 = COLORS.ButtonActive
+					if indicator then indicator.Visible = true end
+				else
+					btn.BackgroundColor3 = COLORS.ButtonInactive
+					if indicator then indicator.Visible = false end
+				end
+			end
+
+			-- Show corresponding section
+			local sectionName = button.Name:gsub("Button", "")
+			for name, section in pairs(sections) do
+				section.Visible = (name == sectionName)
+			end
+		end)
+
+		-- Hover effects
+		button.MouseEnter:Connect(function()
+			local indicator = button:FindFirstChild("ActiveIndicator")
+			if not indicator or not indicator.Visible then
+				button.BackgroundColor3 = COLORS.ButtonHover
+			end
+		end)
+
+		button.MouseLeave:Connect(function()
+			local indicator = button:FindFirstChild("ActiveIndicator")
+			if not indicator or not indicator.Visible then
+				button.BackgroundColor3 = COLORS.ButtonInactive
+			end
+		end)
+	end
+
+	print("✓ Connected", #buttons, "sidebar buttons to", #sections, "sections")
+end
+
+-- Setup ViewportFrame character animation
+function MenuGenerator:SetupViewportCharacter(screenGui)
+	-- Look for ViewportFrame in multiple possible locations
+	-- Priority: ContentArea > DeploySection > anywhere in screenGui
+	local mainContainer = screenGui:FindFirstChild("MainContainer")
+	local contentArea = mainContainer and mainContainer:FindFirstChild("ContentArea")
+	local deploySection = contentArea and contentArea:FindFirstChild("DeploySection")
+
+	local viewportFrame = nil
+
+	-- Try to find ViewportFrame in order of priority
+	if deploySection then
+		viewportFrame = deploySection:FindFirstChild("ViewportFrame", true)
+	end
+
+	if not viewportFrame and contentArea then
+		viewportFrame = contentArea:FindFirstChild("ViewportFrame", true)
+	end
+
+	if not viewportFrame then
+		viewportFrame = screenGui:FindFirstChild("ViewportFrame", true)
+	end
+
+	if not viewportFrame then
+		print("⚠ ViewportFrame not found in menu (searched DeploySection, ContentArea, and ScreenGui)")
+		return
+	end
+
+	print("✓ Found ViewportFrame at:", viewportFrame:GetFullName())
+
+	-- Find the R6 character model (could be named Background, R6, or just Model)
+	local characterModel = viewportFrame:FindFirstChild("Background")
+		or viewportFrame:FindFirstChild("R6")
+		or viewportFrame:FindFirstChild("KFC")
+		or viewportFrame:FindFirstChildWhichIsA("Model")
+
+	if not characterModel then
+		print("⚠ Character model not found in ViewportFrame")
+		return
+	end
+
+	print("✓ Found character model:", characterModel.Name)
+
+	-- Find humanoid
+	local humanoid = characterModel:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid then
+		print("⚠ Humanoid not found in character model")
+		return
+	end
+
+	-- Setup camera for viewport
+	local camera = viewportFrame:FindFirstChildOfClass("Camera")
+	if not camera then
+		camera = Instance.new("Camera")
+		camera.Parent = viewportFrame
+	end
+	viewportFrame.CurrentCamera = camera
+
+	-- Position camera to view the character
+	local rootPart = characterModel:FindFirstChild("HumanoidRootPart") or characterModel:FindFirstChild("Torso")
+	if rootPart then
+		camera.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, 1, 5), rootPart.Position + Vector3.new(0, 1, 0))
+	end
+
+	-- Find and play idle animation
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+
+	-- Look for animation in the model
+	local animSaves = characterModel:FindFirstChild("AnimSaves")
+	local idleAnim = animSaves and animSaves:FindFirstChildOfClass("Animation")
+
+	if not idleAnim then
+		-- Try to find any Animation instance in the model
+		idleAnim = characterModel:FindFirstChild("Animation", true)
+	end
+
+	if idleAnim then
+		local animTrack = animator:LoadAnimation(idleAnim)
+		animTrack.Looped = true
+		animTrack:Play()
+		print("✓ Playing idle animation in ViewportFrame")
+	else
+		print("⚠ No idle animation found for character")
+	end
+
+	-- Slowly rotate the character for visual effect
+	local RunService = game:GetService("RunService")
+	local connection
+	connection = RunService.RenderStepped:Connect(function(dt)
+		if not characterModel.Parent or not screenGui.Parent then
+			connection:Disconnect()
+			return
+		end
+
+		if rootPart and rootPart.Parent then
+			-- Slowly rotate character
+			rootPart.CFrame = rootPart.CFrame * CFrame.Angles(0, math.rad(15 * dt), 0)
+		end
+	end)
+
+	print("✓ ViewportFrame character setup complete")
 end
 
 -- Generate complete menu
@@ -856,41 +1121,87 @@ function MenuGenerator:Generate()
 	local sidebar = self:CreateSidebar(mainContainer)
 	local contentArea = self:CreateContentArea(mainContainer)
 
-	-- Create sidebar buttons
-	local menuItems = {
-		{Name = "Deploy", Y = 70},
-		{Name = "Customize", Y = 120},
-		{Name = "Leaderboard", Y = 170},
-		{Name = "Settings", Y = 220},
-		{Name = "Shop", Y = 270}
-	}
-
-	for i, item in ipairs(menuItems) do
-		self:CreateSidebarButton(
-			sidebar,
-			item.Name,
-			UDim2.new(0, 5, 0, item.Y),
-			i == 1
-		)
+	-- Check if RBXM already has buttons - if so, DON'T create new ones
+	local existingButtons = {}
+	for _, child in pairs(sidebar:GetChildren()) do
+		if child:IsA("TextButton") then
+			table.insert(existingButtons, child)
+		end
 	end
 
-	-- Create sections
-	local deploySection = self:CreateDeploySection(contentArea)
-	local customizeSection = self:CreateCustomizeSection(contentArea)
-	local leaderboardSection = self:CreatePlaceholderSection(contentArea, "Leaderboard")
-	local settingsSection = self:CreatePlaceholderSection(contentArea, "Settings")
-	local shopSection = self:CreatePlaceholderSection(contentArea, "Shop")
+	if #existingButtons == 0 then
+		-- No existing buttons, create them
+		print("⚠ No existing sidebar buttons found, creating new ones...")
+		local menuItems = {
+			{Name = "Deploy", Y = 70},
+			{Name = "Loadout", Y = 120},
+			{Name = "Leaderboard", Y = 170},
+			{Name = "Settings", Y = 220},
+			{Name = "Shop", Y = 270}
+		}
 
-	local sections = {
-		deploySection,
-		customizeSection,
-		leaderboardSection,
-		settingsSection,
-		shopSection
+		for i, item in ipairs(menuItems) do
+			self:CreateSidebarButton(
+				sidebar,
+				item.Name,
+				UDim2.new(0, 5, 0, item.Y),
+				i == 1
+			)
+		end
+	else
+		print("✓ Found", #existingButtons, "existing sidebar buttons in RBXM, using them")
+	end
+
+	-- Check if sections already exist in RBXM
+	local existingSections = {
+		Deploy = contentArea:FindFirstChild("DeploySection"),
+		Loadout = contentArea:FindFirstChild("LoadoutSection"),
+		Shop = contentArea:FindFirstChild("ShopSection"),
+		Settings = contentArea:FindFirstChild("SettingsSection"),
+		Leaderboard = contentArea:FindFirstChild("LeaderboardSection")
 	}
 
-	-- Setup navigation
-	self:SetupNavigation(sidebar, sections)
+	-- Only create sections that don't exist
+	if not existingSections.Deploy then
+		print("⚠ Creating DeploySection...")
+		existingSections.Deploy = self:CreateDeploySection(contentArea)
+	else
+		print("✓ Found existing DeploySection")
+	end
+
+	if not existingSections.Loadout then
+		print("⚠ Creating LoadoutSection...")
+		existingSections.Loadout = self:CreateCustomizeSection(contentArea)
+	else
+		print("✓ Found existing LoadoutSection")
+	end
+
+	if not existingSections.Shop then
+		print("⚠ Creating ShopSection...")
+		existingSections.Shop = MenuSections:CreateShopSection(contentArea)
+	else
+		print("✓ Found existing ShopSection")
+	end
+
+	if not existingSections.Settings then
+		print("⚠ Creating SettingsSection...")
+		existingSections.Settings = MenuSections:CreateSettingsSection(contentArea)
+	else
+		print("✓ Found existing SettingsSection")
+	end
+
+	if not existingSections.Leaderboard then
+		print("⚠ Creating LeaderboardSection...")
+		existingSections.Leaderboard = MenuSections:CreateLeaderboardSection(contentArea)
+	else
+		print("✓ Found existing LeaderboardSection")
+	end
+
+	-- Setup navigation (pass contentArea instead of sections array)
+	self:SetupNavigation(sidebar, contentArea)
+
+	-- Setup viewport frame character animation
+	self:SetupViewportCharacter(screenGui)
 
 	print("✓ Phantom Forces style menu generated")
 	return screenGui

@@ -7,7 +7,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 local player = Players.LocalPlayer
 
@@ -201,8 +200,6 @@ local ammoUI = nil
 local ammoSelectorOpen = false
 
 function AmmoSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	-- Setup player ammo data
 	self:InitializePlayerAmmo()
 	
@@ -271,14 +268,14 @@ function AmmoSystem:SetupInputHandling()
 end
 
 function AmmoSystem:SetupRemoteEvents()
-	local ammoUpdateEvent = RemoteEventsManager:GetEvent("AmmoUpdate")
+	local ammoUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoUpdate")
 	if ammoUpdateEvent then
 		ammoUpdateEvent.OnClientEvent:Connect(function(ammoData)
 			self:HandleAmmoUpdate(ammoData)
 		end)
 	end
-	
-	local ammoUnlockEvent = RemoteEventsManager:GetEvent("AmmoUnlock")
+
+	local ammoUnlockEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoUnlock")
 	if ammoUnlockEvent then
 		ammoUnlockEvent.OnClientEvent:Connect(function(unlockedAmmo)
 			self:HandleAmmoUnlock(unlockedAmmo)
@@ -465,12 +462,15 @@ function AmmoSystem:SelectAmmoType(caliber, ammoType)
 	
 	-- Update UI
 	self:UpdateAmmoIndicator()
-	
+
 	-- Notify server
-	RemoteEventsManager:FireServer("SelectAmmoType", {
-		Caliber = caliber,
-		AmmoType = ammoType
-	})
+	local selectAmmoTypeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SelectAmmoType")
+	if selectAmmoTypeEvent then
+		selectAmmoTypeEvent:FireServer({
+			Caliber = caliber,
+			AmmoType = ammoType
+		})
+	end
 	
 	-- Apply ammo effects to current weapon
 	self:ApplyAmmoEffects()

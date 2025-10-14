@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 
 local KillStreakManager = {}
@@ -48,11 +47,10 @@ local KILLSTREAK_REWARDS = {
 }
 
 function KillStreakManager:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
 	
 	-- Listen for player kills
-	local playerKilledEvent = RemoteEventsManager:GetEvent("PlayerKilled")
+	local playerKilledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerKilled")
 	if playerKilledEvent then
 		playerKilledEvent.OnServerEvent:Connect(function(killData)
 			if killData.Killer then
@@ -115,10 +113,13 @@ function KillStreakManager:HandleDeath(victim)
 	
 	-- Announce streak ended if it was significant
 	if previousStreak >= 5 then
-		RemoteEventsManager:FireAllClients("KillStreakEnded", {
-			Player = victim.Name,
-			Streak = previousStreak
-		})
+		local killStreakEndedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillStreakEnded")
+		if killStreakEndedEvent then
+			killStreakEndedEvent:FireAllClients({
+				Player = victim.Name,
+				Streak = previousStreak
+			})
+		end
 		print(victim.Name .. "'s " .. previousStreak .. " kill streak was ended")
 	end
 end
@@ -128,17 +129,23 @@ function KillStreakManager:AwardKillStreakReward(player, streak)
 	if not reward then return end
 	
 	-- Announce reward
-	RemoteEventsManager:FireClient(player, "KillStreakReward", {
-		Streak = streak,
-		RewardName = reward.Name,
-		Description = reward.Description
-	})
-	
-	RemoteEventsManager:FireAllClients("KillStreakAchieved", {
-		Player = player.Name,
-		Streak = streak,
-		RewardName = reward.Name
-	})
+	local killStreakRewardEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillStreakReward")
+	if killStreakRewardEvent then
+		killStreakRewardEvent:FireClient(player, {
+			Streak = streak,
+			RewardName = reward.Name,
+			Description = reward.Description
+		})
+	end
+
+	local killStreakAchievedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillStreakAchieved")
+	if killStreakAchievedEvent then
+		killStreakAchievedEvent:FireAllClients({
+			Player = player.Name,
+			Streak = streak,
+			RewardName = reward.Name
+		})
+	end
 	
 	-- Apply reward effect
 	if reward.Type == "Personal" then
@@ -160,7 +167,13 @@ function KillStreakManager:ApplyPersonalReward(player, reward, streak)
 		for _, tool in pairs(player.Character:GetChildren()) do
 			if tool:IsA("Tool") and tool:FindFirstChild("Config") then
 				-- Reset ammo via remote event
-				RemoteEventsManager:FireClient(player, "AmmoResupply", {WeaponName = tool.Name})
+				local ammoresupplyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoResupply")
+
+				if ammoresupplyEvent then
+
+					ammoresupplyEvent:FireClient(player, {WeaponName = tool.Name})
+
+				end
 			end
 		end
 		
@@ -208,7 +221,13 @@ function KillStreakManager:ApplyTeamReward(player, reward, streak)
 	if reward.Name == "UAV Scan" then
 		-- Reveal enemies on radar for team
 		for _, teammate in pairs(teamPlayers) do
-			RemoteEventsManager:FireClient(teammate, "UAVActive", {Duration = reward.Duration})
+			local uavactiveEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UAVActive")
+
+			if uavactiveEvent then
+
+				uavactiveEvent:FireClient(teammate, {Duration = reward.Duration})
+
+			end
 		end
 		
 	elseif reward.Name == "Team Health Boost" then
@@ -240,10 +259,13 @@ function KillStreakManager:ApplyGlobalReward(player, reward, streak)
 		print("Kill streak activated - team wipe temporarily disabled")
 		
 		-- Dramatic announcement
-		RemoteEventsManager:FireAllClients("NuclearStrike", {
-			Player = player.Name,
-			Team = player.Team.Name
-		})
+		local nuclearStrikeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("NuclearStrike")
+		if nuclearStrikeEvent then
+			nuclearStrikeEvent:FireAllClients({
+				Player = player.Name,
+				Team = player.Team.Name
+			})
+		end
 		
 		print("NUCLEAR STRIKE by " .. player.Name .. "!")
 	end
@@ -252,11 +274,14 @@ end
 function KillStreakManager:RemoveReward(player, rewardName)
 	if activeRewards[player] and activeRewards[player][rewardName] then
 		activeRewards[player][rewardName] = nil
-		
-		RemoteEventsManager:FireClient(player, "RewardExpired", {
-			RewardName = rewardName
-		})
-		
+
+		local rewardExpiredEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("RewardExpired")
+		if rewardExpiredEvent then
+			rewardExpiredEvent:FireClient(player, {
+				RewardName = rewardName
+			})
+		end
+
 		print("Removed " .. rewardName .. " from " .. player.Name)
 	end
 end
@@ -271,12 +296,15 @@ function KillStreakManager:AnnounceKillStreak(player, streak)
 	}
 	
 	local message = announcements[streak] or "is on fire!"
-	
-	RemoteEventsManager:FireAllClients("KillStreakAnnouncement", {
-		Player = player.Name,
-		Streak = streak,
-		Message = player.Name .. " " .. message .. " (" .. streak .. " kills)"
-	})
+
+	local killStreakAnnouncementEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillStreakAnnouncement")
+	if killStreakAnnouncementEvent then
+		killStreakAnnouncementEvent:FireAllClients({
+			Player = player.Name,
+			Streak = streak,
+			Message = player.Name .. " " .. message .. " (" .. streak .. " kills)"
+		})
+	end
 end
 
 function KillStreakManager:GetPlayerKillStreak(player)

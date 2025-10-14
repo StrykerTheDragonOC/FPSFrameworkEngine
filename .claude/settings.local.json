@@ -105,7 +105,11 @@
       "Bash(then luau-lsp --check \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\DamageSystem.lua\")",
       "Bash(then luau --compile=null \"D:\\Projects\\FPSSystem\\src\\ReplicatedStorage\\FPSSystem\\Modules\\DamageSystem.lua\")",
       "Read(//c/Users/drago/Documents/**)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(then luau-lsp --check \"src/StarterGUI/MenuUIGenerator.client.lua\")",
+      "Bash(else echo \"Luau checker not available\")"
     ],
     "deny": []
   }

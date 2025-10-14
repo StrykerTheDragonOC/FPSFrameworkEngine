@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 
 -- DataStore variables (server-side only)
@@ -242,9 +241,8 @@ local DEFAULT_PLAYER_DATA = {
 }
 
 function DataStoreManager:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
-	
+
 	print("DataStoreManager initialized")
 end
 
@@ -369,23 +367,29 @@ function DataStoreManager:AddXP(player, amount, reason)
 		local creditsEarned = self:CalculateLevelReward(newLevel)
 		data.Level = newLevel
 		data.Credits = data.Credits + creditsEarned
-		
-		RemoteEventsManager:FireClient(player, "LevelUp", {
-			NewLevel = newLevel,
-			CreditsEarned = creditsEarned,
-			XPGained = amount,
-			Reason = reason
-		})
+
+		local levelUpEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LevelUp")
+		if levelUpEvent then
+			levelUpEvent:FireClient(player, {
+				NewLevel = newLevel,
+				CreditsEarned = creditsEarned,
+				XPGained = amount,
+				Reason = reason
+			})
+		end
 		
 		print(player.Name .. " leveled up to " .. newLevel .. " and earned " .. creditsEarned .. " credits")
 	end
-	
-	RemoteEventsManager:FireClient(player, "XPAwarded", {
-		Amount = amount,
-		Reason = reason,
-		NewXP = data.XP,
-		NextLevelXP = self:CalculateXPForLevel(newLevel + 1)
-	})
+
+	local xpAwardedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("XPAwarded")
+	if xpAwardedEvent then
+		xpAwardedEvent:FireClient(player, {
+			Amount = amount,
+			Reason = reason,
+			NewXP = data.XP,
+			NextLevelXP = self:CalculateXPForLevel(newLevel + 1)
+		})
+	end
 	
 	saveQueue[player] = true
 	return true
@@ -663,12 +667,15 @@ function DataStoreManager:AddWeaponKill(player, weaponName, killData)
 				table.insert(data.Unlocks.Attachments[weaponName], attachmentName)
 				
 				-- Fire mastery unlock event
-				RemoteEventsManager:FireClient(player, "WeaponMasteryUnlock", {
-					WeaponName = weaponName,
-					MasteryLevel = newMasteryLevel,
-					Reward = attachmentName,
-					TotalKills = weaponStats.Kills
-				})
+				local masteryUnlockEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponMasteryUnlock")
+				if masteryUnlockEvent then
+					masteryUnlockEvent:FireClient(player, {
+						WeaponName = weaponName,
+						MasteryLevel = newMasteryLevel,
+						Reward = attachmentName,
+						TotalKills = weaponStats.Kills
+					})
+				end
 				
 				print(player.Name .. " unlocked " .. attachmentName .. " for " .. weaponName .. " (Mastery Level " .. newMasteryLevel .. ")")
 			end

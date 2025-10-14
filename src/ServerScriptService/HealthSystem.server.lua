@@ -3,7 +3,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 local XPSystem = require(ReplicatedStorage.FPSSystem.Modules.XPSystem)
 
@@ -19,12 +18,11 @@ local REGENERATION_RATE = 20
 local MAX_HEALTH = 100
 
 function HealthSystem:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
 	XPSystem:Initialize()
 	
-	local playerDamagedEvent = RemoteEventsManager:GetEvent("PlayerDamaged")
-	local playerKilledEvent = RemoteEventsManager:GetEvent("PlayerKilled")
+	local playerDamagedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDamaged")
+	local playerKilledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerKilled")
 	
 	Players.PlayerAdded:Connect(function(player)
 		self:InitializePlayerHealth(player)
@@ -106,14 +104,17 @@ function HealthSystem:DamagePlayer(player, damage, damageInfo)
 	if damageInfo.Attacker and damageInfo.Attacker ~= player then
 		self:TrackDamage(player, damageInfo.Attacker, actualDamage, damageInfo)
 	end
-	
-	RemoteEventsManager:FireClient(player, "PlayerDamaged", {
-		Damage = actualDamage,
-		Health = humanoid.Health,
-		MaxHealth = humanoid.MaxHealth,
-		DamageType = damageInfo.DamageType or "Unknown",
-		Attacker = damageInfo.Attacker and damageInfo.Attacker.Name or "Unknown"
-	})
+
+	local playerDamagedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDamaged")
+	if playerDamagedEvent then
+		playerDamagedEvent:FireClient(player, {
+			Damage = actualDamage,
+			Health = humanoid.Health,
+			MaxHealth = humanoid.MaxHealth,
+			DamageType = damageInfo.DamageType or "Unknown",
+			Attacker = damageInfo.Attacker and damageInfo.Attacker.Name or "Unknown"
+		})
+	end
 	
 	if humanoid.Health <= 0 then
 		self:HandlePlayerDeath(player, player.Character, damageInfo)
@@ -230,17 +231,20 @@ function HealthSystem:ProcessKill(victim, killer, assisters, damageInfo)
 			dataStoreManager:UpdateMatchStat(assister, "Assists", 1, true)
 		end
 	end
-	
-	RemoteEventsManager:FireAllClients("PlayerKilled", {
-		Victim = victim.Name,
-		Killer = killer.Name,
-		Assisters = self:GetPlayerNames(assisters),
-		KillStreak = playerKillStreaks[killer],
-		IsHeadshot = killData.IsHeadshot,
-		WeaponName = killData.WeaponName,
-		Distance = killData.Distance
-	})
-	
+
+	local playerKilledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerKilled")
+	if playerKilledEvent then
+		playerKilledEvent:FireAllClients({
+			Victim = victim.Name,
+			Killer = killer.Name,
+			Assisters = self:GetPlayerNames(assisters),
+			KillStreak = playerKillStreaks[killer],
+			IsHeadshot = killData.IsHeadshot,
+			WeaponName = killData.WeaponName,
+			Distance = killData.Distance
+		})
+	end
+
 	print(killer.Name .. " killed " .. victim.Name .. " (Streak: " .. playerKillStreaks[killer] .. ")")
 end
 

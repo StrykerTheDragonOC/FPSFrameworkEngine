@@ -2,11 +2,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local TeamManager = require(ReplicatedStorage.FPSSystem.Modules.TeamManager)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
-RemoteEventsManager:Initialize()
 
-local changeTeamEvent = RemoteEventsManager:GetEvent("ChangeTeam")
+local changeTeamEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ChangeTeam")
 if changeTeamEvent then
 	changeTeamEvent.OnServerEvent:Connect(function(player, teamName)
 		TeamManager:AssignPlayerToTeam(player, teamName)

@@ -56,14 +56,11 @@ local VEHICLE_CONFIGS = {
 local activeVehicles = {}
 local vehicleConnections = {}
 
--- Initialize RemoteEvents
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-RemoteEventsManager:Initialize()
-
-local spawnVehicleRemote = RemoteEventsManager:GetEvent("SpawnVehicle")
-local destroyVehicleRemote = RemoteEventsManager:GetEvent("DestroyVehicle")
-local clearVehiclesRemote = RemoteEventsManager:GetEvent("ClearVehicles")
-local vehicleActionRemote = RemoteEventsManager:GetEvent("VehicleAction")
+-- Get RemoteEvents
+local spawnVehicleRemote = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpawnVehicle")
+local destroyVehicleRemote = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DestroyVehicle")
+local clearVehiclesRemote = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClearVehicles")
+local vehicleActionRemote = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("VehicleAction")
 
 function VehicleHandler:CreateTank(position, rotation)
 	local tank = Instance.new("Model")
@@ -383,9 +380,9 @@ else
 	warn("DestroyVehicle RemoteEvent not found - vehicle destruction disabled")
 end
 
-local clearVehiclesRemote = RemoteEventsManager:GetEvent("ClearVehicles")
-if clearVehiclesRemote then
-	clearVehiclesRemote.OnServerEvent:Connect(function(player)
+local clearVehiclesEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClearVehicles")
+if clearVehiclesEvent then
+	clearVehiclesEvent.OnServerEvent:Connect(function(player)
 		if isAdmin(player) then
 			for vehicle, _ in pairs(activeVehicles) do
 				VehicleHandler:DestroyVehicle(vehicle)

@@ -7,7 +7,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 -- Wait for FPSSystem
 local FPSSystem = ReplicatedStorage:WaitForChild("FPSSystem")
-local RemoteEventsManager = require(FPSSystem.RemoteEvents.RemoteEventsManager)
 local WeaponConfig = require(FPSSystem.Modules.WeaponConfig)
 
 local WeaponDeploymentHandler = {}
@@ -227,7 +226,7 @@ function WeaponDeploymentHandler:Initialize()
     print("WeaponDeploymentHandler: Initializing...")
     
     -- Connect remote events
-    local loadoutEvent = RemoteEventsManager:GetEvent("LoadoutChanged")
+    local loadoutEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LoadoutChanged")
     if loadoutEvent then
         loadoutEvent.OnServerEvent:Connect(HandleLoadoutChange)
     end
@@ -238,12 +237,12 @@ function WeaponDeploymentHandler:Initialize()
     end)
 
     -- Connect to team selection events
-    local deployEvent = RemoteEventsManager:GetEvent("DeployPlayer")
+    local deployEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeployPlayer")
     if deployEvent then
         deployEvent.OnServerEvent:Connect(HandlePlayerDeployment)
     end
 
-    local lobbyEvent = RemoteEventsManager:GetEvent("ReturnToLobby")
+    local lobbyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ReturnToLobby")
     if lobbyEvent then
         lobbyEvent.OnServerEvent:Connect(HandleReturnToLobby)
     end

@@ -1,7 +1,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 local XPSystem = require(ReplicatedStorage.FPSSystem.Modules.XPSystem)
 local RaycastSystem = require(ReplicatedStorage.FPSSystem.Modules.RaycastSystem)
@@ -14,7 +13,6 @@ local AttachmentManager = require(ReplicatedStorage.FPSSystem.Modules.Attachment
 print("=== FPS System Initializing ===")
 
 -- Initialize core systems
-RemoteEventsManager:Initialize()
 GameConfig:Initialize()
 TeamManager:Initialize()
 DataStoreManager:Initialize()

@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 
 local PickupHandler = {}
@@ -31,10 +30,9 @@ local DEFAULT_SPAWN_POINTS = {
 }
 
 function PickupHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	
 	-- Handle pickup requests from clients
-	local pickupEvent = RemoteEventsManager:GetEvent("PickupItem")
+	local pickupEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupItem")
 	if pickupEvent then
 		pickupEvent.OnServerEvent:Connect(function(player, pickupData)
 			self:HandlePickupRequest(player, pickupData)
@@ -42,7 +40,7 @@ function PickupHandler:Initialize()
 	end
 	
 	-- Handle spawn pickup requests  
-	local spawnEvent = RemoteEventsManager:GetEvent("SpawnPickup")
+	local spawnEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpawnPickup")
 	if spawnEvent then
 		spawnEvent.OnServerEvent:Connect(function(player, spawnData)
 			-- Only allow admins/devs to spawn pickups
@@ -161,12 +159,15 @@ function PickupHandler:HandlePickupRequest(player, pickupData)
 		end
 		
 		-- Notify all clients that pickup was taken
-		for _, clientPlayer in pairs(Players:GetPlayers()) do
-			RemoteEventsManager:FireClient(clientPlayer, "PickupTaken", {
-				Player = player,
-				PickupType = pickup.type,
-				PickupId = pickupId
-			})
+		local pickupTakenEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupTaken")
+		if pickupTakenEvent then
+			for _, clientPlayer in pairs(Players:GetPlayers()) do
+				pickupTakenEvent:FireClient(clientPlayer, {
+					Player = player,
+					PickupType = pickup.type,
+					PickupId = pickupId
+				})
+			end
 		end
 		
 		print(player.Name .. " picked up " .. pickup.type)
@@ -282,12 +283,15 @@ function PickupHandler:SpawnPickup(pickupType, position, pickupId)
 	}
 	
 	-- Notify all clients to create visual
-	for _, player in pairs(Players:GetPlayers()) do
-		RemoteEventsManager:FireClient(player, "PickupSpawned", {
-			PickupId = pickupId,
-			PickupType = pickupType,
-			Position = position
-		})
+	local pickupSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupSpawned")
+	if pickupSpawnedEvent then
+		for _, player in pairs(Players:GetPlayers()) do
+			pickupSpawnedEvent:FireClient(player, {
+				PickupId = pickupId,
+				PickupType = pickupType,
+				Position = position
+			})
+		end
 	end
 	
 	print("Spawned pickup: " .. pickupType .. " at " .. tostring(position))

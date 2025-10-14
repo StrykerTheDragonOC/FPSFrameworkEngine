@@ -6,8 +6,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 -- CLIENT-ONLY: Only load ViewmodelSystem on client
 local ViewmodelSystem = nil
 if RunService:IsClient() then
@@ -172,12 +170,10 @@ function MeleeSystem:Initialize()
 		return -- Server doesn't need to initialize client-side systems
 	end
 
-	RemoteEventsManager:Initialize()
-
 	self:SetupInputHandling()
 
 	-- Listen for melee events
-	local meleeHitEvent = RemoteEventsManager:GetEvent("MeleeHit")
+	local meleeHitEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeHit")
 	if meleeHitEvent then
 		meleeHitEvent.OnClientEvent:Connect(function(hitData)
 			self:HandleMeleeHitEffect(hitData)
@@ -409,16 +405,19 @@ function MeleeSystem:PerformMeleeRaycast(config, isSpecialAttack)
 	-- Send hits to server
 	for _, hitData in pairs(hitPlayers) do
 		local isBackstab = self:CheckBackstab(hitData.Player, centerDirection)
-		
-		RemoteEventsManager:FireServer("MeleeAttack", {
-			Target = hitData.Player,
-			WeaponName = equippedMelee.Name,
-			IsSpecialAttack = isSpecialAttack,
-			IsBackstab = isBackstab,
-			HitPosition = hitData.Position,
-			HitNormal = hitData.Normal,
-			Distance = hitData.Distance
-		})
+
+		local meleeAttackEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeAttack")
+		if meleeAttackEvent then
+			meleeAttackEvent:FireServer({
+				Target = hitData.Player,
+				WeaponName = equippedMelee.Name,
+				IsSpecialAttack = isSpecialAttack,
+				IsBackstab = isBackstab,
+				HitPosition = hitData.Position,
+				HitNormal = hitData.Normal,
+				Distance = hitData.Distance
+			})
+		end
 	end
 end
 

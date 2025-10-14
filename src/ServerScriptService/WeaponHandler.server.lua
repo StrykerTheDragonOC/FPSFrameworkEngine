@@ -3,7 +3,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 
@@ -13,18 +12,17 @@ local playerWeaponData = {}
 local lastShotTimes = {}
 
 function WeaponHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
-	
-	local weaponFiredEvent = RemoteEventsManager:GetEvent("WeaponFired")
-	local weaponReloadedEvent = RemoteEventsManager:GetEvent("WeaponReloaded")
-	local weaponEquippedEvent = RemoteEventsManager:GetEvent("WeaponEquipped")
-	local weaponUnequippedEvent = RemoteEventsManager:GetEvent("WeaponUnequipped")
-	local meleeAttackEvent = RemoteEventsManager:GetEvent("MeleeAttack")
-	local grenadeThrownEvent = RemoteEventsManager:GetEvent("GrenadeThrown")
-	
-	local getWeaponConfigFunction = RemoteEventsManager:GetFunction("GetWeaponConfig")
-	local validateWeaponActionFunction = RemoteEventsManager:GetFunction("ValidateWeaponAction")
+
+	local weaponFiredEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFired")
+	local weaponReloadedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponReloaded")
+	local weaponEquippedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponEquipped")
+	local weaponUnequippedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponUnequipped")
+	local meleeAttackEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeAttack")
+	local grenadeThrownEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GrenadeThrown")
+
+	local getWeaponConfigFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetWeaponConfig")
+	local validateWeaponActionFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ValidateWeaponAction")
 	
 	if weaponFiredEvent then
 		weaponFiredEvent.OnServerEvent:Connect(function(player, fireData)
@@ -90,64 +88,94 @@ function WeaponHandler:CleanupPlayerWeaponData(player)
 end
 
 function WeaponHandler:HandleWeaponFired(player, fireData)
-	if not self:ValidateFireData(player, fireData) then
-		warn("Invalid fire data from player: " .. player.Name)
+	-- Validate fireData exists and is a table
+	if not fireData or type(fireData) ~= "table" then
+		warn("Invalid fire data from player (not a table):", player.Name)
 		return
 	end
-	
+
+	if not self:ValidateFireData(player, fireData) then
+		warn("Invalid fire data from player:", player.Name)
+		return
+	end
+
 	local weaponConfig = WeaponConfig:GetWeaponConfig(fireData.WeaponName)
 	if not weaponConfig then
-		warn("Unknown weapon: " .. fireData.WeaponName)
+		warn("Unknown weapon:", tostring(fireData.WeaponName))
 		return
 	end
-	
+
 	local currentTime = tick()
 	local timeBetweenShots = 60 / weaponConfig.FireRate
-	
+
+	-- Initialize lastShotTimes[player] if it doesn't exist
+	if not lastShotTimes[player] then
+		lastShotTimes[player] = {}
+	end
+
 	if currentTime - (lastShotTimes[player][fireData.WeaponName] or 0) < timeBetweenShots * 0.8 then
 		warn("Player " .. player.Name .. " firing too fast")
 		return
 	end
-	
+
 	lastShotTimes[player][fireData.WeaponName] = currentTime
-	
+
 	local playerData = playerWeaponData[player]
 	if playerData then
 		playerData.lastFireTime = currentTime
 	end
-	
+
 	self:ProcessWeaponFire(player, fireData, weaponConfig)
-	
+
 	print(player.Name .. " fired " .. fireData.WeaponName)
 end
 
 function WeaponHandler:ProcessWeaponFire(player, fireData, weaponConfig)
-	RemoteEventsManager:FireAllClients("WeaponFired", player, {
-		WeaponName = fireData.WeaponName,
-		Origin = fireData.Origin,
-		Direction = fireData.Direction,
-		PlayerId = player.UserId
-	})
+	local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFired")
+	if event then
+		event:FireAllClients(player, {
+			WeaponName = fireData.WeaponName,
+			Origin = fireData.Origin,
+			Direction = fireData.Direction,
+			PlayerId = player.UserId
+		})
+	end
 end
 
 function WeaponHandler:HandleWeaponReloaded(player, reloadData)
-	local weaponConfig = WeaponConfig:GetWeaponConfig(reloadData.WeaponName)
-	if not weaponConfig then
-		warn("Unknown weapon for reload: " .. reloadData.WeaponName)
+	-- Validate reloadData
+	if not reloadData or not reloadData.WeaponName then
+		warn("Invalid reload data from player:", player.Name)
 		return
 	end
-	
+
+	local weaponConfig = WeaponConfig:GetWeaponConfig(reloadData.WeaponName)
+	if not weaponConfig then
+		warn("Unknown weapon for reload:", reloadData.WeaponName)
+		return
+	end
+
 	local playerData = playerWeaponData[player]
 	if playerData then
 		playerData.lastReloadTime = tick()
 	end
-	
+
 	print(player.Name .. " reloaded " .. reloadData.WeaponName)
 end
 
 function WeaponHandler:HandleWeaponEquipped(player, weaponData)
-	if not weaponData or not weaponData.WeaponName then
-		warn("Invalid weapon data in HandleWeaponEquipped")
+	-- Normalize weaponData - handle both table and string formats
+	if type(weaponData) == "string" then
+		weaponData = {WeaponName = weaponData}
+	end
+
+	if not weaponData or type(weaponData) ~= "table" then
+		warn("Invalid weapon data in HandleWeaponEquipped (not a table or string):", weaponData)
+		return
+	end
+
+	if not weaponData.WeaponName then
+		warn("Invalid weapon data in HandleWeaponEquipped (missing WeaponName):", weaponData)
 		return
 	end
 
@@ -160,8 +188,18 @@ function WeaponHandler:HandleWeaponEquipped(player, weaponData)
 end
 
 function WeaponHandler:HandleWeaponUnequipped(player, weaponData)
-	if not weaponData or not weaponData.WeaponName then
-		warn("Invalid weapon data in HandleWeaponUnequipped")
+	-- Normalize weaponData - handle both table and string formats
+	if type(weaponData) == "string" then
+		weaponData = {WeaponName = weaponData}
+	end
+
+	if not weaponData or type(weaponData) ~= "table" then
+		warn("Invalid weapon data in HandleWeaponUnequipped (not a table or string):", weaponData)
+		return
+	end
+
+	if not weaponData.WeaponName then
+		warn("Invalid weapon data in HandleWeaponUnequipped (missing WeaponName):", weaponData)
 		return
 	end
 

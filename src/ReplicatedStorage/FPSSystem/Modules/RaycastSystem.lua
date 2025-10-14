@@ -7,8 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local raycastParams = RaycastParams.new()
 local bulletTracers = {}
 
@@ -69,11 +67,9 @@ local MATERIAL_SOUNDS = {
 function RaycastSystem:Initialize()
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	raycastParams.IgnoreWater = false
-	
+
 	if RunService:IsClient() then
-		RemoteEventsManager:Initialize()
-		
-		local weaponFiredEvent = RemoteEventsManager:GetEvent("WeaponFired")
+		local weaponFiredEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFired")
 		if weaponFiredEvent then
 			weaponFiredEvent.OnClientEvent:Connect(function(shooter, fireData)
 				if shooter ~= Players.LocalPlayer then
@@ -82,7 +78,7 @@ function RaycastSystem:Initialize()
 			end)
 		end
 	end
-	
+
 	print("RaycastSystem initialized")
 end
 

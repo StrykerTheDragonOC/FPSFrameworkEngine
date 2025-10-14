@@ -4,7 +4,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 
 -- XP Reward Values (based on requirements)
@@ -53,11 +52,9 @@ end
 
 function XPSystem:Initialize()
 	if RunService:IsServer() then
-		RemoteEventsManager:Initialize()
-		
-		local xpAwardedEvent = RemoteEventsManager:GetEvent("XPAwarded")
-		local levelUpEvent = RemoteEventsManager:GetEvent("LevelUp")
-		
+		local xpAwardedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("XPAwarded")
+		local levelUpEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LevelUp")
+
 		print("XPSystem initialized on server")
 	else
 		print("XPSystem initialized on client")
@@ -295,7 +292,7 @@ function XPSystem:AwardXP(player, xpType, amount, additionalData)
 	end
 	
 	-- Fire remote event to update player XP
-	local awardXPEvent = RemoteEventsManager:GetEvent("AwardXP")
+	local awardXPEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AwardXP")
 	if awardXPEvent then
 		awardXPEvent:FireClient(player, xpType, xpAmount, additionalData)
 	end

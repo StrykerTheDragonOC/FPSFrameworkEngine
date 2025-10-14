@@ -7,7 +7,6 @@ local Teams = game:GetService("Teams")
 
 -- Wait for FPSSystem
 local FPSSystem = ReplicatedStorage:WaitForChild("FPSSystem")
-local RemoteEventsManager = require(FPSSystem.RemoteEvents.RemoteEventsManager)
 local TeamManager = require(FPSSystem.Modules.TeamManager)
 
 local TeamSelectionHandler = {}
@@ -93,7 +92,13 @@ local function AutoBalanceTeams()
             if player.Team and player.Team.Name == sourceTeam and playerStates[player] == "lobby" then
                 -- Move player to other team
                 selectedTeams[player] = targetTeam
-                RemoteEventsManager:FireClient(player, "TeamSelected", targetTeam)
+                local teamselectedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TeamSelected")
+
+                if teamselectedEvent then
+
+                	teamselectedEvent:FireClient(player, targetTeam)
+
+                end
                 
                 movedCount = movedCount + 1
                 print("Auto-moved " .. player.Name .. " to " .. targetTeam)
@@ -128,7 +133,13 @@ local function HandleDeployment(player)
     
     -- Check team balance
     if not IsTeamBalanced() then
-        RemoteEventsManager:FireClient(player, "DeploymentError", "Teams are not balanced. Please wait for auto-balance.")
+        local deploymenterrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeploymentError")
+
+        if deploymenterrorEvent then
+
+        	deploymenterrorEvent:FireClient(player, "Teams are not balanced. Please wait for auto-balance.")
+
+        end
         return
     end
     
@@ -145,7 +156,13 @@ local function HandleDeployment(player)
     playerStates[player] = "deployed"
     
     -- Notify client
-    RemoteEventsManager:FireClient(player, "DeploymentSuccessful", selectedTeam)
+    local deploymentsuccessfulEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeploymentSuccessful")
+
+    if deploymentsuccessfulEvent then
+
+    	deploymentsuccessfulEvent:FireClient(player, selectedTeam)
+
+    end
     
     print(player.Name .. " deployed to team: " .. selectedTeam)
 end
@@ -162,7 +179,13 @@ local function HandleReturnToLobby(player)
     pendingDeployments[player] = nil
     
     -- Notify client
-    RemoteEventsManager:FireClient(player, "ReturnedToLobby")
+    local returnedtolobbyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ReturnedToLobby")
+
+    if returnedtolobbyEvent then
+
+    	returnedtolobbyEvent:FireClient(player)
+
+    end
     
     print(player.Name .. " returned to lobby")
 end
@@ -174,14 +197,26 @@ local function AdminTeamChange(adminPlayer, targetPlayer, teamName)
     -- Check admin permissions (simplified - you can expand this)
     local adminLevel = adminPlayer:GetAttribute("AdminLevel") or 0
     if adminLevel < 1 then
-        RemoteEventsManager:FireClient(adminPlayer, "AdminError", "Insufficient permissions")
+        local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+        if adminerrorEvent then
+
+        	adminerrorEvent:FireClient(adminPlayer, "Insufficient permissions")
+
+        end
         return
     end
     
     -- Validate team
     local team = Teams:FindFirstChild(teamName)
     if not team then
-        RemoteEventsManager:FireClient(adminPlayer, "AdminError", "Invalid team: " .. teamName)
+        local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+        if adminerrorEvent then
+
+        	adminerrorEvent:FireClient(adminPlayer, "Invalid team: " .. teamName)
+
+        end
         return
     end
     
@@ -191,8 +226,20 @@ local function AdminTeamChange(adminPlayer, targetPlayer, teamName)
     playerStates[targetPlayer] = "deployed"
     
     -- Notify both players
-    RemoteEventsManager:FireClient(adminPlayer, "AdminTeamChangeSuccess", targetPlayer.Name .. " moved to " .. teamName)
-    RemoteEventsManager:FireClient(targetPlayer, "TeamChangedByAdmin", teamName)
+    local adminteamchangesuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminTeamChangeSuccess")
+
+    if adminteamchangesuccessEvent then
+
+    	adminteamchangesuccessEvent:FireClient(adminPlayer, targetPlayer.Name .. " moved to " .. teamName)
+
+    end
+    local teamchangedbyadminEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TeamChangedByAdmin")
+
+    if teamchangedbyadminEvent then
+
+    	teamchangedbyadminEvent:FireClient(targetPlayer, teamName)
+
+    end
     
     print(adminPlayer.Name .. " moved " .. targetPlayer.Name .. " to team: " .. teamName)
 end
@@ -204,7 +251,13 @@ local function HandleAdminCommand(player, command, args)
     -- Check admin permissions
     local adminLevel = player:GetAttribute("AdminLevel") or 0
     if adminLevel < 1 then
-        RemoteEventsManager:FireClient(player, "AdminError", "Insufficient permissions")
+        local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+        if adminerrorEvent then
+
+        	adminerrorEvent:FireClient(player, "Insufficient permissions")
+
+        end
         return
     end
     
@@ -213,7 +266,13 @@ local function HandleAdminCommand(player, command, args)
     if command == "teamchange" or command == "tc" then
         -- Usage: /tc <player> <team>
         if #args < 2 then
-            RemoteEventsManager:FireClient(player, "AdminError", "Usage: /tc <player> <team>")
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Usage: /tc <player> <team>")
+
+            end
             return
         end
         
@@ -222,7 +281,13 @@ local function HandleAdminCommand(player, command, args)
         
         local targetPlayer = Players:FindFirstChild(targetName)
         if not targetPlayer then
-            RemoteEventsManager:FireClient(player, "AdminError", "Player not found: " .. targetName)
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Player not found: " .. targetName)
+
+            end
             return
         end
         
@@ -231,39 +296,87 @@ local function HandleAdminCommand(player, command, args)
     elseif command == "balance" or command == "bal" then
         -- Force team balance
         AutoBalanceTeams()
-        RemoteEventsManager:FireClient(player, "AdminSuccess", "Teams balanced")
+        local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+        if adminsuccessEvent then
+
+        	adminsuccessEvent:FireClient(player, "Teams balanced")
+
+        end
         
     elseif command == "setbalance" or command == "setbal" then
         -- Set auto-balance on/off
         if #args < 1 then
-            RemoteEventsManager:FireClient(player, "AdminError", "Usage: /setbal <on/off>")
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Usage: /setbal <on/off>")
+
+            end
             return
         end
         
         local state = args[1]:lower()
         if state == "on" or state == "true" then
             autoBalanceEnabled = true
-            RemoteEventsManager:FireClient(player, "AdminSuccess", "Auto-balance enabled")
+            local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+            if adminsuccessEvent then
+
+            	adminsuccessEvent:FireClient(player, "Auto-balance enabled")
+
+            end
         elseif state == "off" or state == "false" then
             autoBalanceEnabled = false
-            RemoteEventsManager:FireClient(player, "AdminSuccess", "Auto-balance disabled")
+            local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+            if adminsuccessEvent then
+
+            	adminsuccessEvent:FireClient(player, "Auto-balance disabled")
+
+            end
         else
-            RemoteEventsManager:FireClient(player, "AdminError", "Usage: /setbal <on/off>")
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Usage: /setbal <on/off>")
+
+            end
         end
         
     elseif command == "teamdiff" or command == "tdiff" then
         -- Set max team size difference
         if #args < 1 then
-            RemoteEventsManager:FireClient(player, "AdminError", "Usage: /tdiff <number>")
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Usage: /tdiff <number>")
+
+            end
             return
         end
         
         local diff = tonumber(args[1])
         if diff and diff >= 0 then
             maxTeamSizeDifference = diff
-            RemoteEventsManager:FireClient(player, "AdminSuccess", "Max team difference set to: " .. diff)
+            local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+            if adminsuccessEvent then
+
+            	adminsuccessEvent:FireClient(player, "Max team difference set to: " .. diff)
+
+            end
         else
-            RemoteEventsManager:FireClient(player, "AdminError", "Invalid number")
+            local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+            if adminerrorEvent then
+
+            	adminerrorEvent:FireClient(player, "Invalid number")
+
+            end
         end
         
     elseif command == "teaminfo" or command == "tinfo" then
@@ -271,7 +384,13 @@ local function HandleAdminCommand(player, command, args)
         local fbiCount, kfcCount = GetTeamSizes()
         local message = string.format("FBI: %d | KFC: %d | Difference: %d | Auto-balance: %s", 
             fbiCount, kfcCount, math.abs(fbiCount - kfcCount), autoBalanceEnabled and "ON" or "OFF")
-        RemoteEventsManager:FireClient(player, "AdminSuccess", message)
+        local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+        if adminsuccessEvent then
+
+        	adminsuccessEvent:FireClient(player, message)
+
+        end
         
     elseif command == "help" then
         -- Show admin commands
@@ -281,10 +400,22 @@ local function HandleAdminCommand(player, command, args)
             "/setbal <on/off> - Toggle auto-balance\n" ..
             "/tdiff <number> - Set max team difference\n" ..
             "/tinfo - Show team information"
-        RemoteEventsManager:FireClient(player, "AdminSuccess", helpMessage)
+        local adminsuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminSuccess")
+
+        if adminsuccessEvent then
+
+        	adminsuccessEvent:FireClient(player, helpMessage)
+
+        end
         
     else
-        RemoteEventsManager:FireClient(player, "AdminError", "Unknown command: " .. command)
+        local adminerrorEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminError")
+
+        if adminerrorEvent then
+
+        	adminerrorEvent:FireClient(player, "Unknown command: " .. command)
+
+        end
     end
 end
 
@@ -347,17 +478,17 @@ function TeamSelectionHandler:Initialize()
     Players.PlayerRemoving:Connect(OnPlayerRemoving)
     
     -- Connect remote events
-    local deployEvent = RemoteEventsManager:GetEvent("DeployPlayer")
+    local deployEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeployPlayer")
     if deployEvent then
         deployEvent.OnServerEvent:Connect(HandleDeployment)
     end
 
-    local lobbyEvent = RemoteEventsManager:GetEvent("ReturnToLobby")
+    local lobbyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ReturnToLobby")
     if lobbyEvent then
         lobbyEvent.OnServerEvent:Connect(HandleReturnToLobby)
     end
 
-    local adminTeamEvent = RemoteEventsManager:GetEvent("AdminTeamChange")
+    local adminTeamEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AdminTeamChange")
     if adminTeamEvent then
         adminTeamEvent.OnServerEvent:Connect(AdminTeamChange)
     end

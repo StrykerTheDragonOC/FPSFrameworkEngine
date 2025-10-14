@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 local TeamManager = require(ReplicatedStorage.FPSSystem.Modules.TeamManager)
 
@@ -118,26 +117,25 @@ local gamemodeData = {
 }
 
 function GamemodeManager:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
 	TeamManager:Initialize()
 	
 	-- Setup remote events
-	local getGamemodeInfoFunction = RemoteEventsManager:GetFunction("GetGamemodeInfo")
+	local getGamemodeInfoFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetGamemodeInfo")
 	if getGamemodeInfoFunction then
 		getGamemodeInfoFunction.OnServerInvoke = function(player)
 			return self:GetCurrentGamemodeInfo()
 		end
 	end
 	
-	local getAvailableGamemodesFunction = RemoteEventsManager:GetFunction("GetAvailableGamemodes")
+	local getAvailableGamemodesFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetAvailableGamemodes")
 	if getAvailableGamemodesFunction then
 		getAvailableGamemodesFunction.OnServerInvoke = function(player)
 			return self:GetAvailableGamemodes()
 		end
 	end
 	
-	local voteGamemodeEvent = RemoteEventsManager:GetEvent("VoteGamemode")
+	local voteGamemodeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("VoteGamemode")
 	if voteGamemodeEvent then
 		voteGamemodeEvent.OnServerEvent:Connect(function(player, gamemode)
 			self:ProcessVote(player, gamemode)
@@ -191,12 +189,15 @@ function GamemodeManager:StartLobbyPhase()
 		end
 	end)
 	
-	RemoteEventsManager:FireAllClients("GamePhaseChanged", {
-		Phase = "Lobby",
-		NextGamemode = nextGamemode or currentGamemode,
-		TimeRemaining = lobbyTime,
-		CanVote = #Players:GetPlayers() >= 4
-	})
+	local gamePhaseEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GamePhaseChanged")
+	if gamePhaseEvent then
+		gamePhaseEvent:FireAllClients({
+			Phase = "Lobby",
+			NextGamemode = nextGamemode or currentGamemode,
+			TimeRemaining = lobbyTime,
+			CanVote = #Players:GetPlayers() >= 4
+		})
+	end
 	
 	print("=== LOBBY PHASE ===")
 	print("Next gamemode: " .. gamemodeData[nextGamemode or currentGamemode].Name)
@@ -218,11 +219,14 @@ function GamemodeManager:StartGamePhase()
 		print("Game started for player: " .. player.Name)
 	end
 	
-	RemoteEventsManager:FireAllClients("GameStarted", {
-		Gamemode = currentGamemode,
-		GamemodeData = gamemodeData[currentGamemode],
-		Duration = gameDuration
-	})
+	local matchStartedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MatchStarted")
+	if matchStartedEvent then
+		matchStartedEvent:FireAllClients({
+			Gamemode = currentGamemode,
+			GamemodeData = gamemodeData[currentGamemode],
+			Duration = gameDuration
+		})
+	end
 	
 	print("=== GAME STARTED ===")
 	print("Gamemode: " .. gamemodeData[currentGamemode].Name)
@@ -254,11 +258,14 @@ function GamemodeManager:EndGame()
 		winner = "KFC"
 	end
 	
-	RemoteEventsManager:FireAllClients("GameEnded", {
-		Winner = winner,
-		FinalScores = {FBI = fbiScore, KFC = kfcScore},
-		Gamemode = currentGamemode
-	})
+	local matchEndedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MatchEnded")
+	if matchEndedEvent then
+		matchEndedEvent:FireAllClients({
+			Winner = winner,
+			FinalScores = {FBI = fbiScore, KFC = kfcScore},
+			Gamemode = currentGamemode
+		})
+	end
 	
 	print("=== GAME ENDED ===")
 	print("Winner: " .. winner)
@@ -334,11 +341,14 @@ function GamemodeManager:StartVoting()
 	end
 	
 	-- Notify all players
-	RemoteEventsManager:FireAllClients("VotingStarted", {
-		Candidates = votingCandidates,
-		GamemodeData = gamemodeData,
-		VotingTime = votingTime
-	})
+	local startVotingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StartVoting")
+	if startVotingEvent then
+		startVotingEvent:FireAllClients({
+			Candidates = votingCandidates,
+			GamemodeData = gamemodeData,
+			VotingTime = votingTime
+		})
+	end
 	
 	print("=== VOTING STARTED ===")
 	print("Candidates:")
@@ -365,13 +375,16 @@ function GamemodeManager:ProcessVote(player, gamemode)
 	
 	-- Add new vote
 	votes[gamemode] = votes[gamemode] + 1
-	
+
 	-- Update all players
-	RemoteEventsManager:FireAllClients("VoteUpdate", {
-		Votes = votes,
-		Voter = player.Name,
-		Choice = gamemode
-	})
+	local updateVotesEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UpdateVotes")
+	if updateVotesEvent then
+		updateVotesEvent:FireAllClients({
+			Votes = votes,
+			Voter = player.Name,
+			Choice = gamemode
+		})
+	end
 	
 	print(player.Name .. " voted for " .. gamemodeData[gamemode].Name)
 end
@@ -403,11 +416,14 @@ function GamemodeManager:EndVoting()
 	end
 	
 	-- Notify all players
-	RemoteEventsManager:FireAllClients("VotingEnded", {
-		Winner = winningMode,
-		Votes = votes,
-		NextGamemode = nextGamemode or gamemodeQueue[currentQueueIndex + 1] or gamemodeQueue[1]
-	})
+	local endVotingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("EndVoting")
+	if endVotingEvent then
+		endVotingEvent:FireAllClients({
+			Winner = winningMode,
+			Votes = votes,
+			NextGamemode = nextGamemode or gamemodeQueue[currentQueueIndex + 1] or gamemodeQueue[1]
+		})
+	end
 end
 
 function GamemodeManager:GetAvailableGamemodes()
@@ -448,7 +464,7 @@ function GamemodeManager:RunTeamDeathmatch()
 	end)
 	
 	-- Listen for kills to add to team score
-	local playerKilledEvent = RemoteEventsManager:GetEvent("PlayerKilled")
+	local playerKilledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerKilled")
 	if playerKilledEvent then
 		local killConnection
 		killConnection = playerKilledEvent.OnServerEvent:Connect(function(killData)
@@ -551,7 +567,7 @@ function GamemodeManager:RunKillConfirmed()
 	local dogTags = {} -- Track dropped dog tags
 	
 	-- Listen for kills to drop dog tags
-	local playerKilledEvent = RemoteEventsManager:GetEvent("PlayerKilled")
+	local playerKilledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerKilled")
 	if playerKilledEvent then
 		local killConnection
 		killConnection = playerKilledEvent.OnServerEvent:Connect(function(killData)
@@ -654,12 +670,15 @@ function GamemodeManager:RunCaptureTheFlag()
 							enemyFlagState.Carrier = player
 							enemyFlagState.AtBase = false
 							print(player.Name .. " captured the " .. enemyTeam .. " flag!")
-							
-							RemoteEventsManager:FireAllClients("FlagCaptured", {
-								Player = player.Name,
-								Team = enemyTeam,
-								FlagTeam = enemyTeam
-							})
+
+							local flagCapturedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("FlagCaptured")
+							if flagCapturedEvent then
+								flagCapturedEvent:FireAllClients({
+									Player = player.Name,
+									Team = enemyTeam,
+									FlagTeam = enemyTeam
+								})
+							end
 						end
 					end
 					
@@ -752,11 +771,10 @@ function GamemodeManager:CollectDogTag(player, tagId, tagData)
 	-- Remove visual dog tag
 	local tagPart = workspace:FindFirstChild("DogTag_" .. tagId)
 	if tagPart then tagPart:Destroy() end
-	
-	RemoteEventsManager:FireAllClients("DogTagCollected", {
-		Player = player.Name,
-		Type = isConfirm and "Confirm" or "Deny"
-	})
+
+	-- Notify players about dog tag collection (no direct RemoteEvent for this, could be added)
+	-- For now, we'll skip the notification or add it to MatchUpdate
+	print("DogTag collected by " .. player.Name .. " - Type: " .. (isConfirm and "Confirm" or "Deny"))
 end
 
 

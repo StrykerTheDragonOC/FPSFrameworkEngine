@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local AttachmentManager = require(ReplicatedStorage.FPSSystem.Modules.AttachmentManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
@@ -11,24 +10,24 @@ local AttachmentHandler = {}
 local playerLoadouts = {}
 
 function AttachmentHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DataStoreManager:Initialize()
-	
+
 	-- Handle loadout save requests
-	local saveLoadoutEvent = RemoteEventsManager:GetEvent("SaveWeaponLoadout")
+	local saveLoadoutEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SaveWeaponLoadout")
 	if saveLoadoutEvent then
 		saveLoadoutEvent.OnServerEvent:Connect(function(player, loadoutData)
 			self:HandleSaveLoadout(player, loadoutData)
 		end)
 	end
-	
+
 	-- Handle loadout requests
-	local getLoadoutEvent = RemoteEventsManager:GetEvent("GetWeaponLoadout")
-	if getLoadoutEvent then
-		getLoadoutEvent.OnServerEvent:Connect(function(player, weaponName)
-			self:SendWeaponLoadout(player, weaponName)
-		end)
-	end
+    local getLoadoutEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetWeaponLoadout")
+
+    if getLoadoutEvent then
+        getLoadoutEvent.OnServerInvoke = function(player, weaponName)
+            return self:SendWeaponLoadout(player, weaponName)
+        end
+    end
 	
 	-- Player management
 	Players.PlayerAdded:Connect(function(player)
@@ -105,19 +104,25 @@ function AttachmentHandler:PlayerOwnsAttachment(player, weaponName, attachmentNa
 end
 
 function AttachmentHandler:SendLoadoutResult(player, success, message)
-	RemoteEventsManager:FireClient(player, "LoadoutResult", {
-		Success = success,
-		Message = message
-	})
+	local loadoutResultEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LoadoutResult")
+	if loadoutResultEvent then
+		loadoutResultEvent:FireClient(player, {
+			Success = success,
+			Message = message
+		})
+	end
 end
 
 function AttachmentHandler:SendWeaponLoadout(player, weaponName)
 	local loadout = self:GetPlayerWeaponLoadout(player, weaponName)
-	
-	RemoteEventsManager:FireClient(player, "WeaponLoadoutData", {
-		WeaponName = weaponName,
-		Attachments = loadout
-	})
+
+	local weaponLoadoutDataEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponLoadoutData")
+	if weaponLoadoutDataEvent then
+		weaponLoadoutDataEvent:FireClient(player, {
+			WeaponName = weaponName,
+			Attachments = loadout
+		})
+	end
 end
 
 function AttachmentHandler:GetPlayerWeaponLoadout(player, weaponName)
@@ -261,10 +266,13 @@ function AttachmentHandler:LoadPlayerLoadouts(player)
 	end
 	
 	-- Send attachment data to client
-	RemoteEventsManager:FireClient(player, "AttachmentDataUpdated", {
-		UnlockedAttachments = playerData.UnlockedAttachments or {},
-		WeaponLoadouts = playerLoadouts[player]
-	})
+	local attachmentDataUpdatedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AttachmentDataUpdated")
+	if attachmentDataUpdatedEvent then
+		attachmentDataUpdatedEvent:FireClient(player, {
+			UnlockedAttachments = playerData.UnlockedAttachments or {},
+			WeaponLoadouts = playerLoadouts[player]
+		})
+	end
 end
 
 function AttachmentHandler:SavePlayerLoadouts(player)
@@ -313,12 +321,15 @@ _G.AttachmentCommands = {
 				
 				table.insert(playerData.UnlockedAttachments[weaponName], attachmentName)
 				print("Unlocked " .. attachmentName .. " for " .. weaponName .. " (" .. playerName .. ")")
-				
+
 				-- Update client
-				RemoteEventsManager:FireClient(player, "AttachmentDataUpdated", {
-					UnlockedAttachments = playerData.UnlockedAttachments,
-					WeaponLoadouts = playerLoadouts[player] or {}
-				})
+				local attachmentDataUpdatedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AttachmentDataUpdated")
+				if attachmentDataUpdatedEvent then
+					attachmentDataUpdatedEvent:FireClient(player, {
+						UnlockedAttachments = playerData.UnlockedAttachments,
+						WeaponLoadouts = playerLoadouts[player] or {}
+					})
+				end
 			end
 		end
 	end,
@@ -333,12 +344,15 @@ _G.AttachmentCommands = {
 					M9 = {"RedDotSight", "Suppressor", "LaserSight", "ExtendedMag"}
 				}
 				print("Unlocked all attachments for " .. playerName)
-				
-				-- Update client  
-				RemoteEventsManager:FireClient(player, "AttachmentDataUpdated", {
-					UnlockedAttachments = playerData.UnlockedAttachments,
-					WeaponLoadouts = playerLoadouts[player] or {}
-				})
+
+				-- Update client
+				local attachmentDataUpdatedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AttachmentDataUpdated")
+				if attachmentDataUpdatedEvent then
+					attachmentDataUpdatedEvent:FireClient(player, {
+						UnlockedAttachments = playerData.UnlockedAttachments,
+						WeaponLoadouts = playerLoadouts[player] or {}
+					})
+				end
 			end
 		end
 	end,

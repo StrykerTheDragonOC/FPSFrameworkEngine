@@ -360,7 +360,7 @@ local WEAPON_CONFIGS = {
 	FlareGrenade = {
 		-- Basic Information
 		Name = "Blinding Flare",
-		Type = "Utility",
+		Type = "Tactical",
 		Category = "Grenade",
 		Class = "Universal",
 		UnlockLevel = 12,

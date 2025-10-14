@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 local MatchStatusHandler = {}
 
@@ -18,10 +17,9 @@ local matchStatus = {
 }
 
 function MatchStatusHandler:Initialize()
-    RemoteEventsManager:Initialize()
     
     -- Handle match status requests
-    local getMatchStatusFunction = RemoteEventsManager:GetFunction("GetMatchStatus")
+    local getMatchStatusFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetMatchStatus")
     if getMatchStatusFunction then
         getMatchStatusFunction.OnServerInvoke = function(player)
             return self:GetCurrentMatchStatus()

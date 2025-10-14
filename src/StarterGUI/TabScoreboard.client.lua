@@ -13,8 +13,6 @@ local StarterGui = game:GetService("StarterGui")
 -- Wait for FPS System to load
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -235,9 +233,12 @@ function TabScoreboard:UpdateScoreboard()
 	end
 
 	-- Get updated scoreboard data from server
-	local serverData = RemoteEventsManager:InvokeServer("GetLeaderboard")
-	if serverData then
-		scoreboardData = serverData
+	local getLeaderboardEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetLeaderboard")
+	if getLeaderboardEvent and getLeaderboardEvent:IsA("RemoteFunction") then
+		local serverData = getLeaderboardEvent:InvokeServer()
+		if serverData then
+			scoreboardData = serverData
+		end
 	end
 
 	-- Sort players by score (highest first)
@@ -258,16 +259,22 @@ function TabScoreboard:UpdateScoreboard()
 	local header = mainContainer.Header
 	local gameInfo = header.GameInfo
 
-	local currentGamemode = RemoteEventsManager:InvokeServer("GetCurrentGamemode")
-	if currentGamemode then
-		gameInfo.GamemodeLabel.Text = currentGamemode.name:upper()
+	local getCurrentGamemodeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetCurrentGamemode")
+	if getCurrentGamemodeEvent and getCurrentGamemodeEvent:IsA("RemoteFunction") then
+		local currentGamemode = getCurrentGamemodeEvent:InvokeServer()
+		if currentGamemode then
+			gameInfo.GamemodeLabel.Text = currentGamemode.name:upper()
+		end
 	end
 
-	local timeRemaining = RemoteEventsManager:InvokeServer("GetRoundTimeLeft")
-	if timeRemaining then
-		local minutes = math.floor(timeRemaining / 60)
-		local seconds = timeRemaining % 60
-		gameInfo.TimeLabel.Text = string.format("%02d:%02d REMAINING", minutes, seconds)
+	local getRoundTimeLeftEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetRoundTimeLeft")
+	if getRoundTimeLeftEvent and getRoundTimeLeftEvent:IsA("RemoteFunction") then
+		local timeRemaining = getRoundTimeLeftEvent:InvokeServer()
+		if timeRemaining then
+			local minutes = math.floor(timeRemaining / 60)
+			local seconds = timeRemaining % 60
+			gameInfo.TimeLabel.Text = string.format("%02d:%02d REMAINING", minutes, seconds)
+		end
 	end
 end
 
@@ -293,7 +300,10 @@ function TabScoreboard:ShowScoreboard()
 	showTween:Play()
 
 	-- Notify server
-	RemoteEventsManager:FireServer("ScoreboardToggled", {visible = true, player = player.Name})
+	local scoreboardToggledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ScoreboardToggled")
+	if scoreboardToggledEvent then
+		scoreboardToggledEvent:FireServer({visible = true, player = player.Name})
+	end
 end
 
 function TabScoreboard:HideScoreboard()
@@ -314,7 +324,10 @@ function TabScoreboard:HideScoreboard()
 	end)
 
 	-- Notify server
-	RemoteEventsManager:FireServer("ScoreboardToggled", {visible = false, player = player.Name})
+	local scoreboardToggledEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ScoreboardToggled")
+	if scoreboardToggledEvent then
+		scoreboardToggledEvent:FireServer({visible = false, player = player.Name})
+	end
 end
 
 function TabScoreboard:ToggleScoreboard()
@@ -335,11 +348,8 @@ function TabScoreboard:Initialize()
 		end
 	end)
 
-	-- Initialize remote events
-	RemoteEventsManager:Initialize()
-
 	-- Listen for scoreboard updates from server
-	local tabPressedEvent = RemoteEventsManager:GetEvent("TabPressed")
+	local tabPressedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TabPressed")
 	if tabPressedEvent then
 		tabPressedEvent.OnClientEvent:Connect(function()
 			self:UpdateScoreboard()

@@ -2,11 +2,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
-RemoteEventsManager:Initialize()
 
-local getPlayerDataFunction = RemoteEventsManager:GetFunction("GetPlayerData")
+local getPlayerDataFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetPlayerData")
 if getPlayerDataFunction then
 	getPlayerDataFunction.OnServerInvoke = function(player)
 		return DataStoreManager:GetPlayerData(player)

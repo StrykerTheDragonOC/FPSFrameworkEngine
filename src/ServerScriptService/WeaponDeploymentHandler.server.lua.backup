@@ -1,0 +1,275 @@
+-- Weapon Deployment Handler
+-- Manages weapon deployment when players join teams
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+
+-- Wait for FPSSystem
+local FPSSystem = ReplicatedStorage:WaitForChild("FPSSystem")
+local RemoteEventsManager = require(FPSSystem.RemoteEvents.RemoteEventsManager)
+local WeaponConfig = require(FPSSystem.Modules.WeaponConfig)
+
+local WeaponDeploymentHandler = {}
+
+-- Player loadouts
+local playerLoadouts = {} -- [player] = {primary = "G36", secondary = "M9", melee = "PocketKnife", grenade = "M67"}
+
+-- Default loadout
+local defaultLoadout = {
+    primary = "G36",
+    secondary = "M9", 
+    melee = "PocketKnife",
+    grenade = "M67"
+}
+
+-- Get player's selected loadout
+local function GetPlayerLoadout(player)
+    return playerLoadouts[player] or defaultLoadout
+end
+
+-- Create weapon tool from ServerStorage
+local function CreateWeaponTool(weaponName, weaponType)
+    local weaponFolder = ServerStorage.Weapons:FindFirstChild(weaponName)
+
+    -- If not found directly, try to find in categorized folders
+    if not weaponFolder then
+        if weaponType == "primary" then
+            -- Try different primary weapon categories
+            local categories = {"AssaultRifles", "SniperRifles", "LMGs", "DMRs", "BattleRifles", "Carbines", "SMGs", "PDWs", "Shotguns"}
+            for _, category in ipairs(categories) do
+                local categoryFolder = ServerStorage.Weapons.Primary:FindFirstChild(category)
+                if categoryFolder then
+                    weaponFolder = categoryFolder:FindFirstChild(weaponName)
+                    if weaponFolder then break end
+                end
+            end
+        elseif weaponType == "secondary" then
+            -- Try secondary weapon categories
+            local categories = {"Pistols", "Other"}
+            for _, category in ipairs(categories) do
+                local categoryFolder = ServerStorage.Weapons.Secondary:FindFirstChild(category)
+                if categoryFolder then
+                    weaponFolder = categoryFolder:FindFirstChild(weaponName)
+                    if weaponFolder then break end
+                end
+            end
+        elseif weaponType == "melee" then
+            -- Try melee categories
+            local categories = {"OneHandedBlades", "OneHandedBlunt", "TwoHandedBlades", "TwoHandedBlunt"}
+            for _, category in ipairs(categories) do
+                local categoryFolder = ServerStorage.Weapons.Melee:FindFirstChild(category)
+                if categoryFolder then
+                    weaponFolder = categoryFolder:FindFirstChild(weaponName)
+                    if weaponFolder then break end
+                end
+            end
+        elseif weaponType == "grenade" then
+            -- Try grenade categories
+            local categories = {"Explosive", "Smoke", "Flash", "Other"}
+            for _, category in ipairs(categories) do
+                local categoryFolder = ServerStorage.Weapons.Grenade:FindFirstChild(category)
+                if categoryFolder then
+                    weaponFolder = categoryFolder:FindFirstChild(weaponName)
+                    if weaponFolder then break end
+                end
+            end
+        end
+    end
+
+    if not weaponFolder then
+        warn("Weapon folder not found: " .. weaponName .. " (type: " .. weaponType .. ")")
+        return nil
+    end
+
+    -- Find the tool script (try ServerScript.server, ServerScript, or LocalScript for client-only tools)
+    local toolScript = weaponFolder:FindFirstChild("ServerScript.server") or
+                      weaponFolder:FindFirstChild("ServerScript") or
+                      weaponFolder:FindFirstChild("LocalScript.client") or
+                      weaponFolder:FindFirstChild("LocalScript")
+
+    if not toolScript then
+        warn("Tool script not found for: " .. weaponName .. " (checked ServerScript.server, ServerScript, LocalScript.client, and LocalScript)")
+        return nil
+    end
+    
+    -- Create the tool
+    local tool = Instance.new("Tool")
+    tool.Name = weaponName
+    tool.RequiresHandle = true
+    
+    -- Create handle
+    local handle = Instance.new("Part")
+    handle.Name = "Handle"
+    handle.Size = Vector3.new(1, 1, 4)
+    handle.Material = Enum.Material.Neon
+    handle.BrickColor = BrickColor.new("Bright blue")
+    handle.TopSurface = Enum.SurfaceType.Smooth
+    handle.BottomSurface = Enum.SurfaceType.Smooth
+    handle.Parent = tool
+    
+    -- Clone and parent the script
+    local clonedScript = toolScript:Clone()
+    clonedScript.Parent = tool
+    
+    return tool
+end
+
+-- Give weapons to player
+local function GiveWeaponsToPlayer(player)
+    if not player or not player.Character then return end
+    
+    local loadout = GetPlayerLoadout(player)
+    
+    -- Clear existing tools
+    for _, tool in pairs(player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool:Destroy()
+        end
+    end
+    
+    for _, tool in pairs(player.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool:Destroy()
+        end
+    end
+    
+    -- Give weapons in order: Primary, Secondary, Melee, Grenade
+    local weaponOrder = {"primary", "secondary", "melee", "grenade"}
+    
+    for _, weaponType in pairs(weaponOrder) do
+        local weaponName = loadout[weaponType]
+        if weaponName then
+            local tool = CreateWeaponTool(weaponName, weaponType)
+            if tool then
+                tool.Parent = player.Backpack
+                print("Gave " .. weaponName .. " to " .. player.Name)
+            end
+        end
+    end
+end
+
+-- Handle loadout change
+local function HandleLoadoutChange(player, loadoutData)
+    if not player or not loadoutData then return end
+    
+    -- Validate loadout
+    local validLoadout = {}
+    for weaponType, weaponName in pairs(loadoutData) do
+        if WeaponConfig:GetWeaponStats(weaponName) then
+            validLoadout[weaponType] = weaponName
+        else
+            warn("Invalid weapon in loadout: " .. weaponName)
+            validLoadout[weaponType] = defaultLoadout[weaponType]
+        end
+    end
+    
+    -- Store loadout
+    playerLoadouts[player] = validLoadout
+    
+    -- If player is deployed, give new weapons
+    if player.Team and player.Team ~= nil then
+        GiveWeaponsToPlayer(player)
+    end
+    
+    print(player.Name .. " updated loadout")
+end
+
+-- Handle deployment
+local function HandlePlayerDeployment(player, teamName)
+    if not player then return end
+    
+    -- Wait for character to exist
+    if not player.Character then
+        player.CharacterAdded:Wait()
+    end
+    
+    -- Give weapons
+    GiveWeaponsToPlayer(player)
+    
+    print(player.Name .. " deployed with weapons to team: " .. (teamName or "Unknown"))
+end
+
+-- Handle return to lobby
+local function HandleReturnToLobby(player)
+    if not player then return end
+    
+    -- Remove all weapons
+    for _, tool in pairs(player.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool:Destroy()
+        end
+    end
+    
+    for _, tool in pairs(player.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool:Destroy()
+        end
+    end
+    
+    print(player.Name .. " returned to lobby - weapons removed")
+end
+
+-- Handle character respawn
+local function OnCharacterAdded(character)
+    local player = Players:GetPlayerFromCharacter(character)
+    if not player then return end
+    
+    -- If player is deployed, give weapons after respawn
+    if player.Team and player.Team ~= nil then
+        wait(1) -- Wait for character to be ready
+        GiveWeaponsToPlayer(player)
+    end
+end
+
+-- Initialize
+function WeaponDeploymentHandler:Initialize()
+    print("WeaponDeploymentHandler: Initializing...")
+    
+    -- Connect remote events
+    local loadoutEvent = RemoteEventsManager:GetEvent("LoadoutChanged")
+    if loadoutEvent then
+        loadoutEvent.OnServerEvent:Connect(HandleLoadoutChange)
+    end
+
+    -- Connect player events
+    Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(OnCharacterAdded)
+    end)
+
+    -- Connect to team selection events
+    local deployEvent = RemoteEventsManager:GetEvent("DeployPlayer")
+    if deployEvent then
+        deployEvent.OnServerEvent:Connect(HandlePlayerDeployment)
+    end
+
+    local lobbyEvent = RemoteEventsManager:GetEvent("ReturnToLobby")
+    if lobbyEvent then
+        lobbyEvent.OnServerEvent:Connect(HandleReturnToLobby)
+    end
+    
+    -- Initialize existing players
+    for _, player in pairs(Players:GetPlayers()) do
+        player.CharacterAdded:Connect(OnCharacterAdded)
+    end
+    
+    print("WeaponDeploymentHandler: Ready!")
+end
+
+-- Public methods
+function WeaponDeploymentHandler:GetPlayerLoadout(player)
+    return GetPlayerLoadout(player)
+end
+
+function WeaponDeploymentHandler:SetPlayerLoadout(player, loadout)
+    HandleLoadoutChange(player, loadout)
+end
+
+function WeaponDeploymentHandler:GiveWeaponsToPlayer(player)
+    GiveWeaponsToPlayer(player)
+end
+
+-- Initialize
+WeaponDeploymentHandler:Initialize()
+
+return WeaponDeploymentHandler

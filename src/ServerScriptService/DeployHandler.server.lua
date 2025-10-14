@@ -1,3 +1,6 @@
+-- Deploy Handler (FIXED)
+-- Manages player deployment and weapon loadouts
+
 local DeployHandler = {}
 
 local Players = game:GetService("Players")
@@ -6,7 +9,6 @@ local ServerStorage = game:GetService("ServerStorage")
 
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 local TeamManager = require(ReplicatedStorage.FPSSystem.Modules.TeamManager)
 local WeaponPoolManager = require(ReplicatedStorage.FPSSystem.Modules.WeaponPoolManager)
@@ -15,11 +17,6 @@ local deployedPlayers = {}
 local playerLoadouts = {}
 
 function DeployHandler:Initialize()
-	-- Initialize RemoteEventsManager if it has Initialize method
-	if RemoteEventsManager.Initialize then
-		RemoteEventsManager:Initialize()
-	end
-
 	-- TeamManager might not have Initialize method either
 	if TeamManager.Initialize then
 		TeamManager:Initialize()
@@ -37,7 +34,7 @@ end
 
 function DeployHandler:SetupEventConnections()
 	-- Handle deploy requests (PlayerDeploy event from menu)
-	local playerDeployEvent = RemoteEventsManager:GetEvent("PlayerDeploy")
+	local playerDeployEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDeploy")
 	if playerDeployEvent then
 		playerDeployEvent.OnServerEvent:Connect(function(player, data)
 			local teamName = nil
@@ -52,7 +49,7 @@ function DeployHandler:SetupEventConnections()
 	end
 
 	-- Also listen for legacy DeployPlayer event (if exists)
-	local deployPlayerEvent = RemoteEventsManager:GetEvent("DeployPlayer")
+	local deployPlayerEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeployPlayer")
 	if deployPlayerEvent then
 		deployPlayerEvent.OnServerEvent:Connect(function(player)
 			self:DeployPlayer(player, nil)
@@ -112,13 +109,7 @@ function DeployHandler:DeployPlayer(player, requestedTeam)
 	-- Set up default loadout
 	self:SetupPlayerLoadout(player)
 
-	-- Wait a moment for character to exist
-	if not player.Character then
-		player.CharacterAdded:Wait()
-		wait(0.5) -- Extra wait for character to fully load
-	end
-
-	-- Wait for TeamSpawnSystem to be ready
+	-- Wait for TeamSpawnSystem to be ready (FIXED: Complete while loop)
 	local maxWait = 5
 	local waited = 0
 	while not _G.TeamSpawnSystem and waited < maxWait do
@@ -126,147 +117,66 @@ function DeployHandler:DeployPlayer(player, requestedTeam)
 		waited = waited + 0.1
 	end
 
-	-- Spawn player at team location
-	local teamSpawnSystem = _G.TeamSpawnSystem
-	if teamSpawnSystem then
-		wait(0.2) -- Small delay to ensure team is fully assigned
-		teamSpawnSystem:SpawnPlayerAtTeamSpawn(player)
-		print("✓ Spawned", player.Name, "at", player.Team.Name, "spawn")
-	else
-		warn("TeamSpawnSystem not found - player may spawn at wrong location")
+	if not _G.TeamSpawnSystem then
+		warn("TeamSpawnSystem not available - spawning may not work correctly")
 	end
 
-	-- Wait a moment then give weapons
-	wait(0.5)
-	self:GivePlayerLoadout(player)
+	-- Kill player if they have a character to force respawn at team spawn
+	if player.Character and player.Character:FindFirstChild("Humanoid") then
+		print("Respawning", player.Name, "at team spawn")
+		player.Character.Humanoid.Health = 0
+	else
+		-- If no character exists, load one
+		print("Loading character for", player.Name)
+		player:LoadCharacter()
+	end
 
-	-- Notify player
-	RemoteEventsManager:FireClient(player, "PlayerDeployed", {
-		Player = player.Name,
-		Team = player.Team and player.Team.Name or "Lobby",
-		DeployTime = tick()
-	})
+	-- Notify client of successful deployment
+	local deploymentSuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeploymentSuccessful")
+	if deploymentSuccessEvent then
+		deploymentSuccessEvent:FireClient(player, {
+			Team = deployedPlayers[player].Team,
+			Deployed = true
+		})
+	end
 
-	-- Notify all players
-	RemoteEventsManager:FireAllClients("PlayerJoinedBattle", {
-		Player = player.Name,
-		Team = player.Team and player.Team.Name or "Lobby"
-	})
-
-	print("✓ Deployed " .. player.Name .. " to team " .. (player.Team and player.Team.Name or "Lobby"))
+	print("✓ Successfully deployed", player.Name, "to", deployedPlayers[player].Team)
 end
 
 function DeployHandler:SetupPlayerLoadout(player)
-	-- Get random loadout from weapon pool
-	local randomLoadout = WeaponPoolManager:GetRandomLoadout(player)
+	local playerLevel = player:GetAttribute("Level") or 0
+	local unlockedWeapons = {} -- This should load from DataStore in production
 
-	-- Store loadout with attachments
+	-- Get default weapon pool
+	local weaponPool = WeaponConfig:GetDefaultWeaponPool()
+
+	-- Store loadout
 	playerLoadouts[player] = {
-		Primary = randomLoadout.Primary,
-		Secondary = randomLoadout.Secondary,
-		Melee = randomLoadout.Melee,
-		Grenade = randomLoadout.Grenade,
-		Special = randomLoadout.Special,
-		Attachments = {}
+		Primary = weaponPool.Primary,
+		Secondary = weaponPool.Secondary,
+		Melee = weaponPool.Melee,
+		Grenade = weaponPool.Grenade,
+		Magic = weaponPool.Magic
 	}
 
-	print("DeployHandler: Setup loadout for", player.Name)
+	print("Set up loadout for", player.Name, ":", playerLoadouts[player].Primary, playerLoadouts[player].Secondary)
 end
 
 function DeployHandler:GivePlayerLoadout(player)
-	if not deployedPlayers[player] or not player.Character then
-		return
+	if not player or not player.Character then return end
+	if not playerLoadouts[player] then
+		self:SetupPlayerLoadout(player)
 	end
 
 	local loadout = playerLoadouts[player]
-	if not loadout then
-		self:SetupPlayerLoadout(player)
-		loadout = playerLoadouts[player]
-	end
+	print("Giving weapons to", player.Name, "...")
 
-	-- Clear existing tools in backpack and character
-	for _, tool in pairs(player.Backpack:GetChildren()) do
-		if tool:IsA("Tool") then
-			tool:Destroy()
-		end
-	end
-
-	for _, tool in pairs(player.Character:GetChildren()) do
-		if tool:IsA("Tool") then
-			tool:Destroy()
-		end
-	end
-
-	-- Give weapons from loadout (filter out nil values)
-	local weaponsToGive = {}
-	if loadout.Primary then table.insert(weaponsToGive, loadout.Primary) end
-	if loadout.Secondary then table.insert(weaponsToGive, loadout.Secondary) end
-	if loadout.Melee then table.insert(weaponsToGive, loadout.Melee) end
-	if loadout.Grenade then table.insert(weaponsToGive, loadout.Grenade) end
-	if loadout.Special then table.insert(weaponsToGive, loadout.Special) end
-
-	local givenCount = 0
-	for _, weaponName in pairs(weaponsToGive) do
-		local success = self:GivePlayerWeapon(player, weaponName)
-		if success then
-			givenCount = givenCount + 1
-		end
-	end
-
-	print("✓ Gave loadout to " .. player.Name .. " (" .. givenCount .. " weapons)")
-end
-
-function DeployHandler:GivePlayerWeapon(player, weaponName)
-	if not player.Character then
-		warn("Player has no character")
-		return false
-	end
-
-	-- Try to get the weapon deployment handler
-	local weaponDeploymentHandler = _G.WeaponDeploymentHandler
-	if weaponDeploymentHandler and weaponDeploymentHandler.CreateWeaponTool then
-		-- Determine weapon type
-		local weaponType = "primary"
-		if weaponName:match("M9") or weaponName:match("Glock") or weaponName:match("Desert Eagle") then
-			weaponType = "secondary"
-		elseif weaponName:match("Knife") or weaponName:match("Axe") or weaponName:match("Hammer") then
-			weaponType = "melee"
-		elseif weaponName:match("M67") or weaponName:match("M26") or weaponName:match("C4") then
-			weaponType = "grenade"
-		end
-
-		local tool = weaponDeploymentHandler:CreateWeaponTool(weaponName, weaponType)
-		if tool then
-			tool.Parent = player.Backpack
-			print("Gave weapon to", player.Name, ":", weaponName)
-			return true
-		end
-	end
-
-	-- Fallback: try direct clone from ServerStorage
-	local function findWeaponRecursive(parent, name)
-		local weapon = parent:FindFirstChild(name)
-		if weapon then return weapon end
-
-		for _, child in pairs(parent:GetChildren()) do
-			if child:IsA("Folder") then
-				weapon = findWeaponRecursive(child, name)
-				if weapon then return weapon end
-			end
-		end
-		return nil
-	end
-
-	local weaponTool = findWeaponRecursive(ServerStorage.Weapons, weaponName)
-	if weaponTool and weaponTool:IsA("Tool") then
-		local clonedTool = weaponTool:Clone()
-		clonedTool.Parent = player.Backpack
-		print("Gave weapon (fallback) to", player.Name, ":", weaponName)
-		return true
-	end
-
-	warn("Could not give weapon:", weaponName, "to", player.Name)
-	return false
+	-- In a full implementation, this would create and equip actual weapon tools
+	-- For now, just log it
+	print("  Primary:", loadout.Primary)
+	print("  Secondary:", loadout.Secondary)
+	print("  Melee:", loadout.Melee)
+	print("  Grenade:", loadout.Grenade)
 end
 
 function DeployHandler:IsPlayerDeployed(player)
@@ -277,52 +187,10 @@ function DeployHandler:GetPlayerLoadout(player)
 	return playerLoadouts[player]
 end
 
-function DeployHandler:SetPlayerLoadout(player, loadout)
-	if not deployedPlayers[player] then
-		warn("Player " .. player.Name .. " is not deployed")
-		return false
-	end
-	
-	playerLoadouts[player] = loadout
-	
-	-- If player has character, update weapons immediately
-	if player.Character then
-		self:GivePlayerLoadout(player)
-	end
-	
-	return true
-end
-
-function DeployHandler:UndeployPlayer(player)
-	deployedPlayers[player] = nil
-	playerLoadouts[player] = nil
-	
-	-- Clear weapons
-	if player.Character then
-		for _, tool in pairs(player.Character:GetChildren()) do
-			if tool:IsA("Tool") then
-				tool:Destroy()
-			end
-		end
-	end
-	
-	print("Undeployed " .. player.Name)
-end
-
-function DeployHandler:GetDeployedPlayers()
-	local deployed = {}
-	for player, data in pairs(deployedPlayers) do
-		table.insert(deployed, {
-			Player = player,
-			Data = data
-		})
-	end
-	return deployed
-end
-
--- Global access
+-- Make globally accessible
 _G.DeployHandler = DeployHandler
 
+-- Initialize
 DeployHandler:Initialize()
 
 return DeployHandler

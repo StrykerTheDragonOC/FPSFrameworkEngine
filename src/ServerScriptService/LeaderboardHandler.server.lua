@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 
 local LeaderboardHandler = {}
@@ -12,11 +11,10 @@ local lastUpdateTime = 0
 local CACHE_DURATION = 5 -- Update cache every 5 seconds
 
 function LeaderboardHandler:Initialize()
-    RemoteEventsManager:Initialize()
     DataStoreManager:Initialize()
     
     -- Handle leaderboard requests
-    local getLeaderboardFunction = RemoteEventsManager:GetFunction("GetLeaderboard")
+    local getLeaderboardFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetLeaderboard")
     if getLeaderboardFunction then
         getLeaderboardFunction.OnServerInvoke = function(player)
             return self:GetLeaderboardData()

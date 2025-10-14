@@ -6,7 +6,6 @@ local Players = game:GetService("Players")
 
 local RaycastSystem = require(ReplicatedStorage.FPSSystem.Modules.RaycastSystem)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 local HITBOX_MULTIPLIERS = {
 	Head = 2.5,
@@ -39,9 +38,8 @@ local DAMAGE_TYPES = {
 function DamageSystem:Initialize()
 	RaycastSystem:Initialize()
 	GameConfig:Initialize()
-	
+
 	if RunService:IsServer() then
-		RemoteEventsManager:Initialize()
 		print("DamageSystem initialized on server")
 	else
 		print("DamageSystem initialized on client")

@@ -6,8 +6,6 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 -- Day/Night configuration
 local DAY_NIGHT_CONFIG = {
 	CycleLength = 36000, -- 10 hours (36000 seconds) for full day/night cycle
@@ -201,11 +199,9 @@ end
 
 function DayNightSystem:SetupRemoteEvents()
 	-- For multiplayer synchronization
-	RemoteEventsManager:Initialize()
-	
 	-- Only setup client event listening on the client
 	if RunService:IsClient() then
-		local timeUpdateEvent = RemoteEventsManager:GetEvent("TimeUpdate")
+		local timeUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TimeUpdate")
 		if timeUpdateEvent then
 			timeUpdateEvent.OnClientEvent:Connect(function(timeData)
 				self:SyncTime(timeData.Time, timeData.Preset)

@@ -13,11 +13,20 @@ if RunService:IsServer() then
 end
 
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
+local GlobalStateManager = require(ReplicatedStorage.FPSSystem.Modules.GlobalStateManager)
+
+-- Load ScopeSystem if available
+local ScopeSystem = nil
+pcall(function()
+	ScopeSystem = require(ReplicatedStorage.FPSSystem.Modules.ScopeSystem)
+end)
 
 local Camera = workspace.CurrentCamera
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
+
+-- Initialize player state in GlobalStateManager
+GlobalStateManager:InitializePlayerState(player)
 
 -- Viewmodel state
 local activeViewmodel = nil
@@ -77,10 +86,7 @@ function ViewmodelSystem:Initialize()
 		warn("ViewmodelSystem can only be initialized on the client")
 		return
 	end
-	
-	-- Initialize components
-	RemoteEventsManager:Initialize()
-	
+
 	-- Store original camera settings
 	originalCameraSubject = Camera.CameraSubject
 	originalMaxZoomDistance = player.CameraMaxZoomDistance
@@ -120,7 +126,7 @@ function ViewmodelSystem:LockFirstPerson()
 
 	-- Try to get FOV from server if needed (but don't wait for it)
 	pcall(function()
-		local getSettingEvent = RemoteEventsManager:GetEvent("GetPlayerSetting")
+		local getSettingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetPlayerSetting")
 		if getSettingEvent then
 			local serverFOV = getSettingEvent:InvokeServer("FOV")
 			if serverFOV then
@@ -140,13 +146,30 @@ function ViewmodelSystem:UnlockFirstPerson()
 	isFirstPersonLocked = false
 	fpsWeaponEquipped = false
 
-	-- Restore original camera settings
-	player.CameraMode = Enum.CameraMode.Classic
-	player.CameraMaxZoomDistance = originalMaxZoomDistance or 400
-	player.CameraMinZoomDistance = 0.5
+	-- Restore original camera settings with multiple attempts for safety
+	local success = pcall(function()
+		player.CameraMode = Enum.CameraMode.Classic
+		player.CameraMaxZoomDistance = originalMaxZoomDistance or 400
+		player.CameraMinZoomDistance = 0.5
 
-	-- Reset to default FOV
-	Camera.FieldOfView = 70
+		-- Also reset MouseBehavior to allow mouse movement
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+
+		-- Reset to default FOV
+		Camera.FieldOfView = 70
+	end)
+
+	if not success then
+		warn("Failed to unlock first person view, retrying...")
+		-- Fallback: Force unlock with delay
+		task.wait(0.1)
+		pcall(function()
+			player.CameraMode = Enum.CameraMode.Classic
+			player.CameraMaxZoomDistance = 400
+			player.CameraMinZoomDistance = 0.5
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end)
+	end
 
 	print("✓ First-person view unlocked")
 end
@@ -260,6 +283,22 @@ function ViewmodelSystem:OnToolEquipped(tool)
 	if weaponConfig then
 		self:LockFirstPerson()
 		self:CreateViewmodel(tool.Name)
+
+		-- Hide the tool's handle so only viewmodel is visible
+		local handle = tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			-- Store original transparency
+			if not handle:GetAttribute("OriginalTransparency") then
+				handle:SetAttribute("OriginalTransparency", handle.Transparency)
+			end
+			handle.Transparency = 1
+			print("✓ Hidden tool handle for", tool.Name)
+		end
+
+		-- Notify ScopeSystem about weapon equipped
+		if ScopeSystem and ScopeSystem.OnWeaponEquipped then
+			ScopeSystem:OnWeaponEquipped(tool)
+		end
 	end
 end
 
@@ -267,8 +306,29 @@ end
 function ViewmodelSystem:OnToolUnequipped(tool)
 	local weaponConfig = WeaponConfig:GetWeaponConfig(tool.Name)
 	if weaponConfig then
-		self:UnlockFirstPerson()
+		-- Restore tool handle visibility
+		local handle = tool:FindFirstChild("Handle")
+		if handle and handle:IsA("BasePart") then
+			local originalTransparency = handle:GetAttribute("OriginalTransparency") or 0
+			handle.Transparency = originalTransparency
+			print("✓ Restored tool handle visibility for", tool.Name)
+		end
+
+		-- Remove viewmodel first
 		self:RemoveViewmodel()
+
+		-- Then unlock first person (with safety delay)
+		task.spawn(function()
+			task.wait(0.05) -- Small delay to ensure tool fully unequipped
+			self:UnlockFirstPerson()
+		end)
+
+		-- Notify ScopeSystem about weapon unequipped
+		if ScopeSystem and ScopeSystem.OnWeaponUnequipped then
+			ScopeSystem:OnWeaponUnequipped()
+		end
+
+		print("✓ Tool unequipped, camera should unlock")
 	end
 end
 
@@ -286,20 +346,20 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 
 	-- Lock first-person view
 	self:LockFirstPerson()
-	
+
 	-- Load viewmodel from ReplicatedStorage
-	local viewmodelPath = ReplicatedStorage.FPSSystem.ViewModels
+	local viewmodelPath = ReplicatedStorage.FPSSystem:FindFirstChild("ViewModels") or ReplicatedStorage.FPSSystem:FindFirstChild("Viewmodels")
 	if not viewmodelPath then
 		warn("ViewModels folder not found in ReplicatedStorage")
 		return
 	end
-	
+
 	local categoryFolder = viewmodelPath:FindFirstChild(weaponConfig.Category)
-	if not categoryFolder then 
+	if not categoryFolder then
 		warn("Category folder not found: " .. weaponConfig.Category)
-		return 
+		return
 	end
-	
+
 	local typeFolder = categoryFolder:FindFirstChild(weaponConfig.Type)
 	if not typeFolder then
 		warn("Type folder not found: " .. weaponConfig.Type)
@@ -328,12 +388,23 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 	end
 
 	if not viewmodelModel then
-		warn("Viewmodel not found for: " .. weaponName)
-		warn("  Searched in: " .. typeFolder:GetFullName())
-		warn("  Looking for folder or direct model named: " .. weaponName)
+		warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		warn("⚠ VIEWMODEL NOT FOUND")
+		warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		warn("Weapon: " .. weaponName)
+		warn("Category: " .. weaponConfig.Category)
+		warn("Type: " .. weaponConfig.Type)
+		warn("Expected path: " .. typeFolder:GetFullName() .. "/" .. weaponName)
+		warn("Searched for: Model or Tool named '" .. weaponName .. "'")
+		warn("")
+		warn("Available items in folder:")
+		for _, child in pairs(typeFolder:GetChildren()) do
+			warn("  - " .. child.Name .. " (" .. child.ClassName .. ")")
+		end
+		warn("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 		return
 	end
-	
+
 	-- Clone and setup viewmodel
 	activeViewmodel = viewmodelModel:Clone()
 	activeViewmodel.Name = "ActiveViewmodel"
@@ -344,6 +415,7 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 			descendant.CanCollide = false
 			descendant.Massless = true
 			descendant.CastShadow = false
+			descendant.Anchored = false
 
 			-- Set collision group to Viewmodels
 			pcall(function()
@@ -352,7 +424,43 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 		end
 	end
 
+	-- Find CameraPart and connect to head
+	local cameraPart = activeViewmodel:FindFirstChild("CameraPart", true)
+	if cameraPart and cameraPart:IsA("BasePart") then
+		print("✓ Found CameraPart in viewmodel")
+
+		-- Set CameraPart as primary part
+		if activeViewmodel:IsA("Model") then
+			activeViewmodel.PrimaryPart = cameraPart
+		end
+
+		-- Wait for character head
+		if player.Character then
+			local head = player.Character:WaitForChild("Head", 3)
+			if head then
+				-- Create weld between CameraPart and Camera
+				cameraPart.CFrame = Camera.CFrame
+				cameraPart.Anchored = false
+
+				print("✓ CameraPart connected to camera")
+			else
+				warn("Head not found in character")
+			end
+		end
+	else
+		warn("CameraPart not found in viewmodel - viewmodel may not display correctly")
+		-- Try to find any part to use as primary
+		local primaryPart = activeViewmodel:FindFirstChildOfClass("BasePart")
+		if primaryPart and activeViewmodel:IsA("Model") then
+			activeViewmodel.PrimaryPart = primaryPart
+			print("Using " .. primaryPart.Name .. " as primary part")
+		end
+	end
+
 	activeViewmodel.Parent = Camera
+
+	-- Load animations
+	self:LoadViewmodelAnimations(weaponName, weaponConfig)
 
 	-- Get base offset for weapon category
 	baseOffset = viewmodelOffsets[weaponConfig.Category].Position
@@ -360,7 +468,7 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 	-- Set initial position
 	self:UpdateViewmodelPosition()
 
-	print("Viewmodel created for " .. weaponName .. " (" .. weaponConfig.Category .. ")")
+	print("✓ Viewmodel created for " .. weaponName .. " (" .. weaponConfig.Category .. ")")
 end
 -- Apply recoil to viewmodel
 function ViewmodelSystem:ApplyRecoil(recoilVector)
@@ -390,19 +498,96 @@ function ViewmodelSystem:RemoveViewmodel()
 	end
 end
 
+-- Load viewmodel animations
+function ViewmodelSystem:LoadViewmodelAnimations(weaponName, weaponConfig)
+	if not activeViewmodel then return end
+
+	-- Look for animations in ReplicatedStorage.FPSSystem
+	local animationsPath = ReplicatedStorage.FPSSystem:FindFirstChild("Animations")
+	if not animationsPath then
+		warn("Animations folder not found in FPSSystem")
+		return
+	end
+
+	-- Check category folder
+	local categoryFolder = animationsPath:FindFirstChild(weaponConfig.Category)
+	if not categoryFolder then
+		print("No animations folder for category: " .. weaponConfig.Category)
+		return
+	end
+
+	-- Check type folder
+	local typeFolder = categoryFolder:FindFirstChild(weaponConfig.Type)
+	if not typeFolder then
+		print("No animations folder for type: " .. weaponConfig.Type)
+		return
+	end
+
+	-- Check weapon-specific folder
+	local weaponAnimFolder = typeFolder:FindFirstChild(weaponName)
+	if not weaponAnimFolder then
+		print("No animations folder for weapon: " .. weaponName)
+		return
+	end
+
+	-- Find AnimationController or Humanoid in viewmodel
+	local animController = activeViewmodel:FindFirstChildOfClass("AnimationController")
+	if not animController then
+		-- Create one if it doesn't exist
+		animController = Instance.new("AnimationController")
+		animController.Parent = activeViewmodel
+
+		-- Find a humanoid root part or create one
+		local rootPart = activeViewmodel:FindFirstChild("HumanoidRootPart")
+		if not rootPart then
+			rootPart = activeViewmodel:FindFirstChild("CameraPart")
+		end
+
+		if rootPart then
+			local animator = Instance.new("Animator")
+			animator.Parent = animController
+		end
+	end
+
+	local animator = animController:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = animController
+	end
+
+	-- Load all animations
+	for _, anim in pairs(weaponAnimFolder:GetChildren()) do
+		if anim:IsA("Animation") then
+			local track = animator:LoadAnimation(anim)
+			print("✓ Loaded animation: " .. anim.Name)
+			-- Store animation track if needed
+		end
+	end
+
+	print("✓ Loaded animations for " .. weaponName)
+end
+
 -- Update viewmodel position with all offsets combined
 function ViewmodelSystem:UpdateViewmodelPosition()
 	if not activeViewmodel then return end
-	
+
 	-- Combine all offset vectors
 	local totalOffset = baseOffset + swayOffset + breathingOffset + walkingOffset + recoilOffset
-	
+
 	-- Calculate new CFrame relative to camera
 	local cameraCFrame = Camera.CFrame
 	local viewmodelCFrame = cameraCFrame * CFrame.new(totalOffset)
-	
+
 	-- Apply the transform to viewmodel
-	activeViewmodel:SetPrimaryPartCFrame(viewmodelCFrame)
+	if activeViewmodel:IsA("Model") and activeViewmodel.PrimaryPart then
+		activeViewmodel:SetPrimaryPartCFrame(viewmodelCFrame)
+	elseif activeViewmodel:IsA("Tool") then
+		-- For tools, set the Handle CFrame
+		local handle = activeViewmodel:FindFirstChild("Handle")
+		if handle then
+			handle.CFrame = viewmodelCFrame
+		end
+	end
 end
 
 -- Public interface functions
@@ -425,32 +610,69 @@ function ViewmodelSystem:Cleanup()
 		swayConnection:Disconnect()
 		swayConnection = nil
 	end
-	
+
 	if breathingConnection then
 		breathingConnection:Disconnect()
 		breathingConnection = nil
 	end
-	
+
 	if walkingConnection then
 		walkingConnection:Disconnect()
 		walkingConnection = nil
 	end
-	
+
 	if recoilConnection then
 		recoilConnection:Disconnect()
 		recoilConnection = nil
 	end
-	
+
 	-- Remove viewmodel and unlock first person
 	self:RemoveViewmodel()
 	self:UnlockFirstPerson()
-	
+
+	-- Force camera unlock as final safety measure
+	pcall(function()
+		player.CameraMode = Enum.CameraMode.Classic
+		player.CameraMaxZoomDistance = 400
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end)
+
 	print("ViewmodelSystem cleaned up")
+end
+
+-- Add safety cleanup on character removing
+if player then
+	player.CharacterRemoving:Connect(function()
+		-- Force unlock camera when character is removed
+		pcall(function()
+			player.CameraMode = Enum.CameraMode.Classic
+			player.CameraMaxZoomDistance = 400
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		end)
+	end)
 end
 
 -- Alias for RemoveViewmodel for backward compatibility
 function ViewmodelSystem:DestroyViewmodel()
 	return self:RemoveViewmodel()
+end
+
+-- Notify ScopeSystem when aiming (called by weapon scripts)
+function ViewmodelSystem:SetAiming(isAiming)
+	-- Update GlobalStateManager with aiming state
+	GlobalStateManager:UpdatePlayerState(player, "IsAiming", isAiming)
+
+	-- Notify ScopeSystem
+	if ScopeSystem and ScopeSystem.OnAiming then
+		ScopeSystem:OnAiming(isAiming)
+	end
+
+	print("Aiming state updated:", isAiming)
+end
+
+-- Check if scope system is active
+function ViewmodelSystem:IsScopeSystemActive()
+	return ScopeSystem and ScopeSystem:IsScoped() or false
 end
 
 return ViewmodelSystem

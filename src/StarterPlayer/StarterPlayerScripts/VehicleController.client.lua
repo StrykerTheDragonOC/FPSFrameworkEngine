@@ -7,10 +7,6 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 
--- Initialize RemoteEvents
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-RemoteEventsManager:Initialize()
-
 -- Vehicle state
 local currentVehicle = nil
 local currentSeat = nil

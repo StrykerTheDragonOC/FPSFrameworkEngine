@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 local SpottingHandler = {}
 
@@ -11,10 +10,9 @@ local spottedPlayers = {} -- [targetPlayer] = {spotter, startTime, duration}
 local mapPings = {}
 
 function SpottingHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	
 	-- Handle spot requests
-	local spotPlayerEvent = RemoteEventsManager:GetEvent("SpotPlayer")
+	local spotPlayerEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpotPlayer")
 	if spotPlayerEvent then
 		spotPlayerEvent.OnServerEvent:Connect(function(player, spotData)
 			self:HandleSpotRequest(player, spotData)
@@ -22,7 +20,7 @@ function SpottingHandler:Initialize()
 	end
 	
 	-- Handle lose spot requests
-	local loseSpotEvent = RemoteEventsManager:GetEvent("LoseSpot")
+	local loseSpotEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LoseSpot")
 	if loseSpotEvent then
 		loseSpotEvent.OnServerEvent:Connect(function(player, spotData)
 			self:HandleLoseSpot(player, spotData)
@@ -30,7 +28,7 @@ function SpottingHandler:Initialize()
 	end
 	
 	-- Handle map ping requests
-	local mapPingEvent = RemoteEventsManager:GetEvent("CreateMapPing")
+	local mapPingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("CreateMapPing")
 	if mapPingEvent then
 		mapPingEvent.OnServerEvent:Connect(function(player, pingData)
 			self:HandleMapPing(player, pingData)
@@ -121,13 +119,16 @@ function SpottingHandler:HandleMapPing(pinger, pingData)
 	}
 	
 	-- Notify team members
-	for _, player in pairs(Players:GetPlayers()) do
-		if player.Team == pinger.Team then
-			RemoteEventsManager:FireClient(player, "MapPing", {
-				Position = position,
-				Message = message,
-				Pinger = pinger
-			})
+	local createMapPingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("CreateMapPing")
+	if createMapPingEvent then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player.Team == pinger.Team then
+				createMapPingEvent:FireClient(player, {
+					Position = position,
+					Message = message,
+					Pinger = pinger
+				})
+			end
 		end
 	end
 	
@@ -160,13 +161,16 @@ function SpottingHandler:NotifyTeamOfSpot(spotter, target, duration)
 	if not spotter.Team then return end
 	
 	-- Notify all team members
-	for _, player in pairs(Players:GetPlayers()) do
-		if player.Team == spotter.Team then
-			RemoteEventsManager:FireClient(player, "PlayerSpotted", {
-				Player = target,
-				Spotter = spotter,
-				Duration = duration
-			})
+	local spotPlayerEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpotPlayer")
+	if spotPlayerEvent then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player.Team == spotter.Team then
+				spotPlayerEvent:FireClient(player, {
+					Player = target,
+					Spotter = spotter,
+					Duration = duration
+				})
+			end
 		end
 	end
 	
@@ -178,11 +182,14 @@ function SpottingHandler:NotifyTeamOfSpotRemoval(requester, target)
 	if not requester.Team then return end
 	
 	-- Notify all team members
-	for _, player in pairs(Players:GetPlayers()) do
-		if player.Team == requester.Team then
-			RemoteEventsManager:FireClient(player, "SpotRemoved", {
-				Player = target
-			})
+	local loseSpotEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("LoseSpot")
+	if loseSpotEvent then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player.Team == requester.Team then
+				loseSpotEvent:FireClient(player, {
+					Player = target
+				})
+			end
 		end
 	end
 end

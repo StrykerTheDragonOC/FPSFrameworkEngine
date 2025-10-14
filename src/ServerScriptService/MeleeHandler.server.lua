@@ -1,18 +1,16 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local MeleeSystem = require(ReplicatedStorage.FPSSystem.Modules.MeleeSystem)
 local DamageSystem = require(ReplicatedStorage.FPSSystem.Modules.DamageSystem)
 
 local MeleeHandler = {}
 
 function MeleeHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DamageSystem:Initialize()
 	
 	-- Handle melee attacks
-	local meleeAttackEvent = RemoteEventsManager:GetEvent("MeleeAttack")
+	local meleeAttackEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeAttack")
 	if meleeAttackEvent then
 		meleeAttackEvent.OnServerEvent:Connect(function(player, attackData)
 			self:HandleMeleeAttack(player, attackData)
@@ -83,16 +81,19 @@ function MeleeHandler:HandleMeleeAttack(attacker, attackData)
 	
 	if success then
 		-- Notify clients of hit effect
-		RemoteEventsManager:FireAllClients("MeleeHit", {
-			Attacker = attacker.Name,
-			Target = target.Name,
-			Damage = baseDamage,
-			WeaponName = weaponName,
-			IsBackstab = isBackstab,
-			IsSpecialAttack = isSpecialAttack,
-			HitPosition = attackData.HitPosition,
-			HitNormal = attackData.HitNormal
-		})
+		local meleeAttackEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("MeleeAttack")
+		if meleeAttackEvent then
+			meleeAttackEvent:FireAllClients({
+				Attacker = attacker.Name,
+				Target = target.Name,
+				Damage = baseDamage,
+				WeaponName = weaponName,
+				IsBackstab = isBackstab,
+				IsSpecialAttack = isSpecialAttack,
+				HitPosition = attackData.HitPosition,
+				HitNormal = attackData.HitNormal
+			})
+		end
 		
 		-- Award XP for melee kills
 		if target.Character.Humanoid.Health <= 0 then

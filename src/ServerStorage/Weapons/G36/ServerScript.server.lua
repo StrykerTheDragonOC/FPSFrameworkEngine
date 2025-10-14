@@ -1,83 +1,89 @@
+--[[
+	G36 Server Script
+	Fixed version with proper remote events
+	Handles server-side weapon validation and damage
+]]
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
+repeat task.wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
+-- Modules
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 local DamageSystem = require(ReplicatedStorage.FPSSystem.Modules.DamageSystem)
+
+-- Remote Events (NO RemoteEventsManager!)
+local RemoteEvents = ReplicatedStorage.FPSSystem.RemoteEvents
+local WeaponFired = RemoteEvents:WaitForChild("WeaponFired")
 
 local tool = script.Parent
 local weaponName = tool.Name
 
 local lastFireTimes = {}
 
-function onWeaponFired(player, fireData)
+-- Handle weapon fired event from client
+function onWeaponFired(player, weaponName, origin, direction, raycastResult)
 	-- Validate player owns this tool
 	if not player.Character or not player.Character:FindFirstChild(weaponName) then
 		return
 	end
-	
+
 	-- Rate limiting
 	local currentTime = tick()
 	local lastTime = lastFireTimes[player] or 0
 	local weaponStats = WeaponConfig:GetWeaponStats(weaponName)
-	local fireRate = 60 / weaponStats.FireRate
-	
+	local fireRate = 60 / (weaponStats.FireRate or 750)
+
 	if currentTime - lastTime < fireRate then
 		return
 	end
-	
+
 	lastFireTimes[player] = currentTime
-	
-	-- Validate hit
-	if fireData.Hit and fireData.Hit.Character then
-		local targetCharacter = fireData.Hit.Character
-		local targetPlayer = Players:GetPlayerFromCharacter(targetCharacter)
-		
-		if targetPlayer and targetPlayer ~= player then
-			-- Apply damage
-			local damage = weaponStats.Damage
-			if fireData.Hit.Part.Name == "Head" then
-				damage = damage * weaponStats.HeadshotMultiplier
+
+	-- Validate and apply damage if hit
+	if raycastResult and raycastResult.Instance then
+		local hitPart = raycastResult.Instance
+		local targetCharacter = hitPart.Parent
+
+		if targetCharacter and targetCharacter:FindFirstChild("Humanoid") then
+			local targetPlayer = Players:GetPlayerFromCharacter(targetCharacter)
+
+			if targetPlayer and targetPlayer ~= player then
+				-- Calculate damage
+				local damage = weaponStats.Damage or 35
+				if hitPart.Name == "Head" then
+					damage = damage * (weaponStats.HeadshotMultiplier or 2.0)
+				end
+
+				-- Apply damage through DamageSystem
+				DamageSystem:DamagePlayer(targetPlayer, player, {
+					Damage = damage,
+					WeaponName = weaponName,
+					HitPart = hitPart.Name,
+					Distance = raycastResult.Distance or 0,
+					IsHeadshot = hitPart.Name == "Head"
+				})
 			end
-			
-			DamageSystem:DamagePlayer(targetPlayer, player, {
-				Damage = damage,
-				WeaponName = weaponName,
-				HitPart = fireData.Hit.Part.Name,
-				Distance = fireData.Distance,
-				IsHeadshot = fireData.Hit.Part.Name == "Head"
-			})
 		end
 	end
-	
-	-- Broadcast to other players (not the shooter)
+
+	-- Broadcast to other players (not the shooter) for visual effects
 	for _, otherPlayer in pairs(Players:GetPlayers()) do
 		if otherPlayer ~= player then
-			RemoteEventsManager:FireClient(otherPlayer, "WeaponFired", player, fireData)
+			WeaponFired:FireClient(otherPlayer, player, weaponName, origin, direction, raycastResult)
 		end
 	end
 end
 
+-- Clean up player data on leave
 function onPlayerRemoving(player)
 	lastFireTimes[player] = nil
 end
 
--- Initialize only if methods exist
-if RemoteEventsManager.Initialize then
-	RemoteEventsManager:Initialize()
-end
-
-if DamageSystem.Initialize then
-	DamageSystem:Initialize()
-end
-
 -- Connect events
-local weaponFiredEvent = RemoteEventsManager:GetEvent("WeaponFired")
-if weaponFiredEvent then
-	weaponFiredEvent.OnServerEvent:Connect(onWeaponFired)
-end
-
+WeaponFired.OnServerEvent:Connect(onWeaponFired)
 Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+print("G36 server script loaded ✓")

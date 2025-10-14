@@ -3,7 +3,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GrenadeSystem = require(ReplicatedStorage.FPSSystem.Modules.GrenadeSystem)
 local DamageSystem = require(ReplicatedStorage.FPSSystem.Modules.DamageSystem)
 
@@ -13,11 +12,10 @@ local activeGrenades = {}
 local placedC4s = {}
 
 function GrenadeHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DamageSystem:Initialize()
 	
 	-- Handle grenade throws
-	local throwGrenadeEvent = RemoteEventsManager:GetEvent("ThrowGrenade")
+	local throwGrenadeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ThrowGrenade")
 	if throwGrenadeEvent then
 		throwGrenadeEvent.OnServerEvent:Connect(function(player, grenadeData)
 			self:HandleGrenadeThrow(player, grenadeData)
@@ -25,7 +23,7 @@ function GrenadeHandler:Initialize()
 	end
 	
 	-- Handle C4 detonation
-	local detonateC4Event = RemoteEventsManager:GetEvent("DetonateC4")
+	local detonateC4Event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DetonateC4")
 	if detonateC4Event then
 		detonateC4Event.OnServerEvent:Connect(function(player)
 			self:DetonatePlayerC4(player)
@@ -274,12 +272,15 @@ function GrenadeHandler:ExplodeGrenade(grenadeId)
 	end
 	
 	-- Notify all clients of explosion
-	RemoteEventsManager:FireAllClients("GrenadeExploded", {
-		Position = explosionPos,
-		GrenadeType = grenadeData.Config.Name,
-		Radius = config.ExplosionRadius or config.EffectRadius or config.SmokeRadius,
-		Effect = config.Effect
-	})
+	local grenadeExplodedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GrenadeThrown")
+	if grenadeExplodedEvent then
+		grenadeExplodedEvent:FireAllClients({
+			Position = explosionPos,
+			GrenadeType = grenadeData.Config.Name,
+			Radius = config.ExplosionRadius or config.EffectRadius or config.SmokeRadius,
+			Effect = config.Effect
+		})
+	end
 	
 	-- Clean up
 	grenade:Destroy()

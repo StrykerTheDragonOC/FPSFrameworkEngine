@@ -13,8 +13,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- Wait for FPS System to load
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -208,17 +206,26 @@ function AdminPanel:CreateBountySection(parent)
 
 	-- Open Bounty System
 	local openBountyButton = self:CreateActionButton(section, "Open Bounty System", function()
-		RemoteEventsManager:FireServer("OpenBountySystem")
+		local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("OpenBountySystem")
+		if event then
+			event:FireServer()
+		end
 	end)
 
 	-- Clear All Bounties
 	local clearBountiesButton = self:CreateActionButton(section, "Clear All Bounties", function()
-		RemoteEventsManager:FireServer("ClearAllBounties")
+		local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClearAllBounties")
+		if event then
+			event:FireServer()
+		end
 	end)
 
 	-- Reset Bounty UI (fix stuck UI bug)
 	local resetUIButton = self:CreateActionButton(section, "Reset Bounty UI", function()
-		RemoteEventsManager:FireServer("ResetBountyUI")
+		local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ResetBountyUI")
+		if event then
+			event:FireServer()
+		end
 	end)
 end
 
@@ -229,7 +236,10 @@ function AdminPanel:CreateVehicleSection(parent)
 	local spawnTankButton = self:CreateActionButton(section, "Spawn Test Tank", function()
 		if player.Character and player.Character.PrimaryPart then
 			local position = player.Character.PrimaryPart.Position + Vector3.new(10, 5, 0)
-			RemoteEventsManager:FireServer("SpawnVehicle", "Tank", position)
+			local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpawnVehicle")
+			if event then
+				event:FireServer("Tank", position)
+			end
 		end
 	end)
 
@@ -237,13 +247,19 @@ function AdminPanel:CreateVehicleSection(parent)
 	local spawnHeliButton = self:CreateActionButton(section, "Spawn Test Helicopter", function()
 		if player.Character and player.Character.PrimaryPart then
 			local position = player.Character.PrimaryPart.Position + Vector3.new(0, 15, 10)
-			RemoteEventsManager:FireServer("SpawnVehicle", "Helicopter", position)
+			local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SpawnVehicle")
+			if event then
+				event:FireServer("Helicopter", position)
+			end
 		end
 	end)
 
 	-- Clear Vehicles
 	local clearVehiclesButton = self:CreateActionButton(section, "Clear All Vehicles", function()
-		RemoteEventsManager:FireServer("ClearVehicles")
+		local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClearVehicles")
+		if event then
+			event:FireServer()
+		end
 	end)
 end
 
@@ -510,7 +526,10 @@ function AdminPanel:PlayGlobalSound(soundId)
 	currentSoundId = soundId
 
 	-- Notify all clients
-	RemoteEventsManager:FireServer("PlayGlobalSound", soundId)
+	local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayGlobalSound")
+	if event then
+		event:FireServer(soundId)
+	end
 end
 
 function AdminPanel:StopGlobalSounds()
@@ -522,7 +541,10 @@ function AdminPanel:StopGlobalSounds()
 		end
 	end
 
-	RemoteEventsManager:FireServer("StopGlobalSounds")
+	local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StopGlobalSounds")
+	if event then
+		event:FireServer()
+	end
 end
 
 function AdminPanel:UpdatePlayerList(playerList)
@@ -560,15 +582,15 @@ end
 
 function AdminPanel:Initialize()
 	-- Check if player is admin
-	isPlayerAdmin = RemoteEventsManager:InvokeServer("IsPlayerAdmin")
+	local isAdminEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("IsPlayerAdmin")
+	if isAdminEvent and isAdminEvent:IsA("RemoteFunction") then
+		isPlayerAdmin = isAdminEvent:InvokeServer()
+	end
 
 	if not isPlayerAdmin then
 		warn("AdminPanel: Player is not admin, panel will not be created")
 		return
 	end
-
-	-- Initialize remote events
-	RemoteEventsManager:Initialize()
 
 	-- Create the panel UI
 	self:CreateAdminPanelUI()
@@ -578,7 +600,10 @@ function AdminPanel:Initialize()
 		if gameProcessed then return end
 
 		if input.KeyCode == Enum.KeyCode.B and bountyToggleEnabled then
-			RemoteEventsManager:FireServer("ToggleBountySystem")
+			local event = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ToggleBountySystem")
+			if event then
+				event:FireServer()
+			end
 		end
 	end)
 

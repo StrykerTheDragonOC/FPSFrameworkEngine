@@ -5,7 +5,6 @@ local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 
 local FBI_TEAM_NAME = "FBI"
@@ -65,13 +64,17 @@ function TeamManager:AssignPlayerToTeam(player, teamName)
 	--         player.Character.Humanoid.Health = 0
 	--     end
 	-- end
-	
+
+
 	print(player.Name .. " assigned to " .. teamName .. " team")
-	
-	RemoteEventsManager:FireAllClients("UpdateStats", player, {
-		Team = teamName
-	})
-	
+
+	local updateStatsEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UpdateStats")
+	if updateStatsEvent then
+		updateStatsEvent:FireAllClients(player, {
+			Team = teamName
+		})
+	end
+
 	return true
 end
 
@@ -97,8 +100,7 @@ end
 function TeamManager:Initialize()
 	if RunService:IsServer() then
 		self:CreateTeams()
-		RemoteEventsManager:Initialize()
-		
+
 		Players.PlayerAdded:Connect(function(player)
 			self:OnPlayerJoined(player)
 		end)
@@ -175,11 +177,14 @@ function TeamManager:DeployPlayer(player, preferredTeam)
 		if data then
 			data.Deployed = true
 		end
-		
-		RemoteEventsManager:FireClient(player, "PlayerDeployed", {
-			Team = targetTeam,
-			TeamColor = self:GetTeamColor(targetTeam)
-		})
+
+		local playerDeployedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerDeployed")
+		if playerDeployedEvent then
+			playerDeployedEvent:FireClient(player, {
+				Team = targetTeam,
+				TeamColor = self:GetTeamColor(targetTeam)
+			})
+		end
 	end
 	
 	return success
@@ -232,9 +237,12 @@ end
 function TeamManager:AddTeamScore(teamName, points)
 	if teamScores[teamName] then
 		teamScores[teamName] = teamScores[teamName] + points
-		RemoteEventsManager:FireAllClients("UpdateStats", {
-			TeamScores = teamScores
-		})
+		local updateStatsEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UpdateStats")
+		if updateStatsEvent then
+			updateStatsEvent:FireAllClients({
+				TeamScores = teamScores
+			})
+		end
 	end
 end
 

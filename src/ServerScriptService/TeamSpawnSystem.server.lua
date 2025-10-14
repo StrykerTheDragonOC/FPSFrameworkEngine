@@ -4,7 +4,6 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local GameConfig = require(ReplicatedStorage.FPSSystem.Modules.GameConfig)
 
 local TeamSpawnSystem = {}
@@ -13,19 +12,18 @@ local spawnLocations = {}
 local playerRespawnTimes = {}
 
 function TeamSpawnSystem:Initialize()
-	RemoteEventsManager:Initialize()
 	GameConfig:Initialize()
-	
+
 	self:LoadSpawnLocations()
-	
-	local getTeamSpawnsFunction = RemoteEventsManager:GetFunction("GetTeamSpawns")
+
+	local getTeamSpawnsFunction = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("GetTeamSpawns")
 	if getTeamSpawnsFunction then
 		getTeamSpawnsFunction.OnServerInvoke = function(player, teamName)
 			return self:GetTeamSpawnLocations(teamName)
 		end
 	end
-	
-	local playerSpawnedEvent = RemoteEventsManager:GetEvent("PlayerSpawned")
+
+	local playerSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerSpawned")
 	
 	Players.PlayerAdded:Connect(function(player)
 		player.CharacterAdded:Connect(function(character)
@@ -190,11 +188,14 @@ function TeamSpawnSystem:HandlePlayerSpawned(player, character)
 	end
 	
 	self:SpawnPlayerAtTeamSpawn(player)
-	
-	RemoteEventsManager:FireClient(player, "PlayerSpawned", {
-		TeamName = player.Team and player.Team.Name or "None",
-		SpawnTime = tick()
-	})
+
+	local playerSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PlayerSpawned")
+	if playerSpawnedEvent then
+		playerSpawnedEvent:FireClient(player, {
+			TeamName = player.Team and player.Team.Name or "None",
+			SpawnTime = tick()
+		})
+	end
 	
 	playerRespawnTimes[player] = nil
 end

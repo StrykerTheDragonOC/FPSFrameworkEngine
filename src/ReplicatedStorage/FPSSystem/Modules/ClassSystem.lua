@@ -6,8 +6,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 local player = Players.LocalPlayer
 
 -- Class configurations
@@ -282,8 +280,6 @@ local classSelectorOpen = false
 local abilityIndicators = {}
 
 function ClassSystem:Initialize()
-	RemoteEventsManager:Initialize()
-	
 	-- Setup player class data
 	self:InitializePlayerClass()
 	
@@ -540,14 +536,14 @@ function ClassSystem:SetupInputHandling()
 end
 
 function ClassSystem:SetupRemoteEvents()
-	local classUpdateEvent = RemoteEventsManager:GetEvent("ClassUpdate")
+	local classUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClassUpdate")
 	if classUpdateEvent then
 		classUpdateEvent.OnClientEvent:Connect(function(classData)
 			self:HandleClassUpdate(classData)
 		end)
 	end
-	
-	local classUnlockEvent = RemoteEventsManager:GetEvent("ClassUnlock")
+
+	local classUnlockEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ClassUnlock")
 	if classUnlockEvent then
 		classUnlockEvent.OnClientEvent:Connect(function(unlockedClass)
 			self:HandleClassUnlock(unlockedClass)
@@ -746,11 +742,14 @@ function ClassSystem:SelectClass(className)
 	-- Update UI
 	self:UpdateClassIndicator()
 	self:SetupAbilityIndicators()
-	
+
 	-- Notify server
-	RemoteEventsManager:FireServer("SelectClass", {
-		ClassName = className
-	})
+	local selectClassEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("SelectClass")
+	if selectClassEvent then
+		selectClassEvent:FireServer({
+			ClassName = className
+		})
+	end
 	
 	-- Apply class modifiers
 	self:ApplyClassModifiers()
@@ -818,12 +817,16 @@ function ClassSystem:UseAbility(abilityName)
 		-- Instant effect
 		self:ApplyInstantEffect(ability)
 	end
-	
+
+
 	-- Notify server
-	RemoteEventsManager:FireServer("UseAbility", {
-		AbilityName = abilityName,
-		ClassName = playerClassData.CurrentClass
-	})
+	local useAbilityEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UseAbility")
+	if useAbilityEvent then
+		useAbilityEvent:FireServer({
+			AbilityName = abilityName,
+			ClassName = playerClassData.CurrentClass
+		})
+	end
 end
 
 function ClassSystem:ApplyInstantEffect(ability)

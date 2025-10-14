@@ -8,14 +8,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 repeat task.wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
 local VotingSystem = require(ReplicatedStorage.FPSSystem.Modules.VotingSystem)
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 
 -- Initialize systems
-RemoteEventsManager:Initialize()
 VotingSystem:Initialize()
 
 -- Handle voting events
-local voteEvent = RemoteEventsManager:GetEvent("VoteForGamemode")
+local voteEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("VoteForGamemode")
 if voteEvent then
     voteEvent.OnServerEvent:Connect(function(player, gamemode)
         print("Received vote from", player.Name, "for", gamemode)

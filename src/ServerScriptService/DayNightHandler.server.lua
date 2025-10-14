@@ -2,13 +2,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
 local DayNightSystem = require(ReplicatedStorage.FPSSystem.Modules.DayNightSystem)
 
 local DayNightHandler = {}
 
 function DayNightHandler:Initialize()
-	RemoteEventsManager:Initialize()
 	DayNightSystem:Initialize()
 	
 	-- Sync time with clients every few seconds
@@ -35,22 +33,28 @@ function DayNightHandler:SyncTimeWithClients()
 	local currentPreset = DayNightSystem:GetCurrentPresetName()
 	
 	-- Send to all clients
-	for _, player in pairs(Players:GetPlayers()) do
-		RemoteEventsManager:FireClient(player, "TimeUpdate", {
-			Time = currentTime,
-			Preset = currentPreset
-		})
+	local timeUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TimeUpdate")
+	if timeUpdateEvent then
+		for _, player in pairs(Players:GetPlayers()) do
+			timeUpdateEvent:FireClient(player, {
+				Time = currentTime,
+				Preset = currentPreset
+			})
+		end
 	end
 end
 
 function DayNightHandler:SyncTimeWithPlayer(player)
 	local currentTime = DayNightSystem:GetCurrentTime()
 	local currentPreset = DayNightSystem:GetCurrentPresetName()
-	
-	RemoteEventsManager:FireClient(player, "TimeUpdate", {
-		Time = currentTime,
-		Preset = currentPreset
-	})
+
+	local timeUpdateEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("TimeUpdate")
+	if timeUpdateEvent then
+		timeUpdateEvent:FireClient(player, {
+			Time = currentTime,
+			Preset = currentPreset
+		})
+	end
 end
 
 -- Server commands for admins

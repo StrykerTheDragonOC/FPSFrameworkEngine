@@ -6,8 +6,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local RemoteEventsManager = require(ReplicatedStorage.FPSSystem.RemoteEvents.RemoteEventsManager)
-
 function WeaponBase.new(tool, config)
 	local self = setmetatable({}, WeaponBase)
 	
@@ -29,8 +27,6 @@ function WeaponBase.new(tool, config)
 end
 
 function WeaponBase:InitializeWeapon()
-	RemoteEventsManager:Initialize()
-	
 	-- Setup weapon events
 	self:SetupWeaponEvents()
 	
@@ -64,13 +60,16 @@ function WeaponBase:Fire()
 	-- Consume ammo
 	self.currentAmmo = self.currentAmmo - 1
 	self.lastFireTime = currentTime
-	
+
 	-- Send fire event to server
-	RemoteEventsManager:FireServer("WeaponFire", {
-		WeaponName = self.tool.Name,
-		FirePosition = self.character.Head.Position,
-		FireDirection = self.character.Head.CFrame.LookVector
-	})
+	local weaponFireEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("WeaponFire")
+	if weaponFireEvent then
+		weaponFireEvent:FireServer({
+			WeaponName = self.tool.Name,
+			FirePosition = self.character.Head.Position,
+			FireDirection = self.character.Head.CFrame.LookVector
+		})
+	end
 	
 	-- Apply recoil
 	self:ApplyRecoil()
