@@ -97,8 +97,12 @@ function DeployHandler:DeployPlayer(player, requestedTeam)
 		TeamManager:BalanceTeams(player)
 	end
 
+	-- Wait a moment for team assignment to take effect
+	wait(0.2)
+
 	-- Update deployed data with actual team
 	deployedPlayers[player].Team = player.Team and player.Team.Name or "Lobby"
+	print("✓ Player team after assignment:", player.Team and player.Team.Name or "nil")
 
 	-- Mark as deployed in TeamManager
 	local teamData = rawget(TeamManager, "playerTeamData") or {}
@@ -119,15 +123,17 @@ function DeployHandler:DeployPlayer(player, requestedTeam)
 
 	if not _G.TeamSpawnSystem then
 		warn("TeamSpawnSystem not available - spawning may not work correctly")
+	else
+		print("✓ TeamSpawnSystem ready, spawning player...")
 	end
 
 	-- Kill player if they have a character to force respawn at team spawn
 	if player.Character and player.Character:FindFirstChild("Humanoid") then
-		print("Respawning", player.Name, "at team spawn")
+		print("Respawning", player.Name, "at team spawn for team:", player.Team and player.Team.Name or "nil")
 		player.Character.Humanoid.Health = 0
 	else
 		-- If no character exists, load one
-		print("Loading character for", player.Name)
+		print("Loading character for", player.Name, "team:", player.Team and player.Team.Name or "nil")
 		player:LoadCharacter()
 	end
 
@@ -156,7 +162,7 @@ function DeployHandler:SetupPlayerLoadout(player)
 		Secondary = weaponPool.Secondary,
 		Melee = weaponPool.Melee,
 		Grenade = weaponPool.Grenade,
-		Magic = weaponPool.Magic
+		Special = weaponPool.Special
 	}
 
 	print("Set up loadout for", player.Name, ":", playerLoadouts[player].Primary, playerLoadouts[player].Secondary)

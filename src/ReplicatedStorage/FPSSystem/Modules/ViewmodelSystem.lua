@@ -103,9 +103,35 @@ function ViewmodelSystem:Initialize()
 	print("ViewmodelSystem initialized with first-person lock")
 end
 
+-- Check if player is deployed (not in lobby)
+function ViewmodelSystem:IsPlayerDeployed()
+	if not player.Team then return false end
+
+	local teamName = player.Team.Name
+
+	-- Check if player is on a gameplay team (not Lobby)
+	if teamName == "Lobby" or teamName == "Spectator" then
+		return false
+	end
+
+	-- Check DeployHandler if available
+	if _G.DeployHandler and _G.DeployHandler.IsPlayerDeployed then
+		return _G.DeployHandler:IsPlayerDeployed(player)
+	end
+
+	-- Fallback: assume deployed if on KFC or FBI team
+	return teamName == "KFC" or teamName == "FBI"
+end
+
 -- First-person camera lock system
 function ViewmodelSystem:LockFirstPerson()
 	if isFirstPersonLocked then return end
+
+	-- IMPORTANT: Don't lock camera if player isn't deployed
+	if not self:IsPlayerDeployed() then
+		print("⚠ Skipping camera lock - player not deployed yet")
+		return
+	end
 
 	-- Store original values
 	if not originalMaxZoomDistance then
@@ -146,32 +172,45 @@ function ViewmodelSystem:UnlockFirstPerson()
 	isFirstPersonLocked = false
 	fpsWeaponEquipped = false
 
-	-- Restore original camera settings with multiple attempts for safety
-	local success = pcall(function()
+	-- Enhanced unlock with multiple retry attempts
+	local function attemptUnlock()
 		player.CameraMode = Enum.CameraMode.Classic
 		player.CameraMaxZoomDistance = originalMaxZoomDistance or 400
 		player.CameraMinZoomDistance = 0.5
-
-		-- Also reset MouseBehavior to allow mouse movement
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-
-		-- Reset to default FOV
 		Camera.FieldOfView = 70
-	end)
-
-	if not success then
-		warn("Failed to unlock first person view, retrying...")
-		-- Fallback: Force unlock with delay
-		task.wait(0.1)
-		pcall(function()
-			player.CameraMode = Enum.CameraMode.Classic
-			player.CameraMaxZoomDistance = 400
-			player.CameraMinZoomDistance = 0.5
-			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-		end)
 	end
 
-	print("✓ First-person view unlocked")
+	-- First attempt
+	local success, err = pcall(attemptUnlock)
+
+	if not success then
+		warn("⚠ Camera unlock failed (attempt 1):", err)
+
+		-- Retry attempt 1 (with small delay)
+		task.spawn(function()
+			task.wait(0.05)
+			local success2 = pcall(attemptUnlock)
+
+			if not success2 then
+				warn("⚠ Camera unlock failed (attempt 2)")
+
+				-- Retry attempt 2 (with longer delay)
+				task.wait(0.15)
+				local success3 = pcall(attemptUnlock)
+
+				if not success3 then
+					warn("❌ Camera unlock failed after 3 attempts - use _G.ForceUnlockCamera()")
+				else
+					print("✓ First-person view unlocked (attempt 3)")
+				end
+			else
+				print("✓ First-person view unlocked (attempt 2)")
+			end
+		end)
+	else
+		print("✓ First-person view unlocked")
+	end
 end
 
 -- Enhanced mouse sway with multiple layers
@@ -426,34 +465,65 @@ function ViewmodelSystem:CreateViewmodel(weaponName)
 
 	-- Find CameraPart and connect to head
 	local cameraPart = activeViewmodel:FindFirstChild("CameraPart", true)
-	if cameraPart and cameraPart:IsA("BasePart") then
-		print("✓ Found CameraPart in viewmodel")
 
-		-- Set CameraPart as primary part
-		if activeViewmodel:IsA("Model") then
-			activeViewmodel.PrimaryPart = cameraPart
-		end
+	if not cameraPart or not cameraPart:IsA("BasePart") then
+		-- CameraPart not found - create one automatically
+		warn("⚠ CameraPart not found in viewmodel - creating automatic fallback")
 
-		-- Wait for character head
-		if player.Character then
-			local head = player.Character:WaitForChild("Head", 3)
-			if head then
-				-- Create weld between CameraPart and Camera
-				cameraPart.CFrame = Camera.CFrame
-				cameraPart.Anchored = false
+		-- Find a suitable part to position the camera at
+		local referencePart = activeViewmodel:FindFirstChildOfClass("BasePart")
 
-				print("✓ CameraPart connected to camera")
-			else
-				warn("Head not found in character")
-			end
+		if referencePart and activeViewmodel:IsA("Model") then
+			-- Create new CameraPart
+			cameraPart = Instance.new("Part")
+			cameraPart.Name = "CameraPart"
+			cameraPart.Size = Vector3.new(0.2, 0.2, 0.2) -- Small part
+			cameraPart.Transparency = 1 -- Invisible
+			cameraPart.CanCollide = false
+			cameraPart.Massless = true
+			cameraPart.Anchored = false
+			cameraPart.CastShadow = false
+
+			-- Position it at reference part location (usually grip/handle)
+			-- Offset slightly forward and to the right for typical viewmodel position
+			local offset = CFrame.new(0.5, -0.3, -0.5)
+			cameraPart.CFrame = referencePart.CFrame * offset
+
+			-- Parent to viewmodel
+			cameraPart.Parent = activeViewmodel
+
+			-- Weld to reference part so it moves with the viewmodel
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = cameraPart
+			weld.Part1 = referencePart
+			weld.Parent = cameraPart
+
+			print("✓ Created automatic CameraPart at", weaponName, "viewmodel")
+		else
+			warn("❌ Cannot create CameraPart - no suitable reference part found")
+			return
 		end
 	else
-		warn("CameraPart not found in viewmodel - viewmodel may not display correctly")
-		-- Try to find any part to use as primary
-		local primaryPart = activeViewmodel:FindFirstChildOfClass("BasePart")
-		if primaryPart and activeViewmodel:IsA("Model") then
-			activeViewmodel.PrimaryPart = primaryPart
-			print("Using " .. primaryPart.Name .. " as primary part")
+		print("✓ Found CameraPart in viewmodel")
+	end
+
+	-- Set CameraPart as primary part
+	if cameraPart and activeViewmodel:IsA("Model") then
+		activeViewmodel.PrimaryPart = cameraPart
+		print("✓ Set CameraPart as PrimaryPart")
+	end
+
+	-- Connect CameraPart to camera
+	if cameraPart and player.Character then
+		local head = player.Character:WaitForChild("Head", 3)
+		if head then
+			-- Position at camera
+			cameraPart.CFrame = Camera.CFrame
+			cameraPart.Anchored = false
+
+			print("✓ CameraPart connected to camera")
+		else
+			warn("Head not found in character")
 		end
 	end
 
@@ -674,5 +744,238 @@ end
 function ViewmodelSystem:IsScopeSystemActive()
 	return ScopeSystem and ScopeSystem:IsScoped() or false
 end
+
+-- Emergency camera unlock function (accessible via _G)
+_G.ForceUnlockCamera = function()
+	print("🔧 Force unlocking camera...")
+
+	-- Force unlock all camera locks
+	pcall(function()
+		player.CameraMode = Enum.CameraMode.Classic
+		player.CameraMaxZoomDistance = 400
+		player.CameraMinZoomDistance = 0.5
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		Camera.FieldOfView = 70
+	end)
+
+	-- Reset ViewmodelSystem state
+	isFirstPersonLocked = false
+	fpsWeaponEquipped = false
+
+	-- Remove any active viewmodel
+	if activeViewmodel then
+		ViewmodelSystem:RemoveViewmodel()
+	end
+
+	print("✅ Camera force-unlocked! You can now zoom out.")
+end
+
+-- Debug function: Check viewmodel structure
+_G.CheckViewmodelStructure = function(weaponName)
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("🔍 VIEWMODEL STRUCTURE CHECK")
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("Weapon:", weaponName)
+	print("")
+
+	-- Get weapon config
+	local weaponConfig = WeaponConfig:GetWeaponConfig(weaponName)
+	if not weaponConfig then
+		warn("❌ No weapon config found for:", weaponName)
+		warn("")
+		warn("FIX: Add config to WeaponConfig.lua")
+		print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		return
+	end
+
+	print("✓ Config found")
+	print("  Category:", weaponConfig.Category)
+	print("  Type:", weaponConfig.Type)
+	print("")
+
+	-- Check viewmodel path
+	local viewmodelPath = ReplicatedStorage.FPSSystem:FindFirstChild("ViewModels") or ReplicatedStorage.FPSSystem:FindFirstChild("Viewmodels")
+	if not viewmodelPath then
+		warn("❌ ViewModels folder not found")
+		warn("")
+		warn("FIX: Create folder at ReplicatedStorage.FPSSystem.ViewModels")
+		print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		return
+	end
+
+	print("✓ ViewModels folder found:", viewmodelPath:GetFullName())
+	print("")
+
+	-- Check category folder
+	local categoryFolder = viewmodelPath:FindFirstChild(weaponConfig.Category)
+	if not categoryFolder then
+		warn("❌ Category folder not found:", weaponConfig.Category)
+		warn("")
+		warn("FIX: Create folder at", viewmodelPath:GetFullName() .. "/" .. weaponConfig.Category)
+		print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		return
+	end
+
+	print("✓ Category folder found:", categoryFolder:GetFullName())
+	print("")
+
+	-- Check type folder
+	local typeFolder = categoryFolder:FindFirstChild(weaponConfig.Type)
+	if not typeFolder then
+		warn("❌ Type folder not found:", weaponConfig.Type)
+		warn("")
+		warn("FIX: Create folder at", categoryFolder:GetFullName() .. "/" .. weaponConfig.Type)
+		print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		return
+	end
+
+	print("✓ Type folder found:", typeFolder:GetFullName())
+	print("")
+	print("Contents of type folder:")
+	for _, child in pairs(typeFolder:GetChildren()) do
+		print("  -", child.Name, "(" .. child.ClassName .. ")")
+	end
+	print("")
+
+	-- Check weapon model
+	local weaponFolder = typeFolder:FindFirstChild(weaponName)
+	local viewmodelModel = nil
+
+	if weaponFolder then
+		if weaponFolder:IsA("Model") or weaponFolder:IsA("Tool") then
+			viewmodelModel = weaponFolder
+			print("✓ Viewmodel found (direct RBXM):", weaponFolder.Name)
+		else
+			viewmodelModel = weaponFolder:FindFirstChildOfClass("Model") or weaponFolder:FindFirstChildOfClass("Tool")
+			if viewmodelModel then
+				print("✓ Viewmodel found (inside folder):", viewmodelModel.Name)
+			end
+		end
+	end
+
+	if not viewmodelModel then
+		warn("❌ Viewmodel not found")
+		warn("")
+		warn("FIX: Create Model or RBXM file at", typeFolder:GetFullName() .. "/" .. weaponName)
+		print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+		return
+	end
+
+	print("")
+
+	-- Check for CameraPart
+	local cameraPart = viewmodelModel:FindFirstChild("CameraPart", true)
+	if cameraPart and cameraPart:IsA("BasePart") then
+		print("✓ CameraPart found:", cameraPart:GetFullName())
+	else
+		warn("⚠ CameraPart not found (will be auto-created)")
+		warn("")
+		warn("RECOMMENDATION: Add a Part named 'CameraPart' to viewmodel")
+		warn("This ensures correct camera positioning")
+	end
+
+	print("")
+	print("Structure of viewmodel:")
+	local function printTree(instance, indent)
+		print(indent .. instance.Name .. " (" .. instance.ClassName .. ")")
+		for _, child in pairs(instance:GetChildren()) do
+			if indent == "" or #indent < 10 then -- Limit depth
+				printTree(child, indent .. "  ")
+			end
+		end
+	end
+	printTree(viewmodelModel, "")
+
+	print("")
+	print("✅ STRUCTURE CHECK COMPLETE")
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+end
+
+-- Debug function: Test viewmodel loading
+_G.DebugViewmodel = function(weaponName)
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("🧪 VIEWMODEL DEBUG TEST")
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("Weapon:", weaponName)
+	print("")
+
+	-- Check structure first
+	print("Running structure check...")
+	_G.CheckViewmodelStructure(weaponName)
+
+	print("")
+	print("Attempting to load viewmodel...")
+
+	-- Try to create viewmodel
+	local success, err = pcall(function()
+		ViewmodelSystem:CreateViewmodel(weaponName)
+	end)
+
+	if success then
+		print("✅ Viewmodel loaded successfully!")
+		print("")
+
+		if activeViewmodel then
+			print("Active viewmodel info:")
+			print("  Name:", activeViewmodel.Name)
+			print("  Class:", activeViewmodel.ClassName)
+			print("  Parent:", activeViewmodel.Parent and activeViewmodel.Parent.Name or "nil")
+
+			if activeViewmodel:IsA("Model") then
+				print("  PrimaryPart:", activeViewmodel.PrimaryPart and activeViewmodel.PrimaryPart.Name or "nil")
+			end
+
+			print("")
+			print("To remove this test viewmodel, run: _G.RemoveTestViewmodel()")
+		else
+			warn("⚠ Viewmodel loaded but activeViewmodel is nil")
+		end
+	else
+		warn("❌ Failed to load viewmodel:", err)
+	end
+
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+end
+
+-- Debug function: Remove test viewmodel
+_G.RemoveTestViewmodel = function()
+	print("Removing test viewmodel...")
+	ViewmodelSystem:RemoveViewmodel()
+	print("✓ Test viewmodel removed")
+end
+
+-- Debug function: Print current viewmodel info
+_G.ViewmodelInfo = function()
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("📊 VIEWMODEL SYSTEM INFO")
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	print("Active viewmodel:", activeViewmodel and activeViewmodel.Name or "None")
+	print("First-person locked:", isFirstPersonLocked)
+	print("FPS weapon equipped:", fpsWeaponEquipped)
+	print("Camera mode:", player.CameraMode.Name)
+	print("Camera max zoom:", player.CameraMaxZoomDistance)
+	print("")
+
+	if activeViewmodel then
+		print("Viewmodel details:")
+		print("  Class:", activeViewmodel.ClassName)
+		print("  Parent:", activeViewmodel.Parent and activeViewmodel.Parent.Name or "nil")
+
+		if activeViewmodel:IsA("Model") then
+			print("  PrimaryPart:", activeViewmodel.PrimaryPart and activeViewmodel.PrimaryPart.Name or "nil")
+		end
+
+		local cameraPart = activeViewmodel:FindFirstChild("CameraPart", true)
+		print("  CameraPart:", cameraPart and "Found" or "Not found")
+	end
+
+	print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+end
+
+print("✓ ViewmodelSystem loaded - Debug functions available:")
+print("  _G.CheckViewmodelStructure(weaponName) - Check if viewmodel structure is correct")
+print("  _G.DebugViewmodel(weaponName) - Test loading a viewmodel")
+print("  _G.ViewmodelInfo() - Show current viewmodel status")
+print("  _G.ForceUnlockCamera() - Emergency camera unlock")
 
 return ViewmodelSystem

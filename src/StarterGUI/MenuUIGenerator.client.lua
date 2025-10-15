@@ -324,7 +324,235 @@ function MenuGenerator:CreateDeploySection(parent)
 		end
 	end
 
+	-- Add gamemode voting panel
+	self:CreateGamemodeVotingPanel(section)
+
 	return section
+end
+
+-- Create Gamemode Voting Panel
+function MenuGenerator:CreateGamemodeVotingPanel(deploySection)
+	-- Voting panel container (hidden by default)
+	local votingPanel = Instance.new("Frame")
+	votingPanel.Name = "VotingPanel"
+	votingPanel.Size = UDim2.new(1, -40, 0, 200)
+	votingPanel.Position = UDim2.new(0, 20, 0.7, 0)
+	votingPanel.BackgroundColor3 = Color3.fromRGB(20, 25, 30)
+	votingPanel.BorderSizePixel = 0
+	votingPanel.Visible = false -- Hidden until voting starts
+	votingPanel.Parent = deploySection
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = votingPanel
+
+	-- Voting title
+	local votingTitle = Instance.new("TextLabel")
+	votingTitle.Name = "VotingTitle"
+	votingTitle.Size = UDim2.new(1, -20, 0, 30)
+	votingTitle.Position = UDim2.new(0, 10, 0, 10)
+	votingTitle.BackgroundTransparency = 1
+	votingTitle.Text = "VOTE FOR GAMEMODE"
+	votingTitle.TextColor3 = COLORS.Accent
+	votingTitle.Font = Enum.Font.GothamBold
+	votingTitle.TextSize = 18
+	votingTitle.TextXAlignment = Enum.TextXAlignment.Left
+	votingTitle.Parent = votingPanel
+
+	-- Time remaining label
+	local timeLabel = Instance.new("TextLabel")
+	timeLabel.Name = "TimeLabel"
+	timeLabel.Size = UDim2.new(0, 100, 0, 30)
+	timeLabel.Position = UDim2.new(1, -110, 0, 10)
+	votingPanel.BackgroundTransparency = 1
+	timeLabel.Text = "30s"
+	timeLabel.TextColor3 = COLORS.TextDim
+	timeLabel.Font = Enum.Font.GothamBold
+	timeLabel.TextSize = 16
+	timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+	timeLabel.Parent = votingPanel
+
+	-- Gamemode options container
+	local optionsContainer = Instance.new("Frame")
+	optionsContainer.Name = "OptionsContainer"
+	optionsContainer.Size = UDim2.new(1, -20, 1, -50)
+	optionsContainer.Position = UDim2.new(0, 10, 0, 45)
+	optionsContainer.BackgroundTransparency = 1
+	optionsContainer.Parent = votingPanel
+
+	local gridLayout = Instance.new("UIGridLayout")
+	gridLayout.CellSize = UDim2.new(0.24, -5, 1, 0)
+	gridLayout.CellPadding = UDim2.new(0, 5, 0, 5)
+	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	gridLayout.Parent = optionsContainer
+
+	-- Setup voting event listeners
+	self:SetupVotingEvents(deploySection)
+
+	print("✓ Gamemode voting panel created")
+end
+
+-- Setup voting event listeners
+function MenuGenerator:SetupVotingEvents(deploySection)
+	local votingPanel = deploySection:FindFirstChild("VotingPanel")
+	if not votingPanel then return end
+
+	local optionsContainer = votingPanel:FindFirstChild("OptionsContainer")
+	local timeLabel = votingPanel:FindFirstChild("TimeLabel")
+
+	-- Listen for voting start
+	local startVotingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("StartVoting")
+	if startVotingEvent then
+		startVotingEvent.OnClientEvent:Connect(function(data)
+			print("✓ Voting started!", data)
+			votingPanel.Visible = true
+
+			-- Clear previous options
+			for _, child in pairs(optionsContainer:GetChildren()) do
+				if not child:IsA("UIGridLayout") then
+					child:Destroy()
+				end
+			end
+
+			-- Create gamemode option buttons
+			for i, modeCode in ipairs(data.modes) do
+				local modeData = data.modeData[modeCode]
+				if modeData then
+					local optionButton = self:CreateGamemodeOption(modeCode, modeData, i)
+					optionButton.Parent = optionsContainer
+				end
+			end
+
+			-- Start countdown timer
+			local duration = data.duration or 30
+			local startTime = tick()
+
+			local connection
+			connection = game:GetService("RunService").Heartbeat:Connect(function()
+				local remaining = math.max(0, duration - (tick() - startTime))
+				if timeLabel then
+					timeLabel.Text = string.format("%ds", math.ceil(remaining))
+				end
+
+				if remaining <= 0 then
+					connection:Disconnect()
+				end
+			end)
+		end)
+	end
+
+	-- Listen for vote updates
+	local updateVotesEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("UpdateVotes")
+	if updateVotesEvent then
+		updateVotesEvent.OnClientEvent:Connect(function(data)
+			-- Update vote counts on buttons
+			for _, optionButton in pairs(optionsContainer:GetChildren()) do
+				if optionButton:IsA("TextButton") and optionButton:GetAttribute("ModeCode") then
+					local modeCode = optionButton:GetAttribute("ModeCode")
+					local voteLabel = optionButton:FindFirstChild("VoteCount")
+					if voteLabel and data.votes[modeCode] then
+						voteLabel.Text = data.votes[modeCode] .. " votes"
+					end
+				end
+			end
+		end)
+	end
+
+	-- Listen for voting end
+	local endVotingEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("EndVoting")
+	if endVotingEvent then
+		endVotingEvent.OnClientEvent:Connect(function(data)
+			print("✓ Voting ended! Winner:", data.winner)
+
+			-- Highlight winner for 3 seconds before hiding
+			for _, optionButton in pairs(optionsContainer:GetChildren()) do
+				if optionButton:IsA("TextButton") and optionButton:GetAttribute("ModeCode") == data.winner then
+					optionButton.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
+				end
+			end
+
+			wait(3)
+			votingPanel.Visible = false
+		end)
+	end
+
+	print("✓ Voting event listeners setup")
+end
+
+-- Create gamemode option button
+function MenuGenerator:CreateGamemodeOption(modeCode, modeData, layoutOrder)
+	local optionButton = Instance.new("TextButton")
+	optionButton.Name = modeCode .. "Option"
+	optionButton.BackgroundColor3 = Color3.fromRGB(30, 40, 50)
+	optionButton.BorderSizePixel = 0
+	optionButton.Text = ""
+	optionButton.AutoButtonColor = false
+	optionButton.LayoutOrder = layoutOrder
+	optionButton:SetAttribute("ModeCode", modeCode)
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = optionButton
+
+	-- Mode name
+	local modeName = Instance.new("TextLabel")
+	modeName.Name = "ModeName"
+	modeName.Size = UDim2.new(1, -10, 0, 30)
+	modeName.Position = UDim2.new(0, 5, 0, 10)
+	modeName.BackgroundTransparency = 1
+	modeName.Text = modeData.Name
+	modeName.TextColor3 = COLORS.Text
+	modeName.Font = Enum.Font.GothamBold
+	modeName.TextSize = 14
+	modeName.TextScaled = true
+	modeName.TextWrapped = true
+	modeName.Parent = optionButton
+
+	-- Mode description
+	local modeDesc = Instance.new("TextLabel")
+	modeDesc.Name = "ModeDescription"
+	modeDesc.Size = UDim2.new(1, -10, 0, 40)
+	modeDesc.Position = UDim2.new(0, 5, 0, 45)
+	modeDesc.BackgroundTransparency = 1
+	modeDesc.Text = modeData.Description
+	modeDesc.TextColor3 = COLORS.TextDim
+	modeDesc.Font = Enum.Font.Gotham
+	modeDesc.TextSize = 11
+	modeDesc.TextScaled = true
+	modeDesc.TextWrapped = true
+	modeDesc.Parent = optionButton
+
+	-- Vote count
+	local voteCount = Instance.new("TextLabel")
+	voteCount.Name = "VoteCount"
+	voteCount.Size = UDim2.new(1, -10, 0, 25)
+	voteCount.Position = UDim2.new(0, 5, 1, -30)
+	voteCount.BackgroundTransparency = 1
+	voteCount.Text = "0 votes"
+	voteCount.TextColor3 = COLORS.Accent
+	voteCount.Font = Enum.Font.GothamBold
+	voteCount.TextSize = 12
+	voteCount.Parent = optionButton
+
+	-- Click to vote
+	optionButton.MouseButton1Click:Connect(function()
+		local voteEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("VoteForGamemode")
+		if voteEvent then
+			voteEvent:FireServer(modeCode)
+			print("Voted for:", modeCode)
+		end
+	end)
+
+	-- Hover effects
+	optionButton.MouseEnter:Connect(function()
+		TweenService:Create(optionButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 60, 80)}):Play()
+	end)
+
+	optionButton.MouseLeave:Connect(function()
+		TweenService:Create(optionButton, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 40, 50)}):Play()
+	end)
+
+	return optionButton
 end
 
 -- Create Loadout/Customize section (renamed to LoadoutSection to match MenuController)
@@ -1033,6 +1261,23 @@ function MenuGenerator:SetupViewportCharacter(screenGui)
 	end
 
 	print("✓ Found ViewportFrame at:", viewportFrame:GetFullName())
+
+	-- CRITICAL FIX: Remove any UI elements that don't belong in ViewportFrame
+	-- ViewportFrame should ONLY contain: Camera and R6 character model
+	for _, child in pairs(viewportFrame:GetChildren()) do
+		if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("Frame") or child:IsA("ImageLabel") then
+			warn("⚠ Removing misplaced UI element from ViewportFrame:", child.Name)
+
+			-- Try to move it to DeploySection if it belongs there
+			if deploySection and (child.Name == "DeployButton" or child.Name == "GameTitle" or child.Name == "Hint" or child.Name == "MenuTitle") then
+				print("  → Moving", child.Name, "to DeploySection")
+				child.Parent = deploySection
+			else
+				print("  → Destroying", child.Name)
+				child:Destroy()
+			end
+		end
+	end
 
 	-- Find the R6 character model (could be named Background, R6, or just Model)
 	local characterModel = viewportFrame:FindFirstChild("Background")

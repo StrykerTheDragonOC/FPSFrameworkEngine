@@ -65,6 +65,8 @@ function InGameHUD:CreateHUD()
 
 	-- Create sub-elements
 	self:CreateHealthBar(container)
+	self:CreateAmmoDisplay(container)
+	self:CreateCrosshair(container)
 	self:CreateRadar(container)
 	self:CreateKillFeed(container)
 	self:CreateMatchInfo(container)
@@ -164,6 +166,133 @@ function InGameHUD:CreateHealthBar(parent)
 	armorText.TextSize = 14
 	armorText.Parent = armorBg
 	elements.armorText = armorText
+end
+
+-- Create ammo display
+function InGameHUD:CreateAmmoDisplay(parent)
+	-- Ammo container (Bottom Right)
+	local ammoContainer = Instance.new("Frame")
+	ammoContainer.Name = "AmmoContainer"
+	ammoContainer.Size = UDim2.new(0, 250, 0, 80)
+	ammoContainer.Position = UDim2.new(1, -270, 1, -100)
+	ammoContainer.BackgroundTransparency = 1
+	ammoContainer.Parent = parent
+
+	-- Current ammo (large text)
+	local currentAmmo = Instance.new("TextLabel")
+	currentAmmo.Name = "CurrentAmmo"
+	currentAmmo.Size = UDim2.new(0.5, 0, 1, 0)
+	currentAmmo.Position = UDim2.new(0, 0, 0, 0)
+	currentAmmo.BackgroundTransparency = 1
+	currentAmmo.Text = "30"
+	currentAmmo.TextColor3 = Color3.fromRGB(255, 255, 255)
+	currentAmmo.Font = Enum.Font.GothamBold
+	currentAmmo.TextSize = 48
+	currentAmmo.TextXAlignment = Enum.TextXAlignment.Right
+	currentAmmo.Parent = ammoContainer
+	elements.currentAmmo = currentAmmo
+
+	-- Separator
+	local separator = Instance.new("TextLabel")
+	separator.Name = "Separator"
+	separator.Size = UDim2.new(0, 20, 1, 0)
+	separator.Position = UDim2.new(0.5, 0, 0, 0)
+	separator.BackgroundTransparency = 1
+	separator.Text = "/"
+	separator.TextColor3 = Color3.fromRGB(150, 150, 150)
+	separator.Font = Enum.Font.GothamBold
+	separator.TextSize = 36
+	separator.Parent = ammoContainer
+
+	-- Reserve ammo (smaller text)
+	local reserveAmmo = Instance.new("TextLabel")
+	reserveAmmo.Name = "ReserveAmmo"
+	reserveAmmo.Size = UDim2.new(0.5, -20, 1, 0)
+	reserveAmmo.Position = UDim2.new(0.5, 20, 0, 0)
+	reserveAmmo.BackgroundTransparency = 1
+	reserveAmmo.Text = "120"
+	reserveAmmo.TextColor3 = Color3.fromRGB(200, 200, 200)
+	reserveAmmo.Font = Enum.Font.Gotham
+	reserveAmmo.TextSize = 24
+	reserveAmmo.TextXAlignment = Enum.TextXAlignment.Left
+	reserveAmmo.TextYAlignment = Enum.TextYAlignment.Bottom
+	reserveAmmo.Parent = ammoContainer
+	elements.reserveAmmo = reserveAmmo
+
+	-- Weapon name (below ammo)
+	local weaponName = Instance.new("TextLabel")
+	weaponName.Name = "WeaponName"
+	weaponName.Size = UDim2.new(1, 0, 0, 20)
+	weaponName.Position = UDim2.new(0, 0, 1, 5)
+	weaponName.BackgroundTransparency = 1
+	weaponName.Text = "G36"
+	weaponName.TextColor3 = Color3.fromRGB(180, 180, 180)
+	weaponName.Font = Enum.Font.GothamBold
+	weaponName.TextSize = 14
+	weaponName.TextXAlignment = Enum.TextXAlignment.Right
+	weaponName.Parent = ammoContainer
+	elements.weaponName = weaponName
+end
+
+-- Create crosshair
+function InGameHUD:CreateCrosshair(parent)
+	-- Crosshair container (Screen center)
+	local crosshairContainer = Instance.new("Frame")
+	crosshairContainer.Name = "CrosshairContainer"
+	crosshairContainer.Size = UDim2.new(0, 40, 0, 40)
+	crosshairContainer.Position = UDim2.new(0.5, -20, 0.5, -20)
+	crosshairContainer.BackgroundTransparency = 1
+	crosshairContainer.Parent = parent
+	elements.crosshair = crosshairContainer
+
+	-- Crosshair lines
+	local lineSize = 12
+	local lineThickness = 2
+	local gap = 4
+
+	-- Top line
+	local top = Instance.new("Frame")
+	top.Size = UDim2.new(0, lineThickness, 0, lineSize)
+	top.Position = UDim2.new(0.5, -lineThickness/2, 0, 0)
+	top.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	top.BorderSizePixel = 0
+	top.Parent = crosshairContainer
+
+	-- Bottom line
+	local bottom = Instance.new("Frame")
+	bottom.Size = UDim2.new(0, lineThickness, 0, lineSize)
+	bottom.Position = UDim2.new(0.5, -lineThickness/2, 1, -lineSize)
+	bottom.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	bottom.BorderSizePixel = 0
+	bottom.Parent = crosshairContainer
+
+	-- Left line
+	local left = Instance.new("Frame")
+	left.Size = UDim2.new(0, lineSize, 0, lineThickness)
+	left.Position = UDim2.new(0, 0, 0.5, -lineThickness/2)
+	left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	left.BorderSizePixel = 0
+	left.Parent = crosshairContainer
+
+	-- Right line
+	local right = Instance.new("Frame")
+	right.Size = UDim2.new(0, lineSize, 0, lineThickness)
+	right.Position = UDim2.new(1, -lineSize, 0.5, -lineThickness/2)
+	right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	right.BorderSizePixel = 0
+	right.Parent = crosshairContainer
+
+	-- Center dot
+	local dot = Instance.new("Frame")
+	dot.Size = UDim2.new(0, 2, 0, 2)
+	dot.Position = UDim2.new(0.5, -1, 0.5, -1)
+	dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	dot.BorderSizePixel = 0
+	dot.Parent = crosshairContainer
+
+	local dotCorner = Instance.new("UICorner")
+	dotCorner.CornerRadius = UDim.new(1, 0)
+	dotCorner.Parent = dot
 end
 
 -- Create radar
@@ -363,6 +492,114 @@ function InGameHUD:UpdateArmor(armor, maxArmor)
 	elements.armorText.Text = tostring(math.floor(armor))
 end
 
+-- Update ammo display
+function InGameHUD:UpdateAmmo(current, reserve, weaponName)
+	if elements.currentAmmo then
+		elements.currentAmmo.Text = tostring(current or 0)
+
+		-- Warning color when low ammo
+		if current and current <= 5 then
+			elements.currentAmmo.TextColor3 = Color3.fromRGB(255, 100, 100)
+		else
+			elements.currentAmmo.TextColor3 = Color3.fromRGB(255, 255, 255)
+		end
+	end
+
+	if elements.reserveAmmo then
+		elements.reserveAmmo.Text = tostring(reserve or 0)
+	end
+
+	if elements.weaponName and weaponName then
+		elements.weaponName.Text = weaponName:upper()
+	end
+end
+
+-- Show/hide crosshair
+function InGameHUD:SetCrosshairVisible(visible)
+	if elements.crosshair then
+		elements.crosshair.Visible = visible
+	end
+end
+
+-- Track weapon equipped/unequipped
+function InGameHUD:SetupWeaponTracking()
+	local currentWeapon = nil
+
+	local function onWeaponEquipped(tool)
+		currentWeapon = tool
+
+		-- Get ammo values from tool
+		local ammo = tool:FindFirstChild("Ammo")
+		local reserveAmmo = tool:FindFirstChild("ReserveAmmo")
+
+		local currentAmmo = ammo and ammo.Value or 0
+		local reserve = reserveAmmo and reserveAmmo.Value or 0
+
+		-- Update display
+		self:UpdateAmmo(currentAmmo, reserve, tool.Name)
+		self:SetCrosshairVisible(true)
+
+		-- Track ammo changes
+		if ammo then
+			ammo.Changed:Connect(function()
+				local reserve = reserveAmmo and reserveAmmo.Value or 0
+				self:UpdateAmmo(ammo.Value, reserve, tool.Name)
+			end)
+		end
+
+		if reserveAmmo then
+			reserveAmmo.Changed:Connect(function()
+				local current = ammo and ammo.Value or 0
+				self:UpdateAmmo(current, reserveAmmo.Value, tool.Name)
+			end)
+		end
+	end
+
+	local function onWeaponUnequipped()
+		currentWeapon = nil
+		self:UpdateAmmo(0, 0, "")
+		self:SetCrosshairVisible(false)
+	end
+
+	-- Track character tool changes
+	player.CharacterAdded:Connect(function(character)
+		character.ChildAdded:Connect(function(child)
+			if child:IsA("Tool") then
+				onWeaponEquipped(child)
+			end
+		end)
+
+		character.ChildRemoved:Connect(function(child)
+			if child:IsA("Tool") and child == currentWeapon then
+				onWeaponUnequipped()
+			end
+		end)
+	end)
+
+	-- If character already exists
+	if player.Character then
+		player.Character.ChildAdded:Connect(function(child)
+			if child:IsA("Tool") then
+				onWeaponEquipped(child)
+			end
+		end)
+
+		player.Character.ChildRemoved:Connect(function(child)
+			if child:IsA("Tool") and child == currentWeapon then
+				onWeaponUnequipped()
+			end
+		end)
+
+		-- Check for existing equipped tool
+		for _, child in pairs(player.Character:GetChildren()) do
+			if child:IsA("Tool") then
+				onWeaponEquipped(child)
+				break
+			end
+		end
+	end
+end
+
 -- Add killfeed entry
 function InGameHUD:AddKillFeedEntry(killerName, victimName, weaponName, isHeadshot)
 	if not elements.killFeed then return end
@@ -499,6 +736,16 @@ function InGameHUD:Initialize()
 		-- Initial health update
 		self:UpdateHealth(humanoid.Health, humanoid.MaxHealth)
 
+		-- Track armor attribute changes
+		player:GetAttributeChangedSignal("Armor"):Connect(function()
+			local armor = player:GetAttribute("Armor") or 0
+			self:UpdateArmor(armor, 100)
+		end)
+
+		-- Initial armor update
+		local armor = player:GetAttribute("Armor") or 0
+		self:UpdateArmor(armor, 100)
+
 		-- Show HUD when in game
 		self:Show()
 	end
@@ -508,6 +755,9 @@ function InGameHUD:Initialize()
 	end
 
 	player.CharacterAdded:Connect(onCharacterAdded)
+
+	-- Setup weapon tracking
+	self:SetupWeaponTracking()
 
 	-- Connect remote events for HUD updates
 	local killFeedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillFeedUpdate")

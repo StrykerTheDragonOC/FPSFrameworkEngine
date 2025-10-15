@@ -68,28 +68,28 @@ local CLASS_WEAPON_ACCESS = {
 		Secondary = "All",
 		Melee = "All",
 		Grenade = "All",
-		Magic = "All"
+		Special = "All"
 	},
 	Scout = {
 		Primary = {"Carbines", "DMRS", "PDW"},
 		Secondary = "All",
 		Melee = "All",
 		Grenade = "All",
-		Magic = "All"
+		Special = "All"
 	},
 	Support = {
 		Primary = {"LMG", "BattleRifles", "Shotguns"},
 		Secondary = "All",
 		Melee = "All",
 		Grenade = "All",
-		Magic = "All"
+		Special = "All"
 	},
 	Recon = {
 		Primary = {"SniperRifles", "BattleRifles", "DMR", "Carbines"},
 		Secondary = "All",
 		Melee = "All",
 		Grenade = "All",
-		Magic = "All"
+		Special = "All"
 	}
 }
 
@@ -393,12 +393,12 @@ local WEAPON_CONFIGS = {
 		CausesBlindness = true
 	},
 	
-	-- Magic/Extra Weapons
+	-- Special/Extra Weapons
 	ViciousStinger = {
 		-- Basic Information
 		Name = "Vicious Stinger",
-		Type = "MagicWeapons",
-		Category = "Magic",
+		Type = "SpecialWeapons",
+		Category = "Special",
 		Class = "Universal",
 		UnlockLevel = 5,
 		UnlockCost = 0,
@@ -495,7 +495,7 @@ local WEAPON_CONFIGS = {
 		-- Basic Information
 		Name = "NTW-20 Admin",
 		Type = "AdminWeapons",
-		Category = "Magic",
+		Category = "Special",
 		Class = "Universal",
 		UnlockLevel = 999,
 		UnlockCost = 0,
@@ -910,20 +910,20 @@ function WeaponConfig:GetNextMasteryRequirement(weaponName, currentKills)
 	return nil -- Max mastery reached
 end
 
--- Magic/Extra Weapon Functions
-function WeaponConfig:GetMagicWeapons()
-	local magicWeapons = {}
+-- Special/Extra Weapon Functions
+function WeaponConfig:GetSpecialWeapons()
+	local specialWeapons = {}
 	for weaponName, config in pairs(WEAPON_CONFIGS) do
-		if config.Category == "Magic" then
-			magicWeapons[weaponName] = config
+		if config.Category == "Special" then
+			specialWeapons[weaponName] = config
 		end
 	end
-	return magicWeapons
+	return specialWeapons
 end
 
-function WeaponConfig:IsMagicWeapon(weaponName)
+function WeaponConfig:IsSpecialWeapon(weaponName)
 	local config = WEAPON_CONFIGS[weaponName]
-	return config and config.Category == "Magic"
+	return config and config.Category == "Special"
 end
 
 function WeaponConfig:IsAdminOnlyWeapon(weaponName)
@@ -946,7 +946,7 @@ function WeaponConfig:GetRandomWeaponPool(playerLevel, unlockedWeapons)
 		Secondary = nil,
 		Melee = nil,
 		Grenade = nil,
-		Magic = nil
+		Special = nil
 	}
 
 	-- Get available weapons for each category
@@ -955,7 +955,7 @@ function WeaponConfig:GetRandomWeaponPool(playerLevel, unlockedWeapons)
 		Secondary = {},
 		Melee = {},
 		Grenade = {},
-		Magic = {}
+		Special = {}
 	}
 
 	for weaponName, config in pairs(WEAPON_CONFIGS) do
@@ -989,7 +989,7 @@ function WeaponConfig:GetDefaultWeaponPool()
 		Secondary = "M9", -- Default pistol
 		Melee = "PocketKnife", -- Default melee
 		Grenade = "M67", -- Default grenade
-		Magic = nil -- No magic weapons at rank 0
+		Special = nil -- No special weapons at rank 0
 	}
 end
 
@@ -1010,8 +1010,8 @@ function WeaponConfig:GetWeaponModelPath(weaponName)
 		return "ReplicatedStorage.FPSSystem.WeaponModels.Melee." .. weaponType .. "." .. weaponName
 	elseif category == "Grenade" then
 		return "ReplicatedStorage.FPSSystem.WeaponModels.Grenades." .. weaponType .. "." .. weaponName
-	elseif category == "Magic" then
-		return "ReplicatedStorage.FPSSystem.WeaponModels.Magic." .. weaponType .. "." .. weaponName
+	elseif category == "Special" then
+		return "ReplicatedStorage.FPSSystem.WeaponModels.Special." .. weaponType .. "." .. weaponName
 	end
 
 	return nil
@@ -1033,8 +1033,8 @@ function WeaponConfig:GetViewmodelPath(weaponName)
 		return "ReplicatedStorage.FPSSystem.ViewModels.Melee." .. weaponType .. "." .. weaponName
 	elseif category == "Grenade" then
 		return "ReplicatedStorage.FPSSystem.ViewModels.Grenades." .. weaponType .. "." .. weaponName
-	elseif category == "Magic" then
-		return "ReplicatedStorage.FPSSystem.ViewModels.Magic." .. weaponType .. "." .. weaponName
+	elseif category == "Special" then
+		return "ReplicatedStorage.FPSSystem.ViewModels.Special." .. weaponType .. "." .. weaponName
 	end
 
 	return nil

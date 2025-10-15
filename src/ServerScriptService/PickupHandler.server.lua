@@ -1,33 +1,16 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local RunService = game:GetService("RunService")
+
+repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 
 local DataStoreManager = require(ReplicatedStorage.FPSSystem.Modules.DataStoreManager)
 
 local PickupHandler = {}
 
-local activePickups = {} -- [pickupId] = {type, position, spawnTime, respawnTime}
-local pickupSpawnPoints = {} -- Predefined spawn locations
-
--- Initialize spawn points (can be configured per map)
-local DEFAULT_SPAWN_POINTS = {
-	-- Health spawns
-	{Position = Vector3.new(0, 5, 0), Type = "Health Pack", Probability = 0.3},
-	{Position = Vector3.new(20, 5, 20), Type = "Medical Kit", Probability = 0.15},
-	
-	-- Ammo spawns
-	{Position = Vector3.new(-20, 5, 0), Type = "Rifle Ammo", Probability = 0.4},
-	{Position = Vector3.new(0, 5, -20), Type = "Pistol Ammo", Probability = 0.5},
-	{Position = Vector3.new(20, 5, -20), Type = "Sniper Ammo", Probability = 0.2},
-	
-	-- Armor spawns
-	{Position = Vector3.new(-20, 5, 20), Type = "Light Armor", Probability = 0.25},
-	{Position = Vector3.new(30, 5, 0), Type = "Heavy Armor", Probability = 0.1},
-	
-	-- Special spawns
-	{Position = Vector3.new(0, 5, 30), Type = "Night Vision", Probability = 0.05},
-	{Position = Vector3.new(-30, 5, 0), Type = "Speed Boost", Probability = 0.15},
-}
+local activePickups = {} -- [pickupId] = {type, position, spawnTime, respawnTime, spawnPoint}
+local pickupSpawnPoints = {} -- Spawn point parts found in workspace/ServerStorage
 
 function PickupHandler:Initialize()
 	
@@ -66,110 +49,192 @@ function PickupHandler:Initialize()
 end
 
 function PickupHandler:LoadSpawnPoints()
-	-- Use default spawn points for now
-	pickupSpawnPoints = DEFAULT_SPAWN_POINTS
-	
-	-- TODO: Load from map configuration
-	print("Loaded " .. #pickupSpawnPoints .. " pickup spawn points")
+	-- Scan workspace and ServerStorage for pickup spawn point parts
+	-- Spawn points should be named: "PickupSpawn_[PickupType]"
+	-- Example: "PickupSpawn_HealthPack", "PickupSpawn_LightArmor"
+
+	local function scanFolder(folder)
+		for _, child in pairs(folder:GetChildren()) do
+			if child:IsA("Part") and child.Name:match("^PickupSpawn_") then
+				-- Extract pickup type from part name
+				local pickupType = child.Name:gsub("^PickupSpawn_", "")
+
+				-- Validate pickup type exists in configs
+				local config = self:GetPickupConfig(pickupType)
+				if config then
+					table.insert(pickupSpawnPoints, {
+						Part = child,
+						Type = pickupType,
+						Position = child.Position,
+						Active = false, -- Track if pickup is currently spawned
+						SpawnId = nil -- Track which pickup is at this point
+					})
+					print("Found pickup spawn point:", pickupType, "at", tostring(child.Position))
+				else
+					warn("Invalid pickup type in spawn point name:", pickupType)
+					warn("Available types: Health Pack, Medical Kit, Adrenaline, Light Armor, Heavy Armor, Riot Armor, etc.")
+				end
+			elseif child:IsA("Folder") or child:IsA("Model") then
+				-- Recursively scan folders
+				scanFolder(child)
+			end
+		end
+	end
+
+	-- Scan workspace
+	scanFolder(workspace)
+
+	-- Also scan ServerStorage if it has a PickupSpawns folder
+	if ServerStorage:FindFirstChild("PickupSpawns") then
+		scanFolder(ServerStorage.PickupSpawns)
+	end
+
+	print("Loaded " .. #pickupSpawnPoints .. " pickup spawn points from map")
+
+	-- If no spawn points found, warn the user
+	if #pickupSpawnPoints == 0 then
+		warn("⚠ No pickup spawn points found in workspace!")
+		warn("To create pickup spawns, add Parts to workspace named: PickupSpawn_[Type]")
+		warn("Examples: PickupSpawn_HealthPack, PickupSpawn_LightArmor, PickupSpawn_RifleAmmo")
+	end
 end
 
 function PickupHandler:StartPickupLoop()
+	-- Initial spawn of all pickups
+	spawn(function()
+		wait(3) -- Wait for map to load
+		self:SpawnInitialPickups()
+	end)
+
+	-- Respawn loop (checks every 2 seconds)
 	spawn(function()
 		while true do
-			self:UpdatePickups()
-			wait(1) -- Check every second
+			wait(2)
+			self:CheckRespawns()
 		end
-	end)
-	
-	-- Initial spawn of pickups
-	spawn(function()
-		wait(5) -- Wait for players to load
-		self:SpawnInitialPickups()
 	end)
 end
 
-function PickupHandler:UpdatePickups()
+function PickupHandler:CheckRespawns()
 	local currentTime = tick()
-	
-	-- Check for pickups that need to respawn
-	for spawnPoint, spawnData in pairs(pickupSpawnPoints) do
-		local pickupId = "spawn_" .. spawnPoint
-		local pickup = activePickups[pickupId]
-		
-		if not pickup then
-			-- Spawn new pickup if probability allows
-			if math.random() < spawnData.Probability * 0.01 then -- Reduce spawn rate
-				self:SpawnPickup(spawnData.Type, spawnData.Position, pickupId)
+
+	-- Check each spawn point for respawns
+	for _, spawnPoint in pairs(pickupSpawnPoints) do
+		-- If spawn point is inactive and has a respawn time
+		if not spawnPoint.Active and spawnPoint.RespawnTime then
+			if currentTime >= spawnPoint.RespawnTime then
+				-- Respawn the pickup
+				self:SpawnPickupAtPoint(spawnPoint)
+				spawnPoint.RespawnTime = nil
 			end
-		elseif pickup.respawnTime and currentTime >= pickup.respawnTime then
-			-- Respawn pickup
-			self:SpawnPickup(pickup.type, pickup.position, pickupId)
-		end
-	end
-	
-	-- Clean up expired pickups
-	for pickupId, pickup in pairs(activePickups) do
-		if pickup.expireTime and currentTime >= pickup.expireTime then
-			self:RemovePickup(pickupId)
 		end
 	end
 end
 
 function PickupHandler:SpawnInitialPickups()
-	for i, spawnData in pairs(pickupSpawnPoints) do
-		if math.random() < spawnData.Probability then
-			local pickupId = "spawn_" .. i
-			self:SpawnPickup(spawnData.Type, spawnData.Position, pickupId)
-		end
+	-- Spawn a pickup at every spawn point
+	for _, spawnPoint in pairs(pickupSpawnPoints) do
+		self:SpawnPickupAtPoint(spawnPoint)
 	end
+	print("Spawned", #pickupSpawnPoints, "initial pickups")
+end
+
+function PickupHandler:SpawnPickupAtPoint(spawnPoint)
+	if spawnPoint.Active then
+		-- Pickup already spawned at this point
+		return
+	end
+
+	local pickupType = spawnPoint.Type
+	local config = self:GetPickupConfig(pickupType)
+	if not config then return end
+
+	-- Generate unique pickup ID
+	local pickupId = "Pickup_" .. pickupType .. "_" .. tick()
+
+	-- Store pickup data
+	activePickups[pickupId] = {
+		type = pickupType,
+		position = spawnPoint.Position,
+		spawnTime = tick(),
+		taken = false,
+		spawnPoint = spawnPoint
+	}
+
+	-- Mark spawn point as active
+	spawnPoint.Active = true
+	spawnPoint.SpawnId = pickupId
+
+	-- Notify all clients to create visual pickup
+	local pickupSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupSpawned")
+	if pickupSpawnedEvent then
+		pickupSpawnedEvent:FireAllClients({
+			PickupId = pickupId,
+			PickupType = pickupType,
+			Position = spawnPoint.Position
+		})
+	end
+
+	print("Spawned pickup:", pickupType, "at", tostring(spawnPoint.Position))
 end
 
 function PickupHandler:HandlePickupRequest(player, pickupData)
 	local pickupId = pickupData.PickupId
 	local pickup = activePickups[pickupId]
-	
-	if not pickup then
+
+	if not pickup or pickup.taken then
 		-- Pickup doesn't exist or was already taken
 		return
 	end
-	
-	-- Validate distance
+
+	-- Validate distance (anti-cheat)
 	local character = player.Character
 	if not character or not character:FindFirstChild("HumanoidRootPart") then
 		return
 	end
-	
+
 	local distance = (character.HumanoidRootPart.Position - pickup.position).Magnitude
-	if distance > 6 then -- 6 stud pickup range (slightly larger than client detection)
+	if distance > 8 then -- 8 stud max (5 stud client range + 3 stud buffer for lag)
+		warn("Player", player.Name, "tried to pick up from too far:", distance, "studs")
 		return
 	end
-	
-	-- Apply pickup effects
+
+	-- Apply pickup effects to player
 	local success = self:ApplyPickupToPlayer(player, pickup.type)
 	if success then
-		-- Remove pickup from world
-		self:RemovePickup(pickupId)
-		
-		-- Set respawn timer
+		-- Mark as taken
+		pickup.taken = true
+
+		-- Get pickup config for respawn time
 		local config = self:GetPickupConfig(pickup.type)
-		if config and config.RespawnTime then
-			pickup.respawnTime = tick() + config.RespawnTime
-			pickup.taken = true
-			activePickups[pickupId] = pickup -- Keep for respawn
+
+		-- Schedule respawn at spawn point
+		if pickup.spawnPoint and config and config.RespawnTime then
+			pickup.spawnPoint.Active = false
+			pickup.spawnPoint.SpawnId = nil
+			pickup.spawnPoint.RespawnTime = tick() + config.RespawnTime
+
+			print("Pickup will respawn in", config.RespawnTime, "seconds at", tostring(pickup.position))
 		end
-		
-		-- Notify all clients that pickup was taken
+
+		-- Remove pickup from active list
+		activePickups[pickupId] = nil
+
+		-- Notify all clients to remove visual
+		local pickupRemovedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupRemoved")
+		if pickupRemovedEvent then
+			pickupRemovedEvent:FireAllClients(pickupId)
+		end
+
+		-- Notify the player that they picked it up
 		local pickupTakenEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupTaken")
 		if pickupTakenEvent then
-			for _, clientPlayer in pairs(Players:GetPlayers()) do
-				pickupTakenEvent:FireClient(clientPlayer, {
-					Player = player,
-					PickupType = pickup.type,
-					PickupId = pickupId
-				})
-			end
+			pickupTakenEvent:FireClient(player, {
+				PickupType = pickup.type,
+				PickupId = pickupId
+			})
 		end
-		
+
 		print(player.Name .. " picked up " .. pickup.type)
 	end
 end
@@ -179,65 +244,68 @@ function PickupHandler:ApplyPickupToPlayer(player, pickupType)
 	if not config then
 		return false
 	end
-	
+
 	local character = player.Character
 	if not character then
 		return false
 	end
-	
+
 	local humanoid = character:FindFirstChild("Humanoid")
 	if not humanoid then
 		return false
 	end
-	
+
 	-- Apply effects based on pickup type
 	if config.Type == "Medical" then
 		-- Heal player
 		if config.HealAmount then
 			local newHealth = math.min(humanoid.MaxHealth, humanoid.Health + config.HealAmount)
 			humanoid.Health = newHealth
+			print("Healed", player.Name, "for", config.HealAmount, "HP")
 		end
-		
+
 		-- Remove status effects
 		if config.RemoveStatusEffects then
 			local statusSystem = _G.StatusEffectsSystem
 			if statusSystem then
 				statusSystem:CureAllStatusEffects(player)
+				print("Removed negative status effects from", player.Name)
 			end
 		end
-		
+
 		-- Apply status effect
 		if config.StatusEffect then
 			local statusSystem = _G.StatusEffectsSystem
 			if statusSystem then
 				statusSystem:ApplyStatusEffect(player, config.StatusEffect, config.Duration or 30)
+				print("Applied", config.StatusEffect, "to", player.Name)
 			end
 		end
-		
+
 	elseif config.Type == "Armor" then
-		-- Add armor (would integrate with armor system)
-		local dataStore = DataStoreManager
-		if dataStore then
-			local currentArmor = dataStore:GetPlayerData(player, "Armor") or 0
-			local newArmor = math.min(100, currentArmor + config.ArmorValue)
-			dataStore:SetPlayerData(player, "Armor", newArmor)
-		end
-		
+		-- Add armor using player attributes
+		local currentArmor = player:GetAttribute("Armor") or 0
+		local newArmor = math.min(100, currentArmor + config.ArmorValue)
+		player:SetAttribute("Armor", newArmor)
+		print("Applied", config.ArmorValue, "armor to", player.Name, "(total:", newArmor .. ")")
+
 	elseif config.Type == "Ammo" then
-		-- Add ammunition (would integrate with weapon system)
-		local dataStore = DataStoreManager
-		if dataStore then
-			local currentAmmo = dataStore:GetPlayerData(player, config.AmmoType .. "_Ammo") or 0
-			dataStore:SetPlayerData(player, config.AmmoType .. "_Ammo", currentAmmo + config.AmmoAmount)
+		-- Add ammunition via AmmoResupply RemoteEvent
+		local ammoEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("AmmoResupply")
+		if ammoEvent then
+			ammoEvent:FireClient(player, {
+				AmmoType = config.AmmoType,
+				Amount = config.AmmoAmount
+			})
+			print("Gave", config.AmmoAmount, config.AmmoType, "ammo to", player.Name)
+		else
+			warn("AmmoResupply RemoteEvent not found")
 		end
-		
+
 	elseif config.Type == "Equipment" then
-		-- Give equipment
-		local dataStore = DataStoreManager
-		if dataStore then
-			dataStore:SetPlayerData(player, config.Equipment, true)
-		end
-		
+		-- Give equipment using player attributes
+		player:SetAttribute("Equipment_" .. config.Equipment, true)
+
 		-- Apply temporary effects if specified
 		if config.StatusEffect then
 			local statusSystem = _G.StatusEffectsSystem
@@ -245,69 +313,113 @@ function PickupHandler:ApplyPickupToPlayer(player, pickupType)
 				statusSystem:ApplyStatusEffect(player, config.StatusEffect, config.Duration or 60)
 			end
 		end
-		
+
+		-- Schedule removal if equipment has duration
+		if config.Duration then
+			spawn(function()
+				wait(config.Duration)
+				player:SetAttribute("Equipment_" .. config.Equipment, false)
+				print("Removed", config.Equipment, "from", player.Name)
+			end)
+		end
+
+		print("Gave", config.Equipment, "to", player.Name)
+
 	elseif config.Type == "Powerup" then
 		-- Apply powerup status effect
 		if config.StatusEffect then
 			local statusSystem = _G.StatusEffectsSystem
 			if statusSystem then
 				statusSystem:ApplyStatusEffect(player, config.StatusEffect, config.Duration or 30)
+				print("Applied powerup", config.StatusEffect, "to", player.Name)
+			else
+				-- Fallback if StatusEffectsSystem not available
+				player:SetAttribute("StatusEffect_" .. config.StatusEffect, true)
+
+				spawn(function()
+					wait(config.Duration or 30)
+					player:SetAttribute("StatusEffect_" .. config.StatusEffect, false)
+				end)
+
+				print("Applied powerup", config.StatusEffect, "to", player.Name, "(fallback)")
 			end
 		end
 	end
-	
+
 	-- Award XP for pickup
 	local xpReward = 10
-	if config.Rarity == "Uncommon" then xpReward = 15
-	elseif config.Rarity == "Rare" then xpReward = 25
-	elseif config.Rarity == "Epic" then xpReward = 40
-	elseif config.Rarity == "Legendary" then xpReward = 75 end
-	
-	if DataStoreManager then
+	if config.Rarity == "Uncommon" then
+		xpReward = 15
+	elseif config.Rarity == "Rare" then
+		xpReward = 25
+	elseif config.Rarity == "Epic" then
+		xpReward = 40
+	elseif config.Rarity == "Legendary" then
+		xpReward = 75
+	end
+
+	if DataStoreManager and DataStoreManager.AddXP then
 		DataStoreManager:AddXP(player, xpReward, "Item Pickup")
 	end
-	
+
 	return true
 end
 
 function PickupHandler:SpawnPickup(pickupType, position, pickupId)
-	pickupId = pickupId or tostring(tick()) .. "_" .. pickupType
-	
-	-- Store pickup data
+	-- Spawn a pickup at a custom position (for admin commands)
+	local config = self:GetPickupConfig(pickupType)
+	if not config then
+		warn("Invalid pickup type:", pickupType)
+		return
+	end
+
+	pickupId = pickupId or "Pickup_" .. pickupType .. "_" .. tick()
+
+	-- Store pickup data (no spawn point for custom spawns)
 	activePickups[pickupId] = {
 		type = pickupType,
 		position = position,
 		spawnTime = tick(),
 		taken = false,
-		expireTime = tick() + 300 -- Expire after 5 minutes if not taken
+		spawnPoint = nil -- Custom spawns don't have spawn points
 	}
-	
+
 	-- Notify all clients to create visual
 	local pickupSpawnedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupSpawned")
 	if pickupSpawnedEvent then
-		for _, player in pairs(Players:GetPlayers()) do
-			pickupSpawnedEvent:FireClient(player, {
-				PickupId = pickupId,
-				PickupType = pickupType,
-				Position = position
-			})
-		end
+		pickupSpawnedEvent:FireAllClients({
+			PickupId = pickupId,
+			PickupType = pickupType,
+			Position = position
+		})
 	end
-	
-	print("Spawned pickup: " .. pickupType .. " at " .. tostring(position))
+
+	print("Admin spawned pickup:", pickupType, "at", tostring(position))
 end
 
 function PickupHandler:RemovePickup(pickupId)
-	-- Remove from world
-	local pickup = workspace:FindFirstChild(pickupId)
+	-- Remove from active pickups
+	local pickup = activePickups[pickupId]
 	if pickup then
-		pickup:Destroy()
-	end
-	
-	-- Remove from active list if permanently removed
-	local pickupData = activePickups[pickupId]
-	if pickupData and not pickupData.respawnTime then
+		-- Clear spawn point if it exists
+		if pickup.spawnPoint then
+			pickup.spawnPoint.Active = false
+			pickup.spawnPoint.SpawnId = nil
+		end
+
 		activePickups[pickupId] = nil
+	end
+
+	-- Remove visual from all clients
+	local pickupRemovedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupRemoved")
+	if pickupRemovedEvent then
+		pickupRemovedEvent:FireAllClients(pickupId)
+	end
+
+	-- Also destroy the part in workspace if it exists
+	local pickupPart = workspace:FindFirstChild(pickupId)
+	if pickupPart then
+		pickupPart:Destroy()
 	end
 end
 
@@ -345,9 +457,14 @@ function PickupHandler:GetPickupConfig(pickupType)
 end
 
 function PickupHandler:IsPlayerAdmin(player)
-	-- Check if player is admin/developer
-	-- This should be integrated with your admin system
-	return player.UserId == game.CreatorId or player.Name == "YourUsername" -- Replace with actual admin check
+	-- Check if player is admin
+	-- Integrate with your admin system
+	if _G.AdminSystem then
+		return _G.AdminSystem:IsAdmin(player)
+	end
+
+	-- Fallback: game creator is always admin
+	return player.UserId == game.CreatorId
 end
 
 function PickupHandler:CleanupPlayerData(player)
@@ -355,14 +472,22 @@ function PickupHandler:CleanupPlayerData(player)
 	-- Currently no per-player data to clean up
 end
 
--- Admin commands
+function PickupHandler:GetActivePickups()
+	return activePickups
+end
+
+function PickupHandler:GetSpawnPoints()
+	return pickupSpawnPoints
+end
+
+-- Admin commands (accessible via _G.AdminPickupCommands)
 _G.AdminPickupCommands = {
 	spawnPickup = function(pickupType, x, y, z)
 		local position = Vector3.new(tonumber(x) or 0, tonumber(y) or 10, tonumber(z) or 0)
 		PickupHandler:SpawnPickup(pickupType, position)
 		print("Spawned " .. pickupType .. " at " .. tostring(position))
 	end,
-	
+
 	clearAllPickups = function()
 		for pickupId, _ in pairs(activePickups) do
 			PickupHandler:RemovePickup(pickupId)
@@ -370,32 +495,74 @@ _G.AdminPickupCommands = {
 		activePickups = {}
 		print("Cleared all pickups")
 	end,
-	
+
 	listActivePickups = function()
 		print("Active pickups:")
+		local count = 0
 		for pickupId, pickup in pairs(activePickups) do
 			local status = pickup.taken and "TAKEN" or "ACTIVE"
-			local respawn = pickup.respawnTime and ("respawn in " .. math.ceil(pickup.respawnTime - tick()) .. "s") or "no respawn"
-			print("- " .. pickupId .. ": " .. pickup.type .. " (" .. status .. ", " .. respawn .. ")")
+			print("- " .. pickupId .. ": " .. pickup.type .. " (" .. status .. ")")
+			count = count + 1
 		end
+		print("Total:", count, "active pickups")
 	end,
-	
+
+	listSpawnPoints = function()
+		print("Pickup spawn points:")
+		for i, spawnPoint in pairs(pickupSpawnPoints) do
+			local status = spawnPoint.Active and "OCCUPIED" or "EMPTY"
+			local respawn = ""
+			if spawnPoint.RespawnTime then
+				local timeLeft = math.ceil(spawnPoint.RespawnTime - tick())
+				respawn = " (respawns in " .. timeLeft .. "s)"
+			end
+			print(i .. ". " .. spawnPoint.Type .. " at " .. tostring(spawnPoint.Position) .. " [" .. status .. "]" .. respawn)
+		end
+		print("Total:", #pickupSpawnPoints, "spawn points")
+	end,
+
 	respawnAllPickups = function()
+		-- Clear all active pickups and respawn at spawn points
+		for pickupId, _ in pairs(activePickups) do
+			PickupHandler:RemovePickup(pickupId)
+		end
+
+		-- Reset all spawn points
+		for _, spawnPoint in pairs(pickupSpawnPoints) do
+			spawnPoint.Active = false
+			spawnPoint.SpawnId = nil
+			spawnPoint.RespawnTime = nil
+		end
+
+		-- Spawn fresh pickups
 		PickupHandler:SpawnInitialPickups()
 		print("Respawned all pickups")
 	end,
-	
-	setSpawnPoint = function(pickupType, x, y, z, probability)
-		local position = Vector3.new(tonumber(x) or 0, tonumber(y) or 5, tonumber(z) or 0)
-		local prob = tonumber(probability) or 0.3
-		
-		table.insert(pickupSpawnPoints, {
-			Position = position,
-			Type = pickupType,
-			Probability = prob
-		})
-		
-		print("Added spawn point for " .. pickupType .. " at " .. tostring(position) .. " (prob: " .. prob .. ")")
+
+	testPickup = function(pickupType)
+		-- Spawn a pickup in front of the calling player (must be run in command bar as player)
+		local Players = game:GetService("Players")
+		for _, player in pairs(Players:GetPlayers()) do
+			if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				local pos = player.Character.HumanoidRootPart.Position + player.Character.HumanoidRootPart.CFrame.LookVector * 5
+				PickupHandler:SpawnPickup(pickupType, pos)
+				print("Spawned", pickupType, "in front of", player.Name)
+				return
+			end
+		end
+	end,
+
+	listPickupTypes = function()
+		print("Available pickup types:")
+		local types = {}
+		for pickupType, config in pairs(PickupHandler:GetPickupConfig("Health Pack") and PICKUP_CONFIGS or {}) do
+			table.insert(types, pickupType)
+		end
+		table.sort(types)
+		for _, pickupType in pairs(types) do
+			local config = PickupHandler:GetPickupConfig(pickupType)
+			print("- " .. pickupType .. " (" .. config.Type .. ", " .. config.Rarity .. ")")
+		end
 	end
 }
 

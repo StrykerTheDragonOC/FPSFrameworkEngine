@@ -218,7 +218,15 @@ function PickupSystem:Initialize()
 			self:HandlePickupSpawned(pickupData)
 		end)
 	end
-	
+
+	-- Listen for pickup removal from server
+	local pickupRemovedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("PickupRemoved")
+	if pickupRemovedEvent then
+		pickupRemovedEvent.OnClientEvent:Connect(function(pickupId)
+			self:HandlePickupRemoved(pickupId)
+		end)
+	end
+
 	print("PickupSystem initialized")
 end
 
@@ -455,6 +463,29 @@ end
 function PickupSystem:HandlePickupSpawned(pickupData)
 	-- Create visual pickup in world
 	self:CreatePickupVisual(pickupData)
+end
+
+function PickupSystem:HandlePickupRemoved(pickupId)
+	-- Remove pickup visual from workspace
+	local pickup = workspace:FindFirstChild(pickupId)
+	if pickup then
+		-- Stop tweens
+		for _, tween in pairs(TweenService:GetValue(pickup) or {}) do
+			if tween then
+				tween:Cancel()
+			end
+		end
+
+		-- Destroy the pickup
+		pickup:Destroy()
+		print("Removed pickup visual:", pickupId)
+	end
+
+	-- Hide prompt if we were looking at this pickup
+	if currentlyNearPickup and currentlyNearPickup.Name == pickupId then
+		currentlyNearPickup = nil
+		self:HidePickupPrompt()
+	end
 end
 
 function PickupSystem:ShowPickupNotification(pickupData)

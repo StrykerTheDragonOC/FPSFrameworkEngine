@@ -26,7 +26,7 @@ local playerLoadout = {
 	Secondary = "M9",
 	Melee = "PocketKnife",
 	Grenade = "M67",
-	Magic = nil
+	Special = nil
 }
 
 local playerSettings = {
@@ -223,7 +223,7 @@ function MenuController:CreateLoadoutSection()
 	title.Parent = loadoutSection
 
 	-- Weapon categories
-	local categories = {"Primary", "Secondary", "Melee", "Grenade", "Magic"}
+	local categories = {"Primary", "Secondary", "Melee", "Grenade", "Special"}
 	local yOffset = 100
 
 	for _, category in ipairs(categories) do
@@ -284,7 +284,7 @@ function MenuController:PopulateLoadoutSection(loadoutSection)
 		Secondary = {},
 		Melee = {},
 		Grenade = {},
-		Magic = {}
+		Special = {}
 	}
 
 	-- Categorize all weapons
