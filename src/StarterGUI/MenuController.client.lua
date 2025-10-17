@@ -11,9 +11,16 @@ local TweenService = game:GetService("TweenService")
 repeat wait() until ReplicatedStorage:FindFirstChild("FPSSystem")
 local WeaponConfig = require(ReplicatedStorage.FPSSystem.Modules.WeaponConfig)
 
--- Get UI
 local playerGui = player:WaitForChild("PlayerGui")
-local mainMenu = playerGui:WaitForChild("FPSMainMenu", 10)
+
+-- STRICT: Use only the RBXM-provided FPSMainMenu that StarterGui inserts.
+-- Do NOT generate or clone a separate menu; if it's missing, warn and abort initialization.
+local mainMenu = playerGui:WaitForChild("FPSMainMenu", 5)
+if not mainMenu then
+    warn("FPSMainMenu ScreenGui not found in PlayerGui. Ensure the RBXM exists in StarterGui.")
+    return MenuController
+end
+
 local menuFrame = mainMenu and mainMenu:FindFirstChild("MainContainer")
 
 -- Track deployment state

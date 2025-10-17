@@ -327,6 +327,31 @@ ReplicatedStorage/FPSSystem/Viewmodels/Primary/AssaultRifles/G36/
    - Adjust CameraPart position if viewmodel is off-center
    - Viewmodel should fill lower-right of screen
 
+### ViewportFrame preview fixes (menu & editor)
+
+When showing weapon models in menu `ViewportFrame`s or editor previews follow these rules to avoid duplicated models, incorrect framing, or running scripts from the preview model:
+
+1. Always clear the viewport before adding a preview:
+   - `viewportFrame:ClearAllChildren()` ensures old previews are removed.
+2. Clone source models (never parent the live model from ReplicatedStorage into the viewport):
+   - `local preview = model:Clone()` and `preview.Parent = viewportFrame`.
+   - Ensure source models are `Archivable = true`.
+3. Strip runtime scripts and sounds from the cloned preview:
+   - Remove `Script`, `LocalScript`, `ModuleScript`, and `Sound` descendants from the clone so they don't run in the preview.
+4. Ensure the preview has a PrimaryPart (or set one programmatically):
+   - If `preview.PrimaryPart == nil` pick the first BasePart and set `preview.PrimaryPart = thatPart`.
+5. Anchor preview parts and disable collisions for stability:
+   - Set `part.Anchored = true` and `part.CanCollide = false` for all preview parts.
+6. Create and configure a Camera inside the `ViewportFrame` and set `viewportFrame.CurrentCamera`.
+   - Position the camera relative to `preview.PrimaryPart.Position` using a distance based on model bounds.
+7. Remove/cleanup previews when the `PlayerGui` is removed or on `CharacterRemoving` to avoid ghost models in Studio.
+
+Files to check/modify:
+- `src/ReplicatedStorage/FPSSystem/Modules/WeaponPreviewSystem.lua` (implements the preview rules above)
+- `StarterGUI/FPSMainMenu` ViewportFrame(s) (ensure script uses the WeaponPreviewSystem API)
+
+This prevents duplicated models in Studio, keeps preview cameras stable, and avoids accidental execution of previewed model scripts.
+
 ---
 
 ## Weapon Models

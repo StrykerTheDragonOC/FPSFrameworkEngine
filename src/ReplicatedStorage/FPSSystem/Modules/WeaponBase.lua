@@ -126,29 +126,41 @@ function WeaponBase:ApplyRecoil()
 end
 
 function WeaponBase:PlayReloadEffects()
-	-- Play reload sound
-	local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://138084889" -- Placeholder reload sound
-	sound.Volume = 0.5
-	sound.Parent = self.tool
-	sound:Play()
-	
-	sound.Ended:Connect(function()
-		sound:Destroy()
-	end)
+    -- Play reload sound via SoundUtils helper if available
+    local ok, SoundUtils = pcall(function()
+        return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+    end)
+    if ok and SoundUtils then
+        SoundUtils:PlayLocalSound("rbxassetid://138084889", self.tool, 0.5)
+    else
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://138084889" -- Placeholder reload sound
+        sound.Volume = 0.5
+        sound.Parent = self.tool
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end
 end
 
 function WeaponBase:PlayDryFireSound()
-	local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://88242783225642" -- Placeholder dry fire sound
-	sound.Volume = 0.3
-	sound.Pitch = 1.5
-	sound.Parent = self.tool
-	sound:Play()
-	
-	sound.Ended:Connect(function()
-		sound:Destroy()
-	end)
+    local ok, SoundUtils = pcall(function()
+        return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+    end)
+    if ok and SoundUtils then
+        SoundUtils:PlayLocalSound("rbxassetid://88242783225642", self.tool, 0.3, 1.5)
+    else
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://88242783225642" -- Placeholder dry fire sound
+        sound.Volume = 0.3
+        sound.Pitch = 1.5
+        sound.Parent = self.tool
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end
 end
 
 function WeaponBase:GetAmmoCount()

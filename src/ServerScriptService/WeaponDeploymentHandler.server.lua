@@ -97,12 +97,13 @@ local function CreateWeaponTool(weaponName, weaponType)
     tool.Name = weaponName
     tool.RequiresHandle = true
     
-    -- Create handle
+    -- Create handle (invisible for viewmodel weapons)
     local handle = Instance.new("Part")
     handle.Name = "Handle"
     handle.Size = Vector3.new(1, 1, 4)
-    handle.Material = Enum.Material.Neon
-    handle.BrickColor = BrickColor.new("Bright blue")
+    handle.Material = Enum.Material.Plastic
+    handle.BrickColor = BrickColor.new("Dark stone grey")
+    handle.Transparency = 1  -- Make invisible since viewmodels will be used
     handle.TopSurface = Enum.SurfaceType.Smooth
     handle.BottomSurface = Enum.SurfaceType.Smooth
     handle.Parent = tool
@@ -121,28 +122,48 @@ local function GiveWeaponsToPlayer(player)
     local loadout = GetPlayerLoadout(player)
     
     -- Clear existing tools
+    -- Clear existing tools in Backpack and Character
     for _, tool in pairs(player.Backpack:GetChildren()) do
         if tool:IsA("Tool") then
             tool:Destroy()
         end
     end
-    
-    for _, tool in pairs(player.Character:GetChildren()) do
-        if tool:IsA("Tool") then
-            tool:Destroy()
+
+    if player.Character then
+        for _, tool in pairs(player.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                tool:Destroy()
+            end
         end
     end
     
     -- Give weapons in order: Primary, Secondary, Melee, Grenade
     local weaponOrder = {"primary", "secondary", "melee", "grenade"}
     
+    -- Dedupe melees: ensure only one melee is granted
+    local seenMelee = false
     for _, weaponType in pairs(weaponOrder) do
         local weaponName = loadout[weaponType]
-        if weaponName then
-            local tool = CreateWeaponTool(weaponName, weaponType)
-            if tool then
-                tool.Parent = player.Backpack
-                print("Gave " .. weaponName .. " to " .. player.Name)
+        if not weaponName then
+            -- nothing to give for this slot
+        else
+            if weaponType == "melee" then
+                if seenMelee then
+                    print("Skipping extra melee for " .. player.Name .. ": " .. tostring(weaponName))
+                else
+                    seenMelee = true
+                    local tool = CreateWeaponTool(weaponName, weaponType)
+                    if tool then
+                        tool.Parent = player.Backpack
+                        print("Gave " .. weaponName .. " to " .. player.Name)
+                    end
+                end
+            else
+                local tool = CreateWeaponTool(weaponName, weaponType)
+                if tool then
+                    tool.Parent = player.Backpack
+                    print("Gave " .. weaponName .. " to " .. player.Name)
+                end
             end
         end
     end

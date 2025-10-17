@@ -276,16 +276,25 @@ function HotbarController:Initialize()
 		warn("HotbarUI not found - hotbar controller may not work properly")
 	end
 
-	-- Initial scan
-	self:ScanBackpack()
+    -- Initial scan and connections
+    self:ScanBackpack()
+    self:SetupConnections()
 
-	-- Setup connections
-	self:SetupConnections()
+    -- Make globally accessible
+    _G.HotbarController = self
 
-	-- Make globally accessible
-	_G.HotbarController = self
+    -- Cleanup orphaned hotbars if any (Studio reset / PlayerGui reparenting issues)
+    local existingHotbar = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("FPSHotbar")
+    if existingHotbar and #player.PlayerGui:GetChildren() > 10 then
+        -- If we detect too many GUI instances, destroy extras (best-effort)
+        for _, child in pairs(player.PlayerGui:GetChildren()) do
+            if child.Name == "FPSHotbar" and child ~= existingHotbar then
+                child:Destroy()
+            end
+        end
+    end
 
-	print("HotbarController: Initialization complete!")
+    print("HotbarController: Initialization complete!")
 end
 
 -- Start initialization

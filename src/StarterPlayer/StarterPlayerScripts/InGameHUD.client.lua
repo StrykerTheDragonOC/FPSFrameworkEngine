@@ -42,25 +42,33 @@ local InGameHUD = {}
 
 -- Create the in-game HUD
 function InGameHUD:CreateHUD()
-	if hudScreenGui then
-		hudScreenGui:Destroy()
+	-- Reuse existing HUD if present to prevent duplication
+	local existing = playerGui:FindFirstChild("InGameHUD")
+	if existing and existing:IsA("ScreenGui") then
+		hudScreenGui = existing
+		hudScreenGui.ResetOnSpawn = false
+		hudScreenGui.DisplayOrder = 5
+		hudScreenGui.IgnoreGuiInset = true
+	else
+		-- Create ScreenGui
+		hudScreenGui = Instance.new("ScreenGui")
+		hudScreenGui.Name = "InGameHUD"
+		hudScreenGui.ResetOnSpawn = false
+		hudScreenGui.DisplayOrder = 5
+		hudScreenGui.IgnoreGuiInset = true
+		hudScreenGui.Parent = playerGui
 	end
 
-	-- Create ScreenGui
-	hudScreenGui = Instance.new("ScreenGui")
-	hudScreenGui.Name = "InGameHUD"
-	hudScreenGui.ResetOnSpawn = false
-	hudScreenGui.DisplayOrder = 5
-	hudScreenGui.IgnoreGuiInset = true
-	hudScreenGui.Parent = playerGui
-
 	-- Main container
-	local container = Instance.new("Frame")
-	container.Name = "HUDContainer"
-	container.Size = UDim2.new(1, 0, 1, 0)
-	container.Position = UDim2.new(0, 0, 0, 0)
-	container.BackgroundTransparency = 1
-	container.Parent = hudScreenGui
+	local container = hudScreenGui:FindFirstChild("HUDContainer")
+	if not container then
+		container = Instance.new("Frame")
+		container.Name = "HUDContainer"
+		container.Size = UDim2.new(1, 0, 1, 0)
+		container.Position = UDim2.new(0, 0, 0, 0)
+		container.BackgroundTransparency = 1
+		container.Parent = hudScreenGui
+	end
 	elements.container = container
 
 	-- Create sub-elements
@@ -760,6 +768,20 @@ function InGameHUD:Initialize()
 	self:SetupWeaponTracking()
 
 	-- Connect remote events for HUD updates
+	-- Show HUD on deployment success, hide on lobby return
+	local deploySuccessEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("DeploymentSuccessful")
+	if deploySuccessEvent then
+		deploySuccessEvent.OnClientEvent:Connect(function()
+			self:Show()
+		end)
+	end
+
+	local returnLobbyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ReturnToLobby")
+	if returnLobbyEvent then
+		returnLobbyEvent.OnClientEvent:Connect(function()
+			self:Hide()
+		end)
+	end
 	local killFeedEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("KillFeedUpdate")
 	if killFeedEvent then
 		killFeedEvent.OnClientEvent:Connect(function(data)

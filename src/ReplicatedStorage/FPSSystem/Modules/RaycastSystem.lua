@@ -6,6 +6,10 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local GlobalStateManager = nil
+pcall(function()
+    GlobalStateManager = require(ReplicatedStorage.FPSSystem.Modules.GlobalStateManager)
+end)
 
 local raycastParams = RaycastParams.new()
 local bulletTracers = {}
@@ -101,8 +105,15 @@ function RaycastSystem:FireRay(origin, direction, distance, weaponName, damage, 
 		local player = self:GetPlayerFromHit(raycastResult.Instance)
 		
 		if RunService:IsClient() then
-			self:CreateImpactEffect(raycastResult.Position, raycastResult.Normal, raycastResult.Material)
-			self:PlayMaterialSound(raycastResult.Position, raycastResult.Material)
+			local allowImpacts = true
+			if GlobalStateManager then
+				local tracersOn = GlobalStateManager:GetNested("GameSettings.BulletTracers")
+				allowImpacts = (tracersOn ~= false)
+			end
+			if allowImpacts then
+				self:CreateImpactEffect(raycastResult.Position, raycastResult.Normal, raycastResult.Material)
+				self:PlayMaterialSound(raycastResult.Position, raycastResult.Material)
+			end
 		end
 		
 		return {
@@ -447,7 +458,11 @@ function RaycastSystem:PlayMaterialSound(position, material)
 end
 
 function RaycastSystem:CreateMuzzleFlash(origin, direction, weaponName)
-	if not RunService:IsClient() then return end
+    if not RunService:IsClient() then return end
+    if GlobalStateManager then
+        local showMuzzle = GlobalStateManager:GetNested("GameSettings.MuzzleFlash")
+        if showMuzzle == false then return end
+    end
 	
 	local muzzleFlash = Instance.new("Part")
 	muzzleFlash.Name = "MuzzleFlash"

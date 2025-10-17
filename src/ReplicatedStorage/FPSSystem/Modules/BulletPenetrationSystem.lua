@@ -193,7 +193,7 @@ function BulletPenetrationSystem:ProcessPenetration(raycastResult, weaponData, d
 	
 	local hitPart = raycastResult.Instance
 	local hitPosition = raycastResult.Position
-	local hitNormal = raycastResult.Normal
+    local hitNormal = raycastResult.Normal or Vector3.new(0, 1, 0)
 	
 	-- Get material properties
 	local materialProps = self:GetMaterialProperties(hitPart.Material)

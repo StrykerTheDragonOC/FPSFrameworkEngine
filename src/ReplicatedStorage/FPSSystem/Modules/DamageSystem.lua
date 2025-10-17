@@ -110,13 +110,13 @@ function DamageSystem:CalculatePenetrationMultiplier(penetrationDepth)
 end
 
 function DamageSystem:ProcessWeaponHit(shooter, weaponConfig, raycastResult, distance)
-	if not raycastResult or not raycastResult.Instance then
-		return nil
-	end
+    if not raycastResult or not raycastResult.Instance then
+        return nil
+    end
 	
 	local hit = raycastResult.Instance
 	local position = raycastResult.Position
-	local normal = raycastResult.Normal
+    local normal = raycastResult.Normal or Vector3.new(0, 1, 0)
 	
 	local targetPlayer = RaycastSystem:GetPlayerFromHit(hit)
 	if not targetPlayer or not targetPlayer.Character then

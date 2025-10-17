@@ -18,12 +18,19 @@ local HotbarUI = {}
 
 -- Create the main hotbar UI
 function HotbarUI:CreateHotbar()
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "FPSHotbar"
-	screenGui.ResetOnSpawn = false
-	screenGui.DisplayOrder = 10
-	screenGui.IgnoreGuiInset = true
-	screenGui.Parent = playerGui
+    -- Avoid creating multiple hotbar instances in PlayerGui
+    local existing = playerGui:FindFirstChild("FPSHotbar")
+    if existing then
+        print("✓ FPSHotbar already exists in PlayerGui, reusing it")
+        return existing
+    end
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "FPSHotbar"
+    screenGui.ResetOnSpawn = false
+    screenGui.DisplayOrder = 10
+    screenGui.IgnoreGuiInset = true
+    screenGui.Parent = playerGui
 
 	-- Main hotbar container
 	local hotbarFrame = Instance.new("Frame")

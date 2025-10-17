@@ -395,7 +395,7 @@ function MeleeSystem:PerformMeleeRaycast(config, isSpecialAttack)
 				hitPlayers[hitPlayer] = {
 					Player = hitPlayer,
 					Position = rayResult.Position,
-					Normal = rayResult.Normal,
+                    Normal = rayResult.Normal,
 					Distance = rayResult.Distance
 				}
 			end
@@ -445,19 +445,28 @@ function MeleeSystem:PlayAttackAnimation(config, isSpecialAttack)
 	-- Camera shake effect
 	self:CreateCameraShake(isSpecialAttack and 2 or 1)
 	
-	-- Attack sound effect
-	local sound = Instance.new("Sound")
-	if config.Type == "Blade" then
-		sound.SoundId = "rbxassetid://18512262218" -- Blade slash sound
-	else
-		sound.SoundId = "rbxassetid://18512262219" -- Blunt impact sound
-	end
-	sound.Volume = 0.7
-	sound.Parent = character:FindFirstChild("Head") or character
-	sound:Play()
-	sound.Ended:Connect(function() 
-		sound:Destroy() 
-	end)
+    -- Attack sound effect (use SoundUtils helper)
+    local ok, SoundUtils = pcall(function()
+        return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+    end)
+    if ok and SoundUtils then
+        local soundId = config.Type == "Blade" and "rbxassetid://18512262218" or "rbxassetid://18512262219"
+        SoundUtils:PlayLocalSound(soundId, character:FindFirstChild("Head") or character, 0.7)
+    else
+        -- Fallback
+        local sound = Instance.new("Sound")
+        if config.Type == "Blade" then
+            sound.SoundId = "rbxassetid://18512262218"
+        else
+            sound.SoundId = "rbxassetid://18512262219"
+        end
+        sound.Volume = 0.7
+        sound.Parent = character:FindFirstChild("Head") or character
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end
 	
 	-- Visual effect
 	if isSpecialAttack then

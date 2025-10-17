@@ -69,6 +69,22 @@ function DeployHandler:SetupEventConnections()
 			if deployedPlayers[player] then
 				wait(1) -- Wait for character to load
 				self:GivePlayerLoadout(player)
+				-- Listen for death to undeploy and return to lobby
+				local humanoid = character:FindFirstChild("Humanoid")
+				if humanoid then
+					humanoid.Died:Connect(function()
+						deployedPlayers[player] = nil
+						-- Send to lobby team
+						if TeamManager and TeamManager.SendToLobby then
+							TeamManager:SendToLobby(player)
+						end
+						-- Notify client to show menu/hide HUD
+						local returnLobbyEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ReturnToLobby")
+						if returnLobbyEvent then
+							returnLobbyEvent:FireClient(player)
+						end
+					end)
+				end
 			end
 		end)
 	end)

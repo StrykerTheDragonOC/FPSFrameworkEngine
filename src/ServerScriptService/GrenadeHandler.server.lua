@@ -18,6 +18,14 @@ function GrenadeHandler:Initialize()
 	local throwGrenadeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ThrowGrenade")
 	if throwGrenadeEvent then
 		throwGrenadeEvent.OnServerEvent:Connect(function(player, grenadeData)
+			-- Server-side validation: rate limit grenade throws per player
+			if not player then return end
+			player._lastGrenadeThrow = player._lastGrenadeThrow or 0
+			if tick() - player._lastGrenadeThrow < 0.5 then
+				-- Too fast; ignore
+				return
+			end
+			player._lastGrenadeThrow = tick()
 			self:HandleGrenadeThrow(player, grenadeData)
 		end)
 	end

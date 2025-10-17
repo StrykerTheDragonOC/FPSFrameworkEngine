@@ -90,13 +90,20 @@ end
 
 -- Play fire effects
 function PlayFireEffects(raycastResult)
-	-- Fire sound
-	local fireSound = Instance.new("Sound")
-	fireSound.SoundId = "rbxassetid://94221465811439"  -- M9 fire sound
-	fireSound.Volume = 0.5
-	fireSound.Parent = Camera
-	fireSound:Play()
-	game:GetService("Debris"):AddItem(fireSound, 2)
+    -- Fire sound via SoundUtils if available
+    local ok, SoundUtils = pcall(function()
+        return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+    end)
+    if ok and SoundUtils then
+        SoundUtils:PlayLocalSound("rbxassetid://94221465811439", Camera, 0.5)
+    else
+        local fireSound = Instance.new("Sound")
+        fireSound.SoundId = "rbxassetid://94221465811439"  -- M9 fire sound
+        fireSound.Volume = 0.5
+        fireSound.Parent = Camera
+        fireSound:Play()
+        game:GetService("Debris"):AddItem(fireSound, 2)
+    end
 
 	-- Camera recoil
 	local recoilAmount = weaponConfig.Recoil or 0.8
@@ -135,12 +142,13 @@ function PlayFireEffects(raycastResult)
 	end
 
 	-- Bullet tracer
-	if raycastResult then
-		local distance = (raycastResult.Position - origin).Magnitude
+    if raycastResult then
+        local originPos = Camera.CFrame.Position
+        local distance = (raycastResult.Position - originPos).Magnitude
 		if distance > 10 then  -- Only show tracer for distant shots
 			local tracer = Instance.new("Part")
 			tracer.Size = Vector3.new(0.05, 0.05, distance)
-			tracer.CFrame = CFrame.new(origin, raycastResult.Position) * CFrame.new(0, 0, -distance/2)
+            tracer.CFrame = CFrame.new(originPos, raycastResult.Position) * CFrame.new(0, 0, -distance/2)
 			tracer.Material = Enum.Material.Neon
 			tracer.Color = Color3.fromRGB(255, 200, 100)
 			tracer.Transparency = 0.5

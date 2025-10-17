@@ -39,5 +39,6 @@
     "luau-lsp.types.definitionFilesEnabled": false,
     "luau-lsp.types.roblox": false,
     "luau-lsp.languageMode": "nonstrict",
-    "stylua.targetReleaseVersion": "latest"
+    "stylua.targetReleaseVersion": "latest",
+    "CodeGPT.apiKey": "OpenAI"
 }

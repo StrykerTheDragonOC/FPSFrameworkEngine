@@ -49,20 +49,45 @@ function WeaponPreviewSystem:CreateWeaponPreview(viewportFrame, weaponName, show
 		end
 	end
 
-	-- Clone the weapon model
-	local weaponModel = currentObj:Clone()
-	if not weaponModel then
-		warn("WeaponPreviewSystem: Failed to clone weapon model:", weaponName)
-		return nil
-	end
+    -- Clone the weapon model
+    local weaponModel = currentObj:Clone()
+    if not weaponModel then
+        warn("WeaponPreviewSystem: Failed to clone weapon model:", weaponName)
+        return nil
+    end
 
-	-- Create camera for viewport
-	local camera = Instance.new("Camera")
-	camera.Parent = viewportFrame
-	viewportFrame.CurrentCamera = camera
+    -- Strip runtime scripts and sounds from preview clone to avoid running code in preview
+    for _, desc in pairs(weaponModel:GetDescendants()) do
+        if desc:IsA("Script") or desc:IsA("LocalScript") or desc:IsA("ModuleScript") or desc:IsA("Sound") then
+            desc:Destroy()
+        end
+    end
 
-	-- Position weapon model
-	weaponModel.Parent = viewportFrame
+    -- Ensure the model has a PrimaryPart; if not, pick the first BasePart found
+    if not weaponModel.PrimaryPart then
+        for _, part in pairs(weaponModel:GetDescendants()) do
+            if part:IsA("BasePart") then
+                weaponModel.PrimaryPart = part
+                break
+            end
+        end
+    end
+
+    -- Anchor preview parts and disable collisions so the viewport is stable
+    for _, part in pairs(weaponModel:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Anchored = true
+            part.CanCollide = false
+        end
+    end
+
+    -- Parent the preview model inside the viewport
+    weaponModel.Parent = viewportFrame
+
+    -- Create camera for viewport (after parenting model so PrimaryPart positions are valid)
+    local camera = Instance.new("Camera")
+    camera.Parent = viewportFrame
+    viewportFrame.CurrentCamera = camera
 
 	-- Calculate model bounds and position camera
 	local modelSize = self:GetModelSize(weaponModel)

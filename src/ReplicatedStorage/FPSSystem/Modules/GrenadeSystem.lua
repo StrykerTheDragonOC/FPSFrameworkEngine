@@ -5,6 +5,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local SoundUtils = nil
+pcall(function()
+    SoundUtils = require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+end)
 local UserInputService = game:GetService("UserInputService")
 
 -- CLIENT-ONLY: Only load ViewmodelSystem on client
@@ -323,17 +327,23 @@ function GrenadeSystem:ThrowGrenade(grenadeName, fuseTime)
 	local throwDirection = camera.CFrame.LookVector
 	local throwPosition = humanoidRootPart.Position + throwDirection * 2
 	
-	-- Send to server
-	local throwGrenadeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ThrowGrenade")
-	if throwGrenadeEvent then
-		throwGrenadeEvent:FireServer({
-			GrenadeType = grenadeName,
-			Position = throwPosition,
-			Direction = throwDirection,
-			Force = config.ThrowForce,
-			FuseTime = fuseTime or config.FuseTime
-		})
-	end
+    -- Client-side cooldown to prevent spam
+    if self._lastThrow and tick() - self._lastThrow < 0.5 then
+        return
+    end
+    self._lastThrow = tick()
+
+    -- Send validated request to server
+    local throwGrenadeEvent = ReplicatedStorage.FPSSystem.RemoteEvents:FindFirstChild("ThrowGrenade")
+    if throwGrenadeEvent then
+        throwGrenadeEvent:FireServer({
+            GrenadeType = grenadeName,
+            Position = throwPosition,
+            Direction = throwDirection,
+            Force = config.ThrowForce,
+            FuseTime = fuseTime or config.FuseTime
+        })
+    end
 end
 
 function GrenadeSystem:HandleExplosionEffect(explosionData)
@@ -385,6 +395,11 @@ function GrenadeSystem:CreateExplosionEffect(explosionData)
 		wait(0.5)
 		particles.Enabled = false
 	end)
+
+    -- Explosion sound
+    if SoundUtils then
+        SoundUtils:PlayLocalSound("rbxassetid://5801257793", workspace.CurrentCamera, 0.8)
+    end
 end
 
 function GrenadeSystem:CreateSmokeEffect(explosionData)
@@ -575,15 +590,29 @@ function GrenadeSystem:OnGrenadeEquipped(tool)
 		return
 	end
 
-	local success, errorMsg = pcall(function()
-		ViewmodelSystem:CreateViewmodel(grenadeName)
-	end)
+    local success, errorMsg = pcall(function()
+        ViewmodelSystem:CreateViewmodel(grenadeName)
+    end)
 
 	if success then
 		print("✓ Grenade viewmodel created for:", grenadeName)
 	else
 		warn("Failed to create grenade viewmodel for:", grenadeName, "Error:", errorMsg or "unknown")
 	end
+
+    -- Bind cooking to input while grenade is equipped
+    if UserInputService then
+        if tool and tool.Activated then
+            tool.Activated:Connect(function()
+                local config = GRENADE_CONFIGS[grenadeName]
+                if config and config.CanCook then
+                    GrenadeSystem:StartCooking(grenadeName)
+                else
+                    GrenadeSystem:ThrowGrenade(grenadeName)
+                end
+            end)
+        end
+    end
 end
 
 function GrenadeSystem:OnGrenadeUnequipped(tool)

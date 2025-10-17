@@ -3,9 +3,14 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local GlobalStateManager = nil
+pcall(function()
+    GlobalStateManager = require(ReplicatedStorage.FPSSystem.Modules.GlobalStateManager)
+end)
 
 -- Wait for menu
 repeat wait() until playerGui:FindFirstChild("FPSMainMenu")
@@ -57,6 +62,12 @@ function SettingsController:SaveSettings()
     -- In a real implementation, this would save to DataStore
     -- For now, we'll use a simple local storage approach
     _G.PlayerSettings = settingsData
+    if GlobalStateManager then
+        GlobalStateManager:Update("GameSettings.Sensitivity", settingsData.sensitivity)
+        GlobalStateManager:Update("GameSettings.FOV", settingsData.fov)
+        GlobalStateManager:Update("GameSettings.RagdollForce", settingsData.ragdollFactor)
+        GlobalStateManager:Update("GameSettings.Volume", settingsData.masterVolume)
+    end
     print("Settings saved locally")
 end
 
@@ -75,10 +86,16 @@ end
 function SettingsController:ApplySettings()
     -- Apply sensitivity (would be used by weapon system)
     _G.WeaponSensitivity = settingsData.sensitivity
+    if GlobalStateManager then
+        GlobalStateManager:Update("GameSettings.Sensitivity", settingsData.sensitivity)
+    end
     
     -- Apply FOV (when weapon is equipped)
     if Workspace.CurrentCamera then
         Workspace.CurrentCamera.FieldOfView = settingsData.fov
+    end
+    if GlobalStateManager then
+        GlobalStateManager:Update("GameSettings.FOV", settingsData.fov)
     end
     
     -- Apply volume settings
@@ -86,6 +103,9 @@ function SettingsController:ApplySettings()
     
     -- Apply other settings as needed
     _G.RagdollFactor = settingsData.ragdollFactor
+    if GlobalStateManager then
+        GlobalStateManager:Update("GameSettings.RagdollForce", settingsData.ragdollFactor)
+    end
     _G.AutoSprint = settingsData.autoSprint
     
     print("Settings applied")

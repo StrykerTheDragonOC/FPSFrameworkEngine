@@ -415,8 +415,8 @@ function MenuGenerator:SetupVotingEvents(deploySection)
 			end
 
 			-- Create gamemode option buttons
-			for i, modeCode in ipairs(data.modes) do
-				local modeData = data.modeData[modeCode]
+            for i, modeCode in ipairs(data.Candidates or data.modes or {}) do
+                local modeData = (data.GamemodeData or data.modeData or {})[modeCode]
 				if modeData then
 					local optionButton = self:CreateGamemodeOption(modeCode, modeData, i)
 					optionButton.Parent = optionsContainer
@@ -424,7 +424,7 @@ function MenuGenerator:SetupVotingEvents(deploySection)
 			end
 
 			-- Start countdown timer
-			local duration = data.duration or 30
+            local duration = data.VotingTime or data.duration or 30
 			local startTime = tick()
 
 			local connection
@@ -450,8 +450,9 @@ function MenuGenerator:SetupVotingEvents(deploySection)
 				if optionButton:IsA("TextButton") and optionButton:GetAttribute("ModeCode") then
 					local modeCode = optionButton:GetAttribute("ModeCode")
 					local voteLabel = optionButton:FindFirstChild("VoteCount")
-					if voteLabel and data.votes[modeCode] then
-						voteLabel.Text = data.votes[modeCode] .. " votes"
+                    local votes = data.Votes or data.votes
+                    if voteLabel and votes and votes[modeCode] then
+                        voteLabel.Text = votes[modeCode] .. " votes"
 					end
 				end
 			end
@@ -465,7 +466,7 @@ function MenuGenerator:SetupVotingEvents(deploySection)
 			print("✓ Voting ended! Winner:", data.winner)
 
 			-- Highlight winner for 3 seconds before hiding
-			for _, optionButton in pairs(optionsContainer:GetChildren()) do
+            for _, optionButton in pairs(optionsContainer:GetChildren()) do
 				if optionButton:IsA("TextButton") and optionButton:GetAttribute("ModeCode") == data.winner then
 					optionButton.BackgroundColor3 = Color3.fromRGB(60, 180, 100)
 				end
@@ -1279,11 +1280,11 @@ function MenuGenerator:SetupViewportCharacter(screenGui)
 		end
 	end
 
-	-- Find the R6 character model (could be named Background, R6, or just Model)
-	local characterModel = viewportFrame:FindFirstChild("Background")
-		or viewportFrame:FindFirstChild("R6")
-		or viewportFrame:FindFirstChild("KFC")
-		or viewportFrame:FindFirstChildWhichIsA("Model")
+    -- Find the R6 character model (could be named Background, R6, or just Model)
+    local characterModel = viewportFrame:FindFirstChild("Background")
+        or viewportFrame:FindFirstChild("R6")
+        or viewportFrame:FindFirstChild("KFC")
+        or viewportFrame:FindFirstChildWhichIsA("Model")
 
 	if not characterModel then
 		print("⚠ Character model not found in ViewportFrame")
@@ -1300,7 +1301,18 @@ function MenuGenerator:SetupViewportCharacter(screenGui)
 		return
 	end
 
-	-- Setup camera for viewport
+    -- Ensure any prop/desk under the character is visible
+    local desk = viewportFrame:FindFirstChild("Desk") or viewportFrame:FindFirstChild("WoodenDesk") or viewportFrame:FindFirstChild("Table")
+    if desk and desk:IsA("Model") then
+        for _, part in ipairs(desk:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Anchored = true
+                part.CanCollide = false
+            end
+        end
+    end
+
+    -- Setup camera for viewport
 	local camera = viewportFrame:FindFirstChildOfClass("Camera")
 	if not camera then
 		camera = Instance.new("Camera")
@@ -1309,10 +1321,30 @@ function MenuGenerator:SetupViewportCharacter(screenGui)
 	viewportFrame.CurrentCamera = camera
 
 	-- Position camera to view the character
-	local rootPart = characterModel:FindFirstChild("HumanoidRootPart") or characterModel:FindFirstChild("Torso")
-	if rootPart then
-		camera.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, 1, 5), rootPart.Position + Vector3.new(0, 1, 0))
-	end
+    local rootPart = characterModel:FindFirstChild("HumanoidRootPart") or characterModel:FindFirstChild("Torso")
+    if rootPart then
+        -- Try to frame both character and desk by using bounding box when possible
+        local cf, size = characterModel:GetBoundingBox()
+        if desk and desk:IsA("Model") then
+            local dcf, dsize = desk:GetBoundingBox()
+            local minPos = Vector3.new(
+                math.min(cf.Position.X, dcf.Position.X),
+                math.min(cf.Position.Y, dcf.Position.Y),
+                math.min(cf.Position.Z, dcf.Position.Z)
+            )
+            local maxPos = Vector3.new(
+                math.max(cf.Position.X, dcf.Position.X),
+                math.max(cf.Position.Y, dcf.Position.Y),
+                math.max(cf.Position.Z, dcf.Position.Z)
+            )
+            local center = (minPos + maxPos) * 0.5
+            local extents = (maxPos - minPos)
+            local dist = math.max(extents.X, extents.Y, extents.Z) * 1.8
+            camera.CFrame = CFrame.new(center + Vector3.new(0, extents.Y * 0.2, dist), center)
+        else
+            camera.CFrame = CFrame.new(rootPart.Position + Vector3.new(0, 1, 5), rootPart.Position + Vector3.new(0, 1, 0))
+        end
+    end
 
 	-- Find and play idle animation
 	local animator = humanoid:FindFirstChildOfClass("Animator")

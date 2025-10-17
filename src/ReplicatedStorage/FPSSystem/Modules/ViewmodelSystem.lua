@@ -293,6 +293,16 @@ end
 function ViewmodelSystem:SetupToolConnections()
 	-- Connect to player's backpack and character
 	player.CharacterAdded:Connect(function(character)
+		-- Ensure we unlock camera when character is removed (respawn/lobby)
+		if character and character:IsA("Model") then
+			character.AncestryChanged:Connect(function(_, parent)
+				if not parent then
+					-- Character removed; clear viewmodel and unlock
+					self:RemoveViewmodel()
+					self:UnlockFirstPerson()
+				end
+			end)
+		end
 		character.ChildAdded:Connect(function(child)
 			if child:IsA("Tool") then
 				self:OnToolEquipped(child)
@@ -313,6 +323,15 @@ function ViewmodelSystem:SetupToolConnections()
 			end
 		end
 	end
+
+	-- Unlock camera if player moves to Lobby/Spectator team
+	player:GetPropertyChangedSignal("Team"):Connect(function()
+		local team = player.Team and player.Team.Name or ""
+		if team == "Lobby" or team == "Spectator" or team == "" then
+			self:RemoveViewmodel()
+			self:UnlockFirstPerson()
+		end
+	end)
 end
 
 -- Tool equipped handler
@@ -356,10 +375,27 @@ function ViewmodelSystem:OnToolUnequipped(tool)
 		-- Remove viewmodel first
 		self:RemoveViewmodel()
 
-		-- Then unlock first person (with safety delay)
+		-- Then unlock first person with safety: only unlock if no other FPS weapon is still equipped
 		task.spawn(function()
 			task.wait(0.05) -- Small delay to ensure tool fully unequipped
-			self:UnlockFirstPerson()
+			local character = player.Character
+			local stillHasFPS = false
+			if character then
+				for _, child in pairs(character:GetChildren()) do
+					if child:IsA("Tool") then
+						local cfg = WeaponConfig:GetWeaponConfig(child.Name)
+						if cfg then
+							stillHasFPS = true
+							break
+						end
+					end
+				end
+			end
+			if not stillHasFPS then
+				self:UnlockFirstPerson()
+			else
+				print("Keeping first-person lock because another FPS weapon is equipped")
+			end
 		end)
 
 		-- Notify ScopeSystem about weapon unequipped

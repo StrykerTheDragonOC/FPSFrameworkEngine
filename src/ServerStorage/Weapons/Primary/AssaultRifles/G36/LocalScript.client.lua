@@ -46,18 +46,25 @@ local fireMode = "Auto"  -- "Auto", "Semi", "Burst"
 
 -- Fire weapon
 local function FireWeapon()
-	if not canFire or isReloading or currentAmmo <= 0 or not isEquipped then
-		if currentAmmo <= 0 then
-			-- Play dry fire sound
-			local drySound = Instance.new("Sound")
-			drySound.SoundId = "rbxassetid://2697295462"  -- Dry fire sound
-			drySound.Volume = 0.3
-			drySound.Parent = Camera
-			drySound:Play()
-			game:GetService("Debris"):AddItem(drySound, 1)
-		end
-		return
-	end
+    if not canFire or isReloading or currentAmmo <= 0 or not isEquipped then
+        if currentAmmo <= 0 then
+            -- Play dry fire sound via SoundUtils
+            local ok, SoundUtils = pcall(function()
+                return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+            end)
+            if ok and SoundUtils then
+                SoundUtils:PlayLocalSound("rbxassetid://2697295462", Camera, 0.3)
+            else
+                local drySound = Instance.new("Sound")
+                drySound.SoundId = "rbxassetid://2697295462"  -- Dry fire sound
+                drySound.Volume = 0.3
+                drySound.Parent = Camera
+                drySound:Play()
+                game:GetService("Debris"):AddItem(drySound, 1)
+            end
+        end
+        return
+    end
 
 	local currentTime = tick()
 	local fireRate = 60 / (weaponConfig.FireRate or 750)
@@ -72,9 +79,9 @@ local function FireWeapon()
 	local direction = (mouse.Hit.Position - origin).Unit
 
 	-- Perform raycast
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterDescendantsInstances = {player.Character}
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {player.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 	local raycastResult = workspace:Raycast(origin, direction * (weaponConfig.Range or 500), raycastParams)
 
@@ -92,13 +99,20 @@ end
 
 -- Play fire effects
 function PlayFireEffects(raycastResult)
-	-- Fire sound
-	local fireSound = Instance.new("Sound")
-	fireSound.SoundId = "rbxassetid://4759267374"  -- G36 fire sound
-	fireSound.Volume = 0.5
-	fireSound.Parent = Camera
-	fireSound:Play()
-	game:GetService("Debris"):AddItem(fireSound, 2)
+    -- Fire sound via SoundUtils
+    local ok, SoundUtils = pcall(function()
+        return require(ReplicatedStorage.FPSSystem.Modules.SoundUtils)
+    end)
+    if ok and SoundUtils then
+        SoundUtils:PlayLocalSound("rbxassetid://4759267374", Camera, 0.5)
+    else
+        local fireSound = Instance.new("Sound")
+        fireSound.SoundId = "rbxassetid://4759267374"  -- G36 fire sound
+        fireSound.Volume = 0.5
+        fireSound.Parent = Camera
+        fireSound:Play()
+        game:GetService("Debris"):AddItem(fireSound, 2)
+    end
 
 	-- Camera recoil
 	local recoilAmount = weaponConfig.Recoil or 1.2
@@ -138,7 +152,7 @@ function PlayFireEffects(raycastResult)
 
 	-- Bullet tracer
 	if raycastResult then
-		local distance = (raycastResult.Position - origin).Magnitude
+        local distance = (raycastResult.Position - (origin or Camera.CFrame.Position)).Magnitude
 		if distance > 10 then  -- Only show tracer for distant shots
 			local tracer = Instance.new("Part")
 			tracer.Size = Vector3.new(0.05, 0.05, distance)
